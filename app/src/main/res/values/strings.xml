@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Z2FB Post Manager</string>
+    <string name="title_share_to_z2fb">Nạp bài vào Z2FB Manager</string>
+    
+    <!-- Tab Titles -->
+    <string name="tab_queue">Hàng Đợi Bài</string>
+    <string name="tab_groups">Nhóm Facebook</string>
+    <string name="tab_settings">Cài Đặt</string>
+    
+    <!-- Status Badges -->
+    <string name="status_pending">Chờ duyệt</string>
+    <string name="status_queued">Đang đợi đăng</string>
+    <string name="status_posted">Đã đăng</string>
+    <string name="status_failed">Thất bại</string>
+    
+    <!-- Buttons & Actions -->
+    <string name="btn_approve_and_post">🚀 Duyệt &amp; Đăng ngay</string>
+    <string name="btn_edit">✏️ Sửa bài</string>
+    <string name="btn_delete">🗑️ Xóa</string>
+    <string name="btn_save">Lưu cấu hình</string>
+    <string name="btn_add_group">Thêm Nhóm FB</string>
+    <string name="btn_login_fb">Đăng nhập Facebook (Lấy Cookie)</string>
+    <string name="btn_grant_notification">Cấp quyền Bắt thông báo Zalo</string>
+    <string name="btn_grant_overlay">Cấp quyền Bong bóng nổi</string>
+    <string name="btn_share_via_fb_app">Chia sẻ qua App Facebook</string>
+    
+    <!-- Settings Labels -->
+    <string name="setting_mode_title">Chế độ hoạt động</string>
+    <string name="setting_mode_semi">Bán tự động (Xem trước &amp; Duyệt bài)</string>
+    <string name="setting_mode_auto">Tự động 100% (Cứ có tin Zalo là tự up)</string>
+    
+    <string name="setting_zalo_groups">Nhóm Zalo cần theo dõi</string>
+    <string name="setting_zalo_groups_hint">Nhập tên nhóm Zalo, nhiều nhóm cách nhau dấu phẩy (Để trống = Theo dõi tất cả)</string>
+    
+    <string name="setting_replace_phone">Số điện thoại thay thế của bạn</string>
+    <string name="setting_replace_phone_hint">VD: 0988888888 (Tự động thay thế SĐT cũ trong bài)</string>
+    
+    <string name="setting_signature">Chữ ký / Lời kết bài viết</string>
+    <string name="setting_signature_hint">VD: ☎️ Hotline: 0988.888.888 - Giao hàng toàn quốc! #bansi #thoitrang</string>
+    
+    <string name="setting_delay_jitter">Giãn cách an toàn giữa các bài (Giây)</string>
+    <string name="setting_delay_hint">180 (Khuyên dùng: 120s - 300s để chống Facebook chặn tính năng)</string>
+</resources>
