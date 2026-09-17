@@ -51,4 +51,4 @@ class FacebookSessionManager private constructor(context: Context) {
         val pattern = Regex("c_user=(\d+)")
         return pattern.find(cookie)?.groupValues?.getOrNull(1) ?: ""
     }
-}\n
+}

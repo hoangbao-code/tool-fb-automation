@@ -118,4 +118,4 @@ object FacebookGroupScanner {
         val lower = name.lowercase().trim()
         return IGNORED_KEYWORDS.any { lower == it || lower.startsWith(it) }
     }
-}\n
+}

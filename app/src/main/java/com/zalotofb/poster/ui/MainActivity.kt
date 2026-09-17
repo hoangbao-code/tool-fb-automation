@@ -394,4 +394,4 @@ class MainActivity : AppCompatActivity() {
             postAdapter.updateData(repository.getPosts())
         }
     }
-}\n
+}

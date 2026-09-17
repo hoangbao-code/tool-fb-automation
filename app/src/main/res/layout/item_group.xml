@@ -91,4 +91,4 @@
             android:contentDescription="Xóa nhóm" />
 
     </LinearLayout>
-</com.google.android.material.card.MaterialCardView>\n
+</com.google.android.material.card.MaterialCardView>

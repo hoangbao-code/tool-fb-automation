@@ -208,4 +208,4 @@ class PostEditorActivity : AppCompatActivity() {
             val btnRemove: View = itemView.findViewById(R.id.btn_remove_thumb)
         }
     }
-}\n
+}

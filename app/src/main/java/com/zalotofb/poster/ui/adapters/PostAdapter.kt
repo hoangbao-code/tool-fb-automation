@@ -146,4 +146,4 @@ class PostAdapter(
             btnDelete.setOnClickListener { onDeleteClick(post) }
         }
     }
-}\n
+}

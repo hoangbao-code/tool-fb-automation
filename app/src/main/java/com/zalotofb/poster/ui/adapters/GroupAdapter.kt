@@ -97,4 +97,4 @@ class GroupAdapter(
             }
         }
     }
-}\n
+}

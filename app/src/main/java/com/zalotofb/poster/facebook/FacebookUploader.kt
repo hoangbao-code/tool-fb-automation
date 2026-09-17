@@ -169,4 +169,4 @@ object FacebookUploader {
             })
         }
     }
-}\n
+}

@@ -25,4 +25,4 @@
         app:tint="#FFFFFF"
         android:contentDescription="Xóa ảnh" />
 
-</FrameLayout>\n
+</FrameLayout>
