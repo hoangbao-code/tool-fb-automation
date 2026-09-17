@@ -3,6 +3,7 @@ package com.zalotofb.poster.services
 import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
+import androidx.work.ListenableWorker.Result as WorkResult
 import androidx.work.WorkerParameters
 import com.zalotofb.poster.data.models.PostStatus
 import com.zalotofb.poster.data.repository.StorageRepository
@@ -21,12 +22,12 @@ class FacebookPostWorker(
         private const val TAG = "FacebookPostWorker"
     }
 
-    override suspend fun doWork(): Result {
-        val postId = inputData.getString(KEY_POST_ID) ?: return Result.failure()
+    override suspend fun doWork(): WorkResult {
+        val postId = inputData.getString(KEY_POST_ID) ?: return WorkResult.failure()
         val repository = StorageRepository.getInstance(applicationContext)
         val settings = repository.getSettings()
 
-        val post = repository.getPosts().find { it.id == postId } ?: return Result.failure()
+        val post = repository.getPosts().find { it.id == postId } ?: return WorkResult.failure()
 
         repository.updatePostStatus(postId, PostStatus.POSTING)
         val targetGroups = if (post.targetGroupIds.isNotEmpty()) {
@@ -37,13 +38,13 @@ class FacebookPostWorker(
 
         if (targetGroups.isEmpty()) {
             repository.updatePostStatus(postId, PostStatus.FAILED, errorMsg = "Không có nhóm Facebook nào được chọn để đăng")
-            return Result.failure()
+            return WorkResult.failure()
         }
 
         val sessionManager = FacebookSessionManager.getInstance(applicationContext)
         if (!sessionManager.isLoggedIn()) {
             repository.updatePostStatus(postId, PostStatus.FAILED, errorMsg = "Chưa đăng nhập Facebook. Vui lòng đăng nhập trong tab Nhóm Facebook")
-            return Result.failure()
+            return WorkResult.failure()
         }
 
         val contentToPost = post.processedContent.ifBlank { post.originalContent }
@@ -89,14 +90,14 @@ class FacebookPostWorker(
                 PostStatus.POSTED,
                 postUrl = lastSuccessUrl
             )
-            Result.success()
+            WorkResult.success()
         } else {
             repository.updatePostStatus(
                 postId,
                 PostStatus.FAILED,
                 errorMsg = lastError
             )
-            Result.failure()
+            WorkResult.failure()
         }
     }
 }

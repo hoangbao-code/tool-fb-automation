@@ -24,10 +24,20 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleDebug --stacktrace --info
 
       - name: Upload APK Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Z2FB-Post-Manager-Debug-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload Build Reports on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-failure-reports
+          path: |
+            app/build/reports/
+            app/build/outputs/logs/
