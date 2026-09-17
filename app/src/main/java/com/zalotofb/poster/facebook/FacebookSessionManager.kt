@@ -48,7 +48,7 @@ class FacebookSessionManager private constructor(context: Context) {
     }
 
     private fun extractUserIdFromCookie(cookie: String): String {
-        val pattern = Regex("c_user=(\d+)")
+        val pattern = Regex("c_user=(\\d+)")
         return pattern.find(cookie)?.groupValues?.getOrNull(1) ?: ""
     }
 }

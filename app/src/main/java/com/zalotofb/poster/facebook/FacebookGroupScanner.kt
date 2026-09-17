@@ -79,7 +79,7 @@ object FacebookGroupScanner {
                     // Làm sạch tên nhóm
                     val cleanName = rawName.replace(Regex("<[^>]+>"), "")
                         .replace("&amp;", "&")
-                        .replace("&quot;", """)
+                        .replace("&quot;", "\"")
                         .replace("&#039;", "'")
                         .replace("&lt;", "<")
                         .replace("&gt;", ">")
