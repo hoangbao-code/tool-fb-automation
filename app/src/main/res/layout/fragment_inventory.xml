@@ -6,35 +6,82 @@
     android:orientation="vertical"
     android:background="@color/background">
 
-    <!-- Top Action Bar -->
-    <LinearLayout
+    <!-- Top Hero Banner with Quick Actions -->
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="12dp"
-        android:gravity="center_vertical">
+        android:layout_margin="12dp"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="2dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="@color/divider"
+        app:cardBackgroundColor="@color/surface">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_paste_listing"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1"
-            android:text="@string/btn_paste_listing"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            app:cornerRadius="10dp"
-            style="@style/Widget.Material3.Button.TonalButton" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="14dp">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_new_listing"
-            android:layout_width="wrap_content"
-            android:layout_height="44dp"
-            android:layout_marginStart="8dp"
-            android:text="@string/btn_new_listing"
-            android:textSize="14sp"
-            app:cornerRadius="10dp"
-            style="@style/Widget.Material3.Button.OutlinedButton" />
-    </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_sparkle" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:text="Kho Tin Phòng Cho Thuê"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_primary" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="Bóc tách tự động, lọc sạch hoa hồng và số điện thoại chủ nhà 100%."
+                android:textSize="12sp"
+                android:textColor="@color/text_secondary" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="12dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_paste_listing"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:text="📋 Dán Tin Zalo Mới"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="10dp"
+                    app:backgroundTint="@color/primary" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_new_listing"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="8dp"
+                    android:text="+ Tạo Thủ Công"
+                    android:textSize="12sp"
+                    app:cornerRadius="10dp"
+                    style="@style/Widget.Material3.Button.TonalButton" />
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 
     <!-- Filter Chips Horizontal Scroll -->
     <HorizontalScrollView
@@ -42,7 +89,7 @@
         android:layout_height="wrap_content"
         android:scrollbars="none"
         android:paddingHorizontal="12dp"
-        android:paddingBottom="8dp">
+        android:paddingBottom="6dp">
 
         <com.google.android.material.chip.ChipGroup
             android:id="@+id/chip_group_status"
@@ -59,13 +106,6 @@
                 style="@style/Widget.Material3.Chip.Filter" />
 
             <com.google.android.material.chip.Chip
-                android:id="@+id/chip_draft"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Nháp"
-                style="@style/Widget.Material3.Chip.Filter" />
-
-            <com.google.android.material.chip.Chip
                 android:id="@+id/chip_ready"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -77,6 +117,13 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Đang đăng"
+                style="@style/Widget.Material3.Chip.Filter" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_draft"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Nháp"
                 style="@style/Widget.Material3.Chip.Filter" />
 
             <com.google.android.material.chip.Chip
@@ -100,17 +147,17 @@
         android:visibility="gone">
 
         <ImageView
-            android:layout_width="64dp"
-            android:layout_height="64dp"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
             android:src="@drawable/ic_apartment"
-            app:tint="@color/text_secondary" />
+            app:tint="@color/text_muted" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="Chưa có tin phòng nào"
-            android:textSize="16sp"
+            android:layout_marginTop="16dp"
+            android:text="Chưa Có Tin Phòng Nào"
+            android:textSize="17sp"
             android:textStyle="bold"
             android:textColor="@color/text_primary" />
 
@@ -118,20 +165,18 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
-            android:text="Bấm 'Dán tin' từ clipboard hoặc chia sẻ trực tiếp từ nhóm Zalo sang app."
-            android:textSize="14sp"
             android:gravity="center"
+            android:text="Sao chép tin phòng từ nhóm Zalo đầu chủ và bấm nút 'Dán Tin Zalo Mới' ở trên để AI tự động xử lý."
+            android:textSize="13sp"
             android:textColor="@color/text_secondary" />
     </LinearLayout>
 
-    <!-- Listing Recycler -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_listings"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:paddingHorizontal="12dp"
-        android:clipToPadding="false"
-        android:paddingBottom="16dp" />
+        android:clipToPadding="false" />
 
 </LinearLayout>
