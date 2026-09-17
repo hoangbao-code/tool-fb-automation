@@ -1,205 +1,217 @@
-# 📋 ĐẶC TẢ KIẾN TRÚC & GIẢI PHÁP TOÀN DIỆN
-## HỆ THỐNG QUẢN LÝ VÀ ĐĂNG BÀI FACEBOOK TỰ ĐỘNG TỪ ZALO (Z2FB ALL-IN-ONE SUITE)
+# 📋 TỔNG HỢP TOÀN DIỆN VỀ CÔNG CỤ: CHDV FACEBOOK MANAGER PRO
+## HỆ THỐNG QUẢN LÝ VÀ ĐĂNG BÀI BẤT ĐỘNG SẢN / CĂN HỘ DỊCH VỤ (ZALO ➔ FACEBOOK)
 
-> **Mục tiêu:** Xây dựng một hệ thống hoàn chỉnh không chỉ để "bắn bài" đơn thuần, mà là một **Trung tâm Quản lý & Tự động hóa toàn diện**: Quản lý tài khoản Facebook, quét & phân loại nhóm, quản lý kho bài viết, tích hợp **Trí tuệ nhân tạo (AI)** tự động viết lại bài theo form mẫu định sẵn, gom tin từ Zalo và điều phối lịch đăng bài thông minh.
+> **Lĩnh vực ứng dụng chuyên biệt:** Cho Thuê Căn Hộ Dịch Vụ (CHDV), Chung Cư Mini (CCMN), Phòng Trọ & Bất Động Sản Cho Thuê tại TP.HCM, Hà Nội và các đô thị lớn.  
+> **Nền tảng:** Ứng dụng Android độc lập (file APK), hoạt động trực tiếp trên điện thoại của môi giới/chủ nhà mà không cần máy tính rườm rà.
 
 ---
 
 ## 📑 MỤC LỤC
-1. [Quản Lý Tài Khoản & Quét / Phân Tệp Nhóm Facebook](#1-quản-lý-tài-khoản--quét--phân-tệp-nhóm-facebook)
-2. [Kho Nội Dung & Quản Lý Bài Đăng Đa Năng](#2-kho-nội-dung--quản-lý-bài-đăng-đa-năng)
-3. [Bộ Não AI Viết Lại Nội Dung Theo Form Mẫu Định Sẵn](#3-bộ-não-ai-viết-lại-nội-dung-theo-form-mẫu-định-sẵn)
-4. [Thu Thập Dữ Liệu Zalo & Xử Lý Vấn Đề Quyền Hệ Thống](#4-thu-thập-dữ-liệu-zalo--xử-lý-vấn-đề-quyền-hệ-thống)
-5. [Cơ Chế Đăng Bài Thông Minh & Chống Checkpoint Facebook](#5-cơ-chế-đăng-bài-thông-minh--chống-checkpoint-facebook)
+1. [Tổng Quan Kiến Trúc & Luồng Hoạt Động Khép Kín](#1-tổng-quan-kiến-trúc--luồng-hoạt-động-khép-kín)
+2. [Quản Lý Tài Khoản Facebook & 1-Click Tự Động Quét Nhóm](#2-quản-lý-tài-khoản-facebook--1-click-tự-động-quét-nhóm)
+3. [Bộ Não AI Form Mẫu Bán Phòng & Lọc Sạch Hoa Hồng Môi Giới](#3-bộ-não-ai-form-mẫu-bán-phòng--lọc-sạch-hoa-hồng-môi-giới)
+4. [Quản Lý Kho Bài Đăng, Album Ảnh HD & Nạp Tin Đa Dạng](#4-quản-lý-kho-bài-đăng-album-ảnh-hd--nạp-tin-đa-dạng)
+5. [Cơ Chế Đăng Bài Facebook Thật & Chống Checkpoint (Anti-Ban)](#5-cơ-chế-đăng-bài-facebook-thật--chống-checkpoint-anti-ban)
 6. [Hai Chế Độ Vận Hành: Bán Tự Động & Tự Động 100%](#6-hai-chế-độ-vận-hành-bán-tự-động--tự-động-100)
-7. [Đánh Giá Kiến Trúc Nền Tảng (APK Thuần vs Web App Mobile)](#7-đánh-giá-kiến-trúc-nền-tảng-apk-thuần-vs-web-app-mobile)
+7. [Bảng So Sánh Trước & Sau Bản Cập Nhật](#7-bảng-so-sánh-trước--sau-bản-cập-nhật)
+8. [Hướng Dẫn Cài Đặt, Cấp Quyền & Vận Hành](#8-hướng-dẫn-cài-đặt-cấp-quyền--vận-hành)
 
 ---
 
-## 1. Quản Lý Tài Khoản & Quét / Phân Tệp Nhóm Facebook
+## 1. Tổng Quan Kiến Trúc & Luồng Hoạt Động Khép Kín
 
-Thay vì chỉ nhập mã nhóm thủ công, hệ thống sở hữu đầy đủ bộ công cụ quản trị nhóm và tài khoản:
+Hệ thống được thiết kế như một **Trợ lý Môi Giới BĐS Số Hóa 24/7**, giải quyết triệt để khâu tốn thời gian nhất của người làm nghề cho thuê: **Cào tin từ các nhóm Zalo đầu chủ ➔ Xóa số điện thoại chủ nhà & xóa hoa hồng môi giới ➔ Viết lại bài theo văn phong thu hút ➔ Đăng phủ lên hàng chục nhóm Facebook**.
 
-### A. Quản Lý Đa Tài Khoản Facebook (Multi-Account Manager)
-- **Thêm và lưu trữ nhiều tài khoản:** Hỗ trợ đăng nhập nhiều tài khoản Facebook bằng Cookie hoặc quét phiên làm việc.
-- **Kiểm tra trạng thái (Live/Die Check):** Tự động kiểm tra xem Cookie của tài khoản còn hoạt động hay đã hết hạn/bị checkpoint để cảnh báo người dùng.
-- **Xoay vòng tài khoản (Account Rotation):** Cho phép chọn tài khoản A đăng 5 nhóm, tài khoản B đăng 5 nhóm tiếp theo để giảm tải cho từng nick.
-
-### B. Quét Nhóm Đã Tham Gia (Auto-Fetch Joined Groups)
-- Hệ thống tự động kết nối và **quét toàn bộ danh sách các Group mà tài khoản Facebook của bạn đã tham gia**.
-- Hiển thị đầy đủ thông tin: *Tên nhóm, ID nhóm, Số lượng thành viên, Loại nhóm (Công khai / Kín)*.
-- Tránh việc bạn phải đi tìm và nhập từng ID nhóm bằng tay.
-
-### C. Quét Tìm Nhóm Mới & Tự Động Tham Gia (Group Discovery & Auto-Join)
-- **Tìm nhóm theo từ khóa:** Nhập từ khóa (VD: *"Sỉ quần áo", "Chợ đầu mối Ninh Hiệp", "Bất động sản Hà Nội"*).
-- **Bộ lọc thông minh:** Lọc nhóm có số thành viên lớn hơn mức quy định (ví dụ chỉ lấy nhóm > 10.000 thành viên).
-- **Tự động tham gia nhóm (Auto Join):** Thiết lập sẵn danh sách câu trả lời tự động cho các nhóm có kiểm duyệt hỏi đáp.
-- **Tự động rời nhóm (Auto Leave):** Lọc và out hàng loạt các nhóm không tương tác hoặc nhóm đã chết.
-
-### D. Phân Loại Tệp Nhóm Theo Chủ Đề (Group Segmentation / Tagging)
-- Bạn có thể gom các nhóm thành từng **Tệp phân loại** riêng biệt:
-  - *Tệp 1: Nhóm Sỉ Thời Trang (15 nhóm)*
-  - *Tệp 2: Nhóm Mẹ & Bé (10 nhóm)*
-  - *Tệp 3: Nhóm Chợ Cư Dân (20 nhóm)*
-- Khi có bài đăng từ Zalo thuộc mặt hàng nào, bạn chỉ cần chọn Tệp tương ứng để đăng bài, không cần tích chọn lại từng nhóm.
-
----
-
-## 2. Kho Nội Dung & Quản Lý Bài Đăng Đa Năng
-
-Không chỉ nhận bài rồi đăng ngay, hệ thống cung cấp một **Kho bài viết (Content Hub)** chuyên nghiệp:
-
-### A. Quản Lý Trạng Thái Bài Viết
-Hệ thống phân tách bài viết theo các tab trạng thái rõ ràng:
-1. **Bài Mới Lấy Từ Zalo (Pending/Drafts):** Chờ người dùng xem trước, sửa nội dung hoặc duyệt.
-2. **Hàng Đợi Lên Lịch (Queued/Scheduled):** Các bài đã duyệt đang xếp hàng chờ đến giờ đăng.
-3. **Đã Đăng Thành Công (Posted):** Lưu lại toàn bộ lịch sử kèm link bài viết trực tiếp trên từng nhóm Facebook để kiểm tra.
-4. **Đăng Thất Bại (Failed):** Hiển thị rõ lý do (Group cần duyệt bài, nick bị chặn tạm thời, mạng lỗi...) và nút **[Thử lại]**.
-
-### B. Bộ Biên Tập Chống Trùng Lặp Nội Dung (Anti-Duplication Engine)
-Facebook có thuật toán quét bài viết trùng lặp (spam content). Hệ thống tích hợp sẵn:
-- **Spin-tax văn bản:** Tự động tạo ra hàng trăm biến thể nội dung từ cùng một bài gốc:
-  - Cú pháp: `{Chào cả nhà|Hello mọi người|Chào ace}, xả kho áo {giá rẻ|cực sốc|ưu đãi}...`
-- **Mã băm vô hình (Zero-Width Hash):** Tự động chèn các ký tự ẩn không nhìn thấy bằng mắt thường vào giữa các chữ cái. Với người xem thì bài viết hoàn toàn bình thường, nhưng thuật toán Facebook sẽ nhận diện đây là bài viết duy nhất, không bị trùng mã hash.
-
-### C. Cơ Chế Lên Lịch Đa Dạng (Campaign Scheduler)
-- **Đăng ngay (Immediate):** Đăng tuần tự sang các nhóm đã chọn.
-- **Hẹn giờ 1 lần (Once):** Cài đặt đăng vào khung giờ vàng (VD: 11h30 trưa hoặc 20h tối).
-- **Lặp lại định kỳ (Recurring/Cron):** Tự động đăng lại bài viết vào các khung giờ cố định mỗi ngày.
-
----
-
-## 3. Bộ Não AI Viết Lại Nội Dung Theo Form Mẫu Định Sẵn
-
-> 🌟 **Giải quyết bài toán thực tế:** Tin nhắn từ nhóm Zalo của các đầu nậu/chủ sỉ thường rất sơ sài, viết tắt lộn xộn (`slg, sz, ib, freeship, sỉ 85k...`), dính tên thương hiệu và số điện thoại của người khác. AI đóng vai trò như **một chuyên viên Content Marketing** chuyên nghiệp, tự động chuyển hóa tin Zalo thô thành bài viết bán hàng Facebook hoàn chỉnh theo đúng khung mẫu của bạn.
-
-### A. Tùy Biến Form Mẫu Bài Viết (Custom Content Template)
-Bạn có thể tự thiết lập sẵn cấu trúc bài viết mẫu trong phần Cài đặt của Tool. Ví dụ:
-
-```text
-🔥 [TIÊU ĐỀ GIẬT TÍT & TÊN SẢN PHẨM] 🔥
-
-👉 ƯU ĐIỂM NỔI BẬT:
-- [Đặc điểm 1, chất liệu, xuất xứ trích từ Zalo]
-- [Đặc điểm 2, form dáng, tính năng]
-
-🎨 BẢNG MÀU & KÍCH THƯỚC:
-- Size: [Liệt kê size và cân nặng phù hợp]
-- Màu sắc: [Các màu có sẵn]
-
-💰 GIÁ BÁN ƯU ĐÃI:
-- Giá lẻ: [AI tự tính theo công thức hoặc giữ nguyên]
-- Mua từ 2 sản phẩm: Miễn phí vận chuyển toàn quốc!
-
-🛡️ CAM KẾT VÀ BẢO HÀNH:
-- Kiểm tra hàng trước khi thanh toán.
-- Lỗi 1 đổi 1 trong 7 ngày nếu có lỗi từ nhà sản xuất.
-
-☎️ THÔNG TIN LIÊN HỆ ĐẶT HÀNG:
-- Hotline / Zalo: 0988.888.888
-- Địa chỉ kho: Tổng kho sỉ Miền Bắc
-
-#Hashtags: #[Tên_Sản_Phẩm] #[Ngành_Hàng] #bansi #giare #chatluong
+```mermaid
+graph TD
+    A[Tin Nhắn Zalo Đầu Chủ / Quản Lý Tòa Nhà] -->|Bắt thông báo tự động| B[ZaloNotificationListener]
+    Z[Khách Tự Paste Tin Zalo + Chọn Ảnh Thư Viện] -->|Nạp thủ công| C[PostEditorActivity]
+    B --> D[ContentFilterEngine: Bộ Não AI CHDV]
+    C --> D
+    D -->|1. Cắt 100% Hoa Hồng Môi Giới HH| E[Nội Dung Bài Đăng Chuẩn Facebook]
+    D -->|2. Nhận diện Studio/Duplex, Quận, Giá| E
+    D -->|3. Thay Hotline & Chữ Ký Cá Nhân| E
+    E --> F{Lựa Chọn Chế Độ}
+    F -->|Bán Tự Động| G[Bong Bóng Nổi / Danh Sách Chờ Duyệt]
+    F -->|Tự Động 100%| H[WorkManager: Xếp Hàng Đăng Ngầm]
+    G -->|Bấm Duyệt & Đăng| H
+    H -->|Giãn cách an toàn 120s - 240s| I[mbasic Posting Engine với fb_dtsg]
+    I --> J[Hàng Loạt Nhóm Facebook BĐS]
+    J --> K[Lưu Link Bài Viết & Theo Dõi Tương Tác]
 ```
 
-### B. Cơ Chế Hoạt Động Của Trí Tuệ Nhân Tạo (AI Pipeline)
-1. **Trích xuất thực thể (Entity Extraction):** AI tự động bóc tách các dữ liệu quan trọng từ tin Zalo:
-   - Tên món đồ, chất liệu vải, tính năng.
-   - Bảng size, màu sắc, số lượng tối thiểu.
-   - Giá sỉ / giá nhập gốc.
-2. **Dịch thuật ngữ bán hàng:** Dịch các từ viết tắt chuyên môn:
-   - `slg` ➔ Số lượng
-   - `sz M, L` ➔ Đủ size từ M đến L (cho người từ 45 - 70kg)
-   - `vnxk` ➔ Hàng Việt Nam Xuất Khẩu chuẩn xịn
-   - `ctv` ➔ Cộng tác viên / Khách sỉ
-3. **Lọc sạch 100% rác Zalo:** Loại bỏ hoàn toàn tên shop cũ, số điện thoại của chủ sỉ Zalo, link nhóm Zalo cũ.
-4. **Tự động áp dụng công thức giá (Tùy chọn):**
-   - Bạn có thể đặt công thức: `Giá Facebook = Giá Zalo + 40.000đ` (hoặc nhân hệ số 1.3). AI sẽ tự động tính toán và đưa ra giá bán lẻ niêm yết mà bạn không cần phải ngồi bấm máy tính tính lãi.
-5. **Đa dạng phong cách viết (Tone of Voice):**
-   - *Hài hước, gần gũi:* Dành cho nhóm chợ dân sinh, đồ ăn, thời trang bình dân.
-   - *Uy tín, sang chảnh:* Dành cho hàng cao cấp, mỹ phẩm, đồ gia dụng.
-   - *Giật tít, xả kho gấp:* Dành cho bài thanh lý, đại hạ giá.
+---
 
-### C. Trải Nghiệm Điều Khiển Trên Điện Thoại
-- **Bán tự động:** Khi có tin Zalo mới ➔ AI tạo ngay bản nháp ➔ Màn hình điện thoại hiển thị song song 2 cột:
-  - *Bên trái:* Tin Zalo gốc lộn xộn.
-  - *Bên phải:* Bài viết Facebook bóng bẩy theo đúng Form của bạn.
-  - Bạn chỉ cần xem lướt qua, có thể bấm `[🤖 Yêu cầu AI viết lại kiểu khác]` hoặc bấm `[🚀 Duyệt Đăng]`.
-- **Tự động 100%:** AI nhận tin Zalo ➔ Tự ráp vào Form mẫu ➔ Tự động đẩy thẳng vào hàng đợi đăng Facebook mà bạn không cần chạm tay.
+## 2. Quản Lý Tài Khoản Facebook & 1-Click Tự Động Quét Nhóm
+
+Khắc phục hoàn toàn nhược điểm phải nhập tay ID nhóm, phiên bản cập nhật mang đến trải nghiệm tự động hóa ngang tầm Web Tool:
+
+### A. Quản Lý Phiên Làm Việc (Facebook Session Manager)
+- **Đăng nhập an toàn qua WebView Mobile:** Người dùng đăng nhập tài khoản Facebook chính thức trực tiếp trên điện thoại. Cookie xác thực (`c_user`, `xs`) được lưu trữ bảo mật cục bộ trong bộ nhớ máy (Private SharedPreferences), không gửi ra máy chủ trung gian.
+- **Thẻ hiển thị trạng thái tài khoản:**
+  - Tên Facebook & Ảnh đại diện.
+  - Mã định danh tài khoản: `UID (c_user)`.
+  - Trạng thái kiểm tra trực quan: `🟢 Live (Đang hoạt động)` hoặc cảnh báo nếu phiên đăng nhập hết hạn.
+  - Nút **Đổi nick / Đăng nhập lại** nhanh chóng.
+
+### B. 1-Click Tự Động Quét Sạch Toàn Bộ Nhóm FB Đã Tham Gia (`FacebookGroupScanner`)
+- Người dùng **chỉ cần bấm nút duy nhất: `[🔄 Tự Động Quét Sạch Nhóm Đã Tham Gia]`**.
+- Cơ chế quét:
+  1. Gửi request xác thực ngầm đến `https://mbasic.facebook.com/groups/?seemore` và `https://m.facebook.com/groups/joins/`.
+  2. Bộ Regex HTML Parser thông minh bóc tách toàn bộ mã ID và tên của tất cả các nhóm mà tài khoản đã tham gia.
+  3. Loại bỏ các liên kết rác hệ thống (*Tạo nhóm, Khám phá, Cài đặt...*).
+  4. **Tự động gán Tag Quận/Khu vực:** Quét tên nhóm và tự động gắn chip địa lý tương ứng (*Bình Thạnh, Quận 3, Quận 1, Phú Nhuận, Quận 10, TP. Thủ Đức, Khu Vực Đại Học...*).
+  5. Tự động lưu trữ danh sách vào cơ sở dữ liệu để tái sử dụng lâu dài.
+
+### C. Bộ Công Cụ Thao Tác Nhóm Hàng Loạt
+- **Thanh tìm kiếm tức thì:** Gõ từ khóa tên nhóm hoặc tên Quận để lọc nhanh nhóm cần đăng.
+- **Nút "Chọn tất cả" & "Bỏ chọn":** Bật/tắt hàng loạt 50–100 nhóm chỉ bằng 1 chạm.
+- **Bộ đếm thời gian thực:** Hiển thị rõ ràng: *"Đã chọn: X / Y nhóm"*.
+- **Nút icon Facebook trên từng nhóm:** Bấm vào là mở trực tiếp trang nhóm trên ứng dụng Facebook để kiểm tra quy định nhóm, bài ghim hoặc xem lại bài viết của mình.
 
 ---
 
-## 4. Thu Thập Dữ Liệu Zalo & Xử Lý Vấn Đề Quyền Hệ Thống
+## 3. Bộ Não AI Form Mẫu Bán Phòng & Lọc Sạch Hoa Hồng Môi Giới
 
-### A. Vì Sao Điện Thoại Bị Chặn Quyền Đọc Thông Báo Zalo?
-Trên Android 13, 14 và đặc biệt là hệ điều hành **Xiaomi / Redmi (MIUI / HyperOS)**:
-- Google và Xiaomi đã áp dụng chính sách **"Cài đặt bị hạn chế" (Restricted Settings)** đối với các file `.apk` cài từ ngoài CH Play.
-- Người dùng khi vào cấp quyền "Truy cập thông báo" (Notification Listener) thường thấy nút gạt bị mờ đi và thông báo: *"Cài đặt bị hạn chế để bảo vệ bạn"*.
+> ⚠️ **Nỗi đau lớn nhất của môi giới BĐS:** Trong các nhóm chat Zalo đầu chủ, tin nhắn thường kèm theo thông tin nội bộ rất nhạy cảm: `HH 50%`, `hh 1 tháng`, `phí mg 3tr`, `lh chủ nhà A.Tuấn 0901...`. Nếu đăng nhầm lên Facebook có khách hàng xem sẽ bị "lộ bài", mất khách và lộ số chủ nhà!
 
-#### 💡 Cách mở khóa quyền trên điện thoại Xiaomi:
-1. Vào **Cài đặt** của máy ➔ Chọn **Ứng dụng** ➔ **Quản lý ứng dụng**.
-2. Tìm và bấm vào ứng dụng **Z2FB Manager**.
-3. Bấm vào biểu tượng **dấu 3 chấm (⋮)** ở góc trên cùng bên phải màn hình.
-4. Chọn: **"Cho phép các cài đặt bị hạn chế" (Allow restricted settings)**.
-5. Sau bước này, bạn mới có thể vào lại phần Cấp quyền thông báo và bật công tắc bình thường!
+### A. Thuật Toán Lọc 100% Hoa Hồng Môi Giới (`BROKER_COMMISSION_REGEX`)
+Bộ lọc thông minh nhận diện và xóa triệt để:
+- Các biến thể phần trăm: `HH 50%`, `hh 60%`, `hoa hồng 50%`, `hh ctv 50%`...
+- Các biến thể tháng thuê: `hh 1 tháng`, `HH 0.5 tháng`, `phí môi giới 1th`...
+- Các biến thể tiền mặt: `hh 3tr`, `hoa hồng 2.5 triệu`, `phí mg 3.500k`...
+- Xóa sạch các đường link mời vào nhóm Zalo cũ (`zalo.me/...`).
 
-### B. Cơ Chế Gom Bài & Tải Ảnh Từ Zalo
-- **Lọc theo nhóm chỉ định:** Chỉ bắt tin nhắn từ đúng các nhóm Zalo bạn cần lấy hàng, bỏ qua tin nhắn riêng tư và nhóm bạn bè.
-- **Bộ đệm gộp bài (Post Batcher):** Tự động gom 3 – 10 ảnh gửi liên tiếp trong vòng 15 – 20 giây của cùng người gửi thành 1 bài viết duy nhất kèm album ảnh.
-- **Hỗ trợ chia sẻ 1 chạm (Share Sheet):** Khi đang ở trong Zalo, chỉ cần bấm nút "Chia sẻ" bài viết ➔ chọn Z2FB Tool để nạp toàn bộ ảnh gốc chất lượng cao HD.
+### B. Tự Động Bóc Tách Dữ Liệu Căn Hộ
+- **Nhận diện loại phòng (`extractRoomType`):** Tự động phân loại từ khóa trong tin nhắn:
+  - Có `gác`, `lửng`, `duplex` ➔ Gán nhãn **Duplex Gác Lửng**.
+  - Có `studio`, `stu`, `ban công` ➔ Gán nhãn **Studio Ban Công**.
+  - Có `1pn`, `1 phòng ngủ` ➔ Gán nhãn **1 Phòng Ngủ Riêng**.
+  - Có `2pn`, `2 phòng ngủ` ➔ Gán nhãn **2 Phòng Ngủ Cao Cấp**.
+  - Có `ccmn`, `chung cư mini` ➔ Gán nhãn **Chung Cư Mini**.
+- **Nhận diện Quận/Khu vực (`extractDistrict`):** Tự động phân tích các địa danh: Quận 1, Quận 3, Bình Thạnh (D2, Hutech), Phú Nhuận, Quận 10, Tân Bình, Gò Vấp, Quận 7, TP. Thủ Đức...
+- **Nhận diện giá thuê (`extractPrice`):** Trích xuất các cụm số kèm đơn vị: `6.5tr` ➔ `6.5 Triệu / tháng`, `7tr5` ➔ `7.5 Triệu / tháng`.
+
+### C. Ráp Vào Form Mẫu Chuẩn Facebook (Customizable AI Template)
+Người dùng có thể tùy chỉnh khung form bán phòng trong Tab Cài đặt:
+
+```text
+🔥 [TIÊU ĐỀ GIẬT TÍT & LOẠI PHÒNG] 🔥
+
+📍 Vị trí: [Đường, Quận - Thuận tiện di chuyển]
+💰 Giá thuê: [Giá thuê / tháng]
+
+✨ TIỆN NGHI CĂN HỘ (Full nội thất cao cấp):
+- Máy lạnh, tủ lạnh, máy giặt, giường nệm cao cấp.
+- Tủ quần áo lớn, bàn làm việc, kệ bếp riêng nấu ăn.
+
+🏢 TIỆN ÍCH TÒA NHÀ:
+- Khóa cổng vân tay, camera an ninh 24/7.
+- Giờ giấc tự do 100%, không chung chủ.
+- Thang máy, bãi để xe rộng rãi, cho nuôi pet 🐶🐱.
+
+📝 Chi tiết thêm từ chủ nhà:
+[CÁC_DÒNG_MÔ_TẢ_THÔ_ĐÃ_LỌC_SẠCH_HOA_HỒNG]
+
+☎️ LIÊN HỆ XEM PHÒNG TRỰC TIẾP:
+[HOTLINE_VA_CHUKY_CỦA_BẠN]
+
+#chothuecanho #canhodichvu #chdv #phongtro #chothue
+```
 
 ---
 
-## 5. Cơ Chế Đăng Bài Thông Minh & Chống Checkpoint Facebook
+## 4. Quản Lý Kho Bài Đăng, Album Ảnh HD & Nạp Tin Đa Dạng
 
-Đăng bài vào nhiều nhóm bằng nick Facebook nếu không có thuật toán an toàn sẽ rất nhanh bị khóa tính năng đăng bài:
+### A. Ba Phương Thức Nạp Tin Cực Kỳ Linh Hoạt
+1. **Tự động bắt thông báo Zalo:** Khi điện thoại nhận tin nhắn từ các nhóm Zalo đầu chủ, app tự động bóc tách và đưa vào giỏ hàng.
+2. **Nạp tin thủ công (Copy & Paste):** Người dùng chỉ cần copy bài viết trên Zalo PC/điện thoại, mở app bấm **"📋 Dán tin"** và bấm **"🤖 AI Viết Lại"** để chuẩn hóa chỉ trong 1 giây.
+3. **Chọn nhiều ảnh sắc nét từ Thư viện máy (Gallery Picker):** Bấm nút **"+ Thêm ảnh HD"** cho phép chọn cùng lúc 3–10 ảnh căn hộ góc rộng, chất lượng cao từ album điện thoại (hỗ trợ `ActivityResultContracts.GetMultipleContents`).
 
-| Cơ Chế Bảo Vệ | Cách Thức Hoạt Động | Lợi Ích |
-| :--- | :--- | :--- |
-| **Giãn cách an toàn (Delay Jitter)** | Sau khi đăng 1 nhóm, hệ thống tạm dừng ngẫu nhiên từ **120s đến 300s** (không cố định) trước khi đăng nhóm tiếp theo. | Ngụy trang như hành vi lướt và đăng bài của người thật, Facebook không thể quét ra bot. |
-| **Giới hạn số bài/ngày (Daily Limit)** | Cài đặt trần đăng tối đa (VD: Tối đa 20 bài/ngày cho 1 tài khoản). | Tránh việc tài khoản bị quét hoạt động bất thường. |
-| **Đăng qua Share Sheet App FB** | Thay vì gửi request ngầm, tool hỗ trợ mở thẳng ứng dụng Facebook thật và tự dán bài. | An toàn tuyệt đối 100%, Facebook nhận diện là thao tác trên ứng dụng chính thức. |
-| **Ghi nhận lịch sử & Nhật ký lỗi** | Mọi thao tác đều có Live Log: bài đăng thành công lưu lại URL, bài lỗi lưu rõ nguyên nhân. | Giúp bạn kiểm soát và điều chỉnh nhóm đăng kịp thời. |
+### B. Màn Hình Quản Lý & Bộ Lọc Phân Trạng Thái (Status Filters)
+Màn hình Giỏ Hàng Phòng được trang bị thanh Filter Chips:
+- **Tất cả bài:** Hiển thị toàn bộ kho hàng phòng.
+- **Chờ duyệt (Pending):** Các bài mới lấy từ Zalo hoặc mới soạn, chờ người dùng kiểm tra.
+- **Đã đăng (Posted):** Các bài đã được đăng thành công lên Facebook. Hiển thị nút **"🔗 Mở bài trên Facebook"** để mở trực tiếp kiểm tra khách hỏi thuê.
+- **Lỗi (Failed):** Các bài đăng gặp sự cố (nhóm bắt admin duyệt, checkpoint...). Có thông báo chi tiết lý do và nút **"⚠️ Thử lại (Retry)"**.
+
+---
+
+## 5. Cơ Chế Đăng Bài Facebook Thật & Chống Checkpoint (Anti-Ban)
+
+### A. Posting Engine Mô Phỏng `mbasic` Đi Kèm Bảo Mật `fb_dtsg`
+- Không sử dụng Graph API lỗi thời (vì Facebook chặn Graph API nếu không có Token doanh nghiệp).
+- Ứng dụng thực hiện cơ chế tự động hóa:
+  1. Truy cập vào trang nhóm mục tiêu `https://mbasic.facebook.com/groups/$groupId`.
+  2. Tự động bóc tách mã xác thực phiên: `fb_dtsg`, `jazoest` và URL xử lý form composer.
+  3. Đóng gói dữ liệu bài viết (Nội dung chữ + Multipart ảnh) gửi lên Facebook.
+  4. Kiểm tra phản hồi HTTP và nội dung trang để xác nhận: Đăng thành công hay rơi vào hàng đợi duyệt của Admin.
+
+### B. Giãn Cách Ngẫu Nhiên Chống Checkpoint (Anti-Ban Jitter)
+- Khi đăng bài lên nhiều nhóm, Facebook sẽ khóa tài khoản nếu phát hiện bắn bài dồn dập trong vài giây.
+- Ứng dụng tích hợp thuật toán **Giãn cách an toàn (Anti-Ban Jitter)**:
+  - Thiết lập thời gian cơ sở: `180 giây` (có thể chỉnh trong Cài đặt từ 120s – 300s).
+  - Thuật toán tự động cộng/trừ ngẫu nhiên một khoảng `±15s đến 30s` giữa các nhóm.
+  - Hành vi đăng bài hoàn toàn tự nhiên như một con người đang thao tác trên điện thoại.
+
+### C. Chế Độ Chia Sẻ 1-Chạm Sang App Facebook Chính Thức (Native Share Fallback)
+Nếu người dùng không muốn dùng Cookie hoặc muốn đăng bài có tag bạn bè/vị trí:
+- Bấm nút chia sẻ ➔ Ứng dụng tự động sao chép toàn bộ caption AI vào bộ nhớ tạm (Clipboard), gom toàn bộ ảnh căn hộ và mở thẳng ứng dụng Facebook chính thức. Người dùng chỉ cần dán caption và bấm Đăng.
 
 ---
 
 ## 6. Hai Chế Độ Vận Hành: Bán Tự Động & Tự Động 100%
 
-### A. Chế Độ Bán Tự Động (Kiểm Soát Tối Đa)
-1. Zalo nhóm có bài mới ➔ AI tự động đọc tin, bóc tách và viết lại theo Form bài đăng Facebook của bạn.
-2. Thông báo bài mới xuất hiện trên điện thoại:
-   - Bạn mở ra xem trước bài viết (ảnh + chữ do AI viết).
-   - Có thể chỉnh sửa nhanh giá bán hoặc câu chữ nếu muốn.
-   - Chọn Tệp nhóm Facebook muốn bắn sang.
-   - Bấm nút **[🚀 Duyệt & Đăng Ngay]** hoặc **[⏰ Hẹn Giờ]**.
+Hệ thống cho phép bật/tắt linh hoạt ngay tại đầu màn hình chính:
 
-### B. Chế Độ Tự Động 100% (Rảnh Tay Hoàn Toàn)
-1. Bạn bật công tắc "Chế độ Auto", chọn sẵn Form mẫu AI và chọn Tệp nhóm Facebook mục tiêu.
-2. Cứ khi nào nhóm Zalo có bài viết mới:
-   - Hệ thống tự động lọc bỏ tin rác.
-   - AI tự động viết lại bài theo form mẫu chuẩn SEO.
-   - Tự động nạp vào hàng đợi và chạy ngầm đăng lần lượt sang các nhóm với thời gian giãn cách an toàn.
-   - Đăng xong, gửi một thông báo tóm tắt về điện thoại: *"✅ Đã đăng thành công bài viết lên 5 nhóm Facebook"*.
+| Chế độ | Cách thức hoạt động | Phù hợp khi nào? |
+| :--- | :--- | :--- |
+| **Bán Tự Động (Khuyên Dùng)** | - Zalo có tin ➔ AI tự động bóc tách, chuẩn hóa form mẫu sẵn.<br>- Hiện **Bong bóng nổi (Floating Bubble)** hoặc nằm trong danh sách Chờ Duyệt.<br>- Bạn liếc mắt kiểm tra giá, ảnh và bấm **[🚀 Duyệt & Đăng]** thì tool mới đăng. | Môi giới muốn kiểm soát 100% hình ảnh và giá cả trước khi tiếp cận khách hàng. |
+| **Tự Động 100% (Full Auto)** | - Zalo có tin phòng ➔ AI tự động lọc hoa hồng, thay Hotline, ráp form.<br>- Tự động đưa vào hàng đợi `WorkManager` đăng ngầm tuần tự lên tất cả các nhóm FB đã chọn theo thời gian giãn cách. | Phù hợp khi bạn đang đi ngoài đường, dẫn khách hoặc đang ngủ mà vẫn muốn bài đăng phủ sóng liên tục. |
 
 ---
 
-## 7. Đánh Giá Kiến Trúc Nền Tảng (APK Thuần vs Web App Mobile)
+## 7. Bảng So Sánh Trước & Sau Bản Cập Nhật
 
-Để có một hệ thống bao gồm **cả Quản lý chuyên sâu, Quét nhóm, Trí tuệ nhân tạo AI và Đăng bài**, bạn có 2 hướng kiến trúc:
-
-### Mô hình 1: App APK Thuần Chạy Hoàn Toàn Trên Điện Thoại
-- **Ưu điểm:** Cài trực tiếp trên điện thoại Android, không cần dùng máy tính.
-- **Nhược điểm:**
-  - Bị giới hạn bởi quyền hạn ngặt nghèo của Android (dễ bị hệ điều hành tắt ngầm khi khóa màn hình hoặc tiết kiệm pin).
-  - Các tính năng phức tạp như quét hàng trăm nhóm Facebook, gọi AI xử lý bài viết liên tục, spin-tax trên điện thoại sẽ gây nóng máy và nhanh tụt pin.
-
-### Mô hình 2: Mô hình Máy Chủ/PC Xử Lý + Giao Diện Web App Mobile (Khuyên Dùng)
-*(Hệ thống giống như dự án `fb_group_automation` sẵn có trên máy tính của bạn, kết hợp giao diện Web tối ưu riêng cho màn hình điện thoại)*
-- **Cách hoạt động:**
-  - Bộ máy quét nhóm, nuôi tài khoản, gọi AI xử lý và tự động đăng bài chạy bền bỉ trên máy tính hoặc VPS.
-  - Trên điện thoại Android, bạn chỉ cần mở trình duyệt truy cập bảng điều khiển (hoặc lưu icon ra màn hình chính dạng **PWA** dùng như một app native bình thường).
-  - Bạn có thể điền form mẫu AI, quản lý danh sách nhóm, quét nhóm mới, duyệt bài viết Zalo và bật tắt Auto mọi lúc mọi nơi ngay trên điện thoại mà không làm nóng máy, không lo điện thoại bị ngắt quyền ngầm.
+| Hạng mục | Bản Cũ (Trước Cập Nhật) | Bản Mới (CHDV Facebook Manager Pro) |
+| :--- | :--- | :--- |
+| **Quản lý Nhóm FB** | Phải gõ ID thủ công từng nhóm hoặc dùng 2 nhóm mẫu. | **1-Click Tự Động Quét Sạch toàn bộ nhóm** đã tham gia từ Cookie. |
+| **Thao tác Nhóm** | Không có tìm kiếm, không có chọn tất cả. | Có ô tìm kiếm nhóm/Quận, nút **Chọn tất cả**, **Bỏ chọn**, đếm số nhóm. |
+| **Link nhóm Facebook** | Không xem được nhóm. | Tích hợp nút **mở trực tiếp nhóm trên Facebook** để kiểm tra. |
+| **Nguồn ảnh căn hộ** | Chỉ lấy 1 ảnh thumbnail nhỏ mờ từ Zalo notification. | Có nút **+ Thêm ảnh HD từ Thư viện**, chọn cùng lúc 3–10 ảnh rõ nét. |
+| **Nội dung tin nhắn** | Mẫu e-commerce quần áo bán hàng sỉ lẻ. | **Chuyên biệt 100% cho CHDV**: Studio, Duplex, Quận, Giá thuê. |
+| **Xử lý Hoa hồng** | Chưa lọc hoa hồng nội bộ. | **Lọc triệt để 100% `HH 50%`, `hh 1 tháng`**, không lộ bí mật sale. |
+| **Cơ chế Đăng bài** | Gọi Graph API lỗi thời (bị Facebook chặn Cookie). | **Mô phỏng `mbasic` kèm `fb_dtsg`**, đăng ngầm ổn định. |
+| **Bộ lọc bài viết** | Danh sách chung, không phân loại. | Thanh Filter Chips: **Tất cả / Chờ duyệt / Đã đăng / Lỗi**. |
+| **Nhật ký kết quả** | Không biết bài đã đăng ở đâu. | Lưu link bài viết thực tế (`fbPostUrl`), bấm vào mở xem ngay. |
 
 ---
 
-> 🛑 **DỰ ÁN TẠM DỪNG TẠI ĐÂY ĐỂ BẠN ĐỌC VÀ ĐÁNH GIÁ BẢN ĐẶC TẢ.**
+## 8. Hướng Dẫn Cài Đặt, Cấp Quyền & Vận Hành
+
+### Bước 1: Tải và Cài Đặt File APK
+1. Truy cập trực tiếp link GitHub Actions của bản build thành công: [**Bản Build APK #35197914784**](https://github.com/hoangbao-code/tool-fb-automation/actions/runs/35197914784).
+2. Tải tệp **`Z2FB-Post-Manager-Debug-APK.zip`** ở mục **Artifacts** cuối trang.
+3. Giải nén file `.zip` trên điện thoại để nhận file **`app-debug.apk`**.
+4. Mở file để cài đặt (nếu Google Play Protect cảnh báo do app dạng debug cá nhân chưa đưa lên CH Play Store, hãy chọn **"Vẫn cài đặt / Install anyway"**).
+
+### Bước 2: Cấp Quyền Hoạt Động (Chỉ Làm 1 Lần Duy Nhất)
+Vào Tab **Cài Đặt & AI Form**:
+- Bấm **"Cấp quyền Bắt thông báo Zalo"** ➔ Bật công tắc cho ứng dụng *CHDV Post Manager*.
+- Bấm **"Cấp quyền Bong bóng nổi"** ➔ Cho phép ứng dụng hiển thị trên các ứng dụng khác.
+
+### Bước 3: Đăng Nhập & Quét Nhóm Facebook
+1. Chuyển sang Tab **Nhóm Facebook BĐS**.
+2. Bấm **"Đăng nhập"** ➔ Đăng nhập tài khoản Facebook của bạn trong màn hình WebView an toàn.
+3. Sau khi đăng nhập thành công, bấm nút: **`[🔄 Tự Động Quét Sạch Nhóm Đã Tham Gia]`**.
+4. Toàn bộ danh sách nhóm BĐS bạn đã tham gia sẽ hiện ra kèm Tag Quận. Bấm **"Chọn tất cả"** hoặc tích chọn các nhóm bạn muốn phủ sóng.
+
+### Bước 4: Cấu Hình Hotline & AI Form
+1. Chuyển sang Tab **Cài Đặt & AI Form**.
+2. Điền số Hotline/Zalo cá nhân của bạn vào ô: `Hotline & Zalo của bạn (Môi giới)`.
+3. Điền chữ ký mong muốn vào ô: `Chữ ký kết bài`.
+4. Bấm **"Lưu Cấu Hình"**.
+
+### Bước 5: Bắt Đầu Đăng Bài BĐS
+- **Khi có khách gửi tin Zalo:** Bạn chỉ cần mở app, bài viết đã được AI bóc tách sẵn loại phòng, giá, quận và lọc sạch hoa hồng.
+- **Hoặc nạp tin thủ công:** Bấm nút **"+ Thêm phòng"**, dán nội dung từ Zalo, chọn ảnh căn hộ HD từ máy, bấm **"🤖 AI Viết Lại"** rồi bấm **"🚀 Đăng bài ngay"**!
