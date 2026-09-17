@@ -101,8 +101,11 @@ class ZaloNotificationListener : NotificationListenerService() {
         val repository = StorageRepository.getInstance(applicationContext)
         val settings = repository.getSettings()
 
-        // Xử lý tự động thay SĐT, chữ ký
+        // Xử lý tự động thay SĐT, chữ ký và bóc tách dữ liệu CHDV
         post.processedContent = ContentFilterEngine.processContent(post.originalContent, settings)
+        post.roomType = ContentFilterEngine.extractRoomType(post.originalContent)
+        post.district = ContentFilterEngine.extractDistrict(post.originalContent)
+        post.price = ContentFilterEngine.extractPrice(post.originalContent)
 
         // Gán danh sách Group Facebook mặc định đã được tick chọn
         val activeGroups = repository.getFacebookGroups().filter { it.isSelected }.map { it.id }

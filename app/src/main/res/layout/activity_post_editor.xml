@@ -12,7 +12,8 @@
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         android:background="@color/surface"
-        app:title="Biên Tập Bài Viết"
+        app:title="Biên Tập Bài Đăng CHDV"
+        app:subtitle="Chuẩn hóa bài đăng Facebook"
         app:navigationIcon="@drawable/ic_edit" />
 
     <ScrollView
@@ -30,50 +31,58 @@
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                app:cardCornerRadius="12dp"
+                app:cardCornerRadius="16dp"
                 app:cardElevation="2dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/divider"
                 app:cardBackgroundColor="@color/surface">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:padding="12dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Nội dung Caption:"
-                        android:textStyle="bold"
-                        android:textSize="14sp"
-                        android:textColor="@color/text_primary" />
-
-                    <EditText
-                        android:id="@+id/et_caption"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:minLines="5"
-                        android:gravity="top"
-                        android:background="@null"
-                        android:hint="Nhập nội dung bài đăng..."
-                        android:textSize="14sp"
-                        android:textColor="@color/text_primary" />
+                    android:padding="14dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
-                        android:layout_marginTop="8dp">
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Nội Dung Bài Viết Facebook:"
+                            android:textStyle="bold"
+                            android:textSize="14sp"
+                            android:textColor="@color/text_primary" />
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_apply_rules"
                             android:layout_width="wrap_content"
                             android:layout_height="36dp"
-                            android:text="⚡ Thay SĐT &amp; Chữ ký"
+                            android:text="🤖 AI Viết Lại"
                             android:textSize="12sp"
+                            android:textStyle="bold"
+                            app:icon="@drawable/ic_sparkle"
+                            app:cornerRadius="8dp"
                             style="@style/Widget.Material3.Button.TonalButton" />
                     </LinearLayout>
+
+                    <EditText
+                        android:id="@+id/et_caption"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:minLines="7"
+                        android:gravity="top"
+                        android:background="@null"
+                        android:hint="Nội dung bài đăng cho thuê phòng..."
+                        android:textSize="13sp"
+                        android:lineSpacingMultiplier="1.2"
+                        android:textColor="@color/text_primary" />
+
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -83,7 +92,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:layout_marginBottom="6dp"
-                android:text="Hình ảnh đính kèm:"
+                android:text="📸 Album Hình Ảnh Căn Hộ:"
                 android:textStyle="bold"
                 android:textSize="14sp"
                 android:textColor="@color/text_primary" />
@@ -100,7 +109,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:layout_marginBottom="6dp"
-                android:text="Chọn Nhóm Facebook Muốn Đăng:"
+                android:text="🎯 Chọn Nhóm Facebook BĐS Đăng Bài:"
                 android:textStyle="bold"
                 android:textSize="14sp"
                 android:textColor="@color/text_primary" />
@@ -126,21 +135,22 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_editor_save_draft"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="44dp"
             android:layout_weight="1"
-            android:text="Lưu bản nháp"
+            android:text="Lưu nháp"
             style="@style/Widget.Material3.Button.OutlinedButton"
-            app:cornerRadius="8dp" />
+            app:cornerRadius="10dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_editor_post_now"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
+            android:layout_height="44dp"
+            android:layout_weight="1.2"
             android:layout_marginStart="8dp"
             android:text="🚀 Đăng ngay"
+            android:textStyle="bold"
             app:backgroundTint="@color/primary"
-            app:cornerRadius="8dp" />
+            app:cornerRadius="10dp" />
     </LinearLayout>
 
 </LinearLayout>

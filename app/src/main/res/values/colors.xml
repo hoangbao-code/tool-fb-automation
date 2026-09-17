@@ -1,28 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary">#1877F2</color>
-    <color name="primary_dark">#0D56B3</color>
-    <color name="primary_container">#D8E6FF</color>
+    <!-- Brand Real Estate Luxury Palette -->
+    <color name="primary">#0F62FE</color> <!-- IBM / Real Estate Blue -->
+    <color name="primary_dark">#0043CE</color>
+    <color name="primary_container">#EDF5FF</color>
     <color name="on_primary">#FFFFFF</color>
-    
-    <color name="secondary">#0068FF</color> <!-- Zalo Blue -->
-    <color name="secondary_container">#D4E5FF</color>
-    
-    <color name="accent_green">#2ECC71</color>
-    <color name="accent_orange">#E67E22</color>
-    <color name="accent_red">#E74C3C</color>
-    
-    <color name="background">#F8F9FA</color>
+
+    <color name="secondary">#0D9488</color> <!-- Teal / Emerald for amenities -->
+    <color name="secondary_container">#CCFBF1</color>
+    <color name="on_secondary">#134E4A</color>
+
+    <color name="price_tag">#D97706</color> <!-- Amber Orange for Price -->
+    <color name="price_tag_bg">#FEF3C7</color>
+
+    <color name="accent_green">#10B981</color>
+    <color name="accent_red">#EF4444</color>
+
+    <!-- Neutral Backgrounds -->
+    <color name="background">#F8FAFC</color>
     <color name="surface">#FFFFFF</color>
-    <color name="surface_variant">#F1F3F5</color>
-    <color name="text_primary">#212529</color>
-    <color name="text_secondary">#6C757D</color>
-    <color name="divider">#E9ECEF</color>
-    
-    <color name="badge_pending">#FFF3CD</color>
-    <color name="badge_pending_text">#856404</color>
-    <color name="badge_success">#D4EDDA</color>
-    <color name="badge_success_text">#155724</color>
-    <color name="badge_failed">#F8D7DA</color>
-    <color name="badge_failed_text">#721C24</color>
+    <color name="surface_variant">#F1F5F9</color>
+    <color name="text_primary">#0F172A</color>
+    <color name="text_secondary">#64748B</color>
+    <color name="text_muted">#94A3B8</color>
+    <color name="divider">#E2E8F0</color>
+
+    <!-- Status Badges -->
+    <color name="badge_pending">#FEF3C7</color>
+    <color name="badge_pending_text">#B45309</color>
+    <color name="badge_posted">#DCFCE7</color>
+    <color name="badge_posted_text">#15803D</color>
+    <color name="badge_failed">#FEE2E2</color>
+    <color name="badge_failed_text">#B91C1C</color>
 </resources>

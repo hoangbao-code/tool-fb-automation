@@ -13,7 +13,6 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.NotificationManagerCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.work.OneTimeWorkRequestBuilder
@@ -34,7 +33,6 @@ import com.zalotofb.poster.services.FacebookPostWorker
 import com.zalotofb.poster.services.ZaloNotificationListener
 import com.zalotofb.poster.ui.adapters.GroupAdapter
 import com.zalotofb.poster.ui.adapters.PostAdapter
-import java.util.UUID
 
 class MainActivity : AppCompatActivity() {
 
@@ -48,7 +46,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var postAdapter: PostAdapter
     private lateinit var groupAdapter: GroupAdapter
 
-    // Views container
     private lateinit var fragmentContainer: android.widget.FrameLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,7 +94,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- TAB 1: HÀNG ĐỢI BÀI VIẾT ---
+    // --- TAB 1: GIỎ HÀNG PHÒNG CHDV ---
     private fun showQueueTab() {
         fragmentContainer.removeAllViews()
         val view = layoutInflater.inflate(R.layout.fragment_queue, fragmentContainer, true)
@@ -110,12 +107,20 @@ class MainActivity : AppCompatActivity() {
 
         val settings = repository.getSettings()
         switchAuto.isChecked = settings.isAutoMode
-        tvDesc.text = if (settings.isAutoMode) "Đang bật: Tự động 100% (Cứ có tin Zalo là tự đăng)" else "Đang tắt: Bán tự động (cần bấm duyệt trước khi đăng)"
+        tvDesc.text = if (settings.isAutoMode) {
+            "Đang bật: Tự động 100% (Zalo có phòng ➔ AI tự ráp form ➔ Tự đăng FB)"
+        } else {
+            "Đang tắt: Bán tự động (AI viết bài sẵn ➔ Bạn bấm duyệt mới đăng)"
+        }
 
         switchAuto.setOnCheckedChangeListener { _, isChecked ->
             settings.isAutoMode = isChecked
             repository.saveSettings(settings)
-            tvDesc.text = if (isChecked) "Đang bật: Tự động 100% (Cứ có tin Zalo là tự đăng)" else "Đang tắt: Bán tự động (cần bấm duyệt trước khi đăng)"
+            tvDesc.text = if (isChecked) {
+                "Đang bật: Tự động 100% (Zalo có phòng ➔ AI tự ráp form ➔ Tự đăng FB)"
+            } else {
+                "Đang tắt: Bán tự động (AI viết bài sẵn ➔ Bạn bấm duyệt mới đăng)"
+            }
             Toast.makeText(this, "Đã chuyển sang: ${if (isChecked) "Tự động 100%" else "Bán tự động"}", Toast.LENGTH_SHORT).show()
         }
 
@@ -149,7 +154,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun approveAndPost(post: PostItem) {
         if (!sessionManager.isLoggedIn()) {
-            Toast.makeText(this, "Vui lòng đăng nhập Facebook trước (Tab Nhóm Facebook)", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Vui lòng đăng nhập Facebook trước (Tab Nhóm Facebook BĐS)", Toast.LENGTH_LONG).show()
             bottomNav.selectedItemId = R.id.nav_groups
             return
         }
@@ -163,10 +168,10 @@ class MainActivity : AppCompatActivity() {
             .build()
         WorkManager.getInstance(this).enqueue(request)
 
-        Toast.makeText(this, "Đã đưa bài viết vào hàng đợi đăng!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Đã đưa bài viết vào hàng đợi đăng lên Facebook!", Toast.LENGTH_SHORT).show()
     }
 
-    // --- TAB 2: NHÓM FACEBOOK ---
+    // --- TAB 2: NHÓM FACEBOOK BĐS ---
     private fun showGroupsTab() {
         fragmentContainer.removeAllViews()
         val view = layoutInflater.inflate(R.layout.fragment_groups, fragmentContainer, true)
@@ -212,14 +217,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showAddGroupDialog() {
-        val dialogView = LayoutInflater.from(this).inflate(R.layout.item_group, null)
-        val etName = EditText(this).apply { hint = "Tên Nhóm (VD: Chợ Sỉ Quần Áo)" }
-        val etId = EditText(this).apply { hint = "ID Nhóm Facebook (VD: 1234567890)" }
+        val etName = EditText(this).apply { hint = "Tên Nhóm (VD: Hội Thuê Phòng Q3)" }
+        val etDistrict = EditText(this).apply { hint = "Khu vực / Quận (VD: Quận 3, Bình Thạnh)" }
+        val etId = EditText(this).apply { hint = "ID Nhóm Facebook (VD: 1029384756)" }
 
         val layout = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             setPadding(40, 20, 40, 10)
             addView(etName)
+            addView(etDistrict)
             addView(etId)
         }
 
@@ -228,9 +234,10 @@ class MainActivity : AppCompatActivity() {
             .setView(layout)
             .setPositiveButton("Thêm") { _, _ ->
                 val name = etName.text.toString().trim()
+                val district = etDistrict.text.toString().trim().ifBlank { "Toàn TP" }
                 val id = etId.text.toString().trim()
                 if (name.isNotEmpty() && id.isNotEmpty()) {
-                    val newGroup = FacebookGroup(id = id, name = name, isSelected = true)
+                    val newGroup = FacebookGroup(id = id, name = name, districtTag = district, isSelected = true)
                     repository.saveFacebookGroup(newGroup)
                     groupAdapter.updateData(repository.getFacebookGroups())
                     Toast.makeText(this, "Đã thêm nhóm: $name", Toast.LENGTH_SHORT).show()
@@ -240,23 +247,25 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    // --- TAB 3: CÀI ĐẶT ---
+    // --- TAB 3: CÀI ĐẶT & AI FORM ---
     private fun showSettingsTab() {
         fragmentContainer.removeAllViews()
         val view = layoutInflater.inflate(R.layout.fragment_settings, fragmentContainer, true)
 
         val btnNotif: MaterialButton = view.findViewById(R.id.btn_grant_notif)
         val btnOverlay: MaterialButton = view.findViewById(R.id.btn_grant_overlay)
-        val etZaloGroups: TextInputEditText = view.findViewById(R.id.et_zalo_groups)
+        val etAiTemplate: TextInputEditText = view.findViewById(R.id.et_ai_template)
         val etPhone: TextInputEditText = view.findViewById(R.id.et_replace_phone)
         val etSignature: TextInputEditText = view.findViewById(R.id.et_signature)
+        val etZaloGroups: TextInputEditText = view.findViewById(R.id.et_zalo_groups)
         val etDelay: TextInputEditText = view.findViewById(R.id.et_delay_sec)
         val btnSave: MaterialButton = view.findViewById(R.id.btn_save_settings)
 
         val settings = repository.getSettings()
-        etZaloGroups.setText(settings.monitoredZaloGroups)
+        etAiTemplate.setText(settings.aiPromptTemplate)
         etPhone.setText(settings.replacementPhone)
         etSignature.setText(settings.signatureText)
+        etZaloGroups.setText(settings.monitoredZaloGroups)
         etDelay.setText(settings.antiBanDelaySeconds.toString())
 
         btnNotif.setOnClickListener {
@@ -271,26 +280,26 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnSave.setOnClickListener {
-            settings.monitoredZaloGroups = etZaloGroups.text.toString().trim()
+            settings.aiPromptTemplate = etAiTemplate.text.toString().trim()
             settings.replacementPhone = etPhone.text.toString().trim()
             settings.signatureText = etSignature.text.toString().trim()
+            settings.monitoredZaloGroups = etZaloGroups.text.toString().trim()
             settings.antiBanDelaySeconds = etDelay.text.toString().toIntOrNull() ?: 180
 
             repository.saveSettings(settings)
-            Toast.makeText(this, "Đã lưu cài đặt thành công!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Đã lưu cài đặt và Form mẫu AI thành công!", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun checkPermissionsOnStartup() {
-        // Kiểm tra quyền Notification Listener
         val cn = ComponentName(this, ZaloNotificationListener::class.java)
         val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
         val isNotifEnabled = flat != null && flat.contains(cn.flattenToString())
 
         if (!isNotifEnabled) {
             AlertDialog.Builder(this)
-                .setTitle("Cấp quyền đọc thông báo Zalo")
-                .setMessage("Để app tự động phát hiện bài đăng mới trong nhóm Zalo, vui lòng bật quyền 'Truy cập thông báo' cho ứng dụng Z2FB Manager.")
+                .setTitle("Cấp quyền đọc tin Zalo chủ nhà")
+                .setMessage("Để app tự động nhận tin phòng mới từ các nhóm Zalo đầu chủ, vui lòng bật quyền 'Truy cập thông báo' cho ứng dụng CHDV Post Manager.")
                 .setPositiveButton("Cấp quyền ngay") { _, _ ->
                     startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
                 }

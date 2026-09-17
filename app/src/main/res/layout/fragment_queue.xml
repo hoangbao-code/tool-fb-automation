@@ -79,22 +79,23 @@
         <ImageView
             android:layout_width="64dp"
             android:layout_height="64dp"
-            android:src="@drawable/ic_queue"
+            android:src="@drawable/ic_apartment"
             app:tint="@color/text_secondary" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Chưa có bài viết nào từ Zalo"
+            android:text="Chưa có bài đăng CHDV nào"
             android:textSize="14sp"
+            android:textStyle="bold"
             android:textColor="@color/text_secondary" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Tin nhắn mới trong nhóm Zalo sẽ tự động xuất hiện tại đây"
+            android:text="Tin nhắn phòng mới từ nhóm Zalo chủ nhà sẽ tự động được AI định dạng tại đây"
             android:textSize="12sp"
             android:textColor="@color/text_secondary" />
     </LinearLayout>

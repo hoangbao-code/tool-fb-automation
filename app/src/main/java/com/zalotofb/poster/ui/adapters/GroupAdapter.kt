@@ -35,11 +35,13 @@ class GroupAdapter(
     inner class GroupViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val cbSelected: MaterialCheckBox = itemView.findViewById(R.id.cb_group_selected)
         private val tvName: TextView = itemView.findViewById(R.id.tv_group_name)
+        private val tvDistrictTag: TextView = itemView.findViewById(R.id.tv_group_district_tag)
         private val tvId: TextView = itemView.findViewById(R.id.tv_group_id)
         private val btnDelete: ImageButton = itemView.findViewById(R.id.btn_delete_group)
 
         fun bind(group: FacebookGroup) {
             tvName.text = group.name
+            tvDistrictTag.text = group.districtTag
             tvId.text = "ID: ${group.id}"
             cbSelected.isChecked = group.isSelected
 

@@ -49,12 +49,13 @@ class StorageRepository private constructor(context: Context) {
     // --- Posts Management ---
     @Synchronized
     fun getPosts(): MutableList<PostItem> {
-        val json = prefs.getString(KEY_POSTS, null) ?: return mutableListOf()
+        val json = prefs.getString(KEY_POSTS, null) ?: return defaultSamplePosts()
         val type = object : TypeToken<MutableList<PostItem>>() {}.type
         return try {
-            gson.fromJson(json, type) ?: mutableListOf()
+            val list: MutableList<PostItem>? = gson.fromJson(json, type)
+            if (list == null) defaultSamplePosts() else list
         } catch (e: Exception) {
-            mutableListOf()
+            defaultSamplePosts()
         }
     }
 
@@ -138,8 +139,76 @@ class StorageRepository private constructor(context: Context) {
 
     private fun defaultGroups(): MutableList<FacebookGroup> {
         return mutableListOf(
-            FacebookGroup(id = "group_demo_1", name = "Chợ Sỉ & Lẻ Toàn Quốc", isSelected = true),
-            FacebookGroup(id = "group_demo_2", name = "Hội Kinh Doanh Online VN", isSelected = true)
+            FacebookGroup(id = "group_chdv_1", name = "Hội Thuê Phòng Trọ & CHDV Bình Thạnh - Phú Nhuận", districtTag = "Bình Thạnh / Phú Nhuận", isSelected = true),
+            FacebookGroup(id = "group_chdv_2", name = "Tìm Thuê Căn Hộ Dịch Vụ Q1, Q3, Q10 - Giá Tốt", districtTag = "Quận 1 / Q3 / Q10", isSelected = true),
+            FacebookGroup(id = "group_chdv_3", name = "Cộng Đồng Căn Hộ Mini, Studio, Duplex TP.HCM", districtTag = "Toàn TP.HCM", isSelected = true),
+            FacebookGroup(id = "group_chdv_4", name = "Cho Thuê CHDV Sinh Viên ĐH HUTECH - UEF - FTU", districtTag = "Khu Vực Đại Học", isSelected = true),
+            FacebookGroup(id = "group_chdv_5", name = "Review Phòng Trọ & Căn Hộ Dịch Vụ Sài Gòn", districtTag = "Sài Gòn BĐS", isSelected = true)
+        )
+    }
+
+    private fun defaultSamplePosts(): MutableList<PostItem> {
+        return mutableListOf(
+            PostItem(
+                id = "sample_chdv_1",
+                zaloGroupName = "Nhóm Đầu Chủ Q3 - Phú Nhuận",
+                senderName = "Chủ Nhà Hoàng Nam",
+                originalContent = "Trống phòng Studio ban công thoáng mát đường Huỳnh Tịnh Của, Q3. Full NT, máy giặt riêng, thang máy, bảo vệ 24/7. Giá 6.8tr. HH 50% môi giới chốt nhanh. LH 0909123456.",
+                processedContent = """🔥 SIÊU PHẨM Studio Ban Công CỰC ĐẸP TẠI Quận 3 🔥
+
+📍 Vị trí: Khu vực Quận 3 (Gần Huỳnh Tịnh Của, thuận tiện đi Q1, Bình Thạnh)
+💰 Giá thuê: 6.8 Triệu / tháng
+
+✨ TIỆN NGHI CĂN HỘ (Full nội thất cao cấp):
+- Máy lạnh, tủ lạnh, máy giặt riêng, giường nệm cao cấp.
+- Ban công thoáng mát, bếp nấu ăn riêng biệt.
+
+🏢 TIỆN ÍCH TÒA NHÀ:
+- Khóa cổng vân tay, camera an ninh 24/7.
+- Thang máy, giờ giấc tự do 100%, không chung chủ.
+
+📝 Chi tiết thêm từ chủ nhà:
+• Trống phòng Studio ban công thoáng mát đường Huỳnh Tịnh Của, Q3
+• Full NT, máy giặt riêng, thang máy, bảo vệ 24/7
+
+☎️ Hotline / Zalo: 0988.888.888 (Tư vấn & dẫn xem phòng miễn phí 24/7!)
+#chothuecanho #canhodichvu #chdv #quan3 #studio""".trimIndent(),
+                roomType = "Studio Ban Công",
+                district = "Quận 3",
+                price = "6.8 Triệu / tháng",
+                status = PostStatus.PENDING,
+                createdAt = System.currentTimeMillis() - 1000 * 60 * 15
+            ),
+            PostItem(
+                id = "sample_chdv_2",
+                zaloGroupName = "Kho Hàng CHDV Bình Thạnh",
+                senderName = "A. Hùng Quản Lý",
+                originalContent = "Có căn Duplex gác cao không đụng đầu Nguyễn Gia Trí D2, Bình Thạnh. Cực gần ĐH Hutech, Ngoại Thương. Giá 7.5tr, hh 1 tháng cho ae sales. Cửa sổ lớn, cho nuôi pet.",
+                processedContent = """🔥 SIÊU PHẨM Duplex Gác Lửng CỰC ĐẸP TẠI Bình Thạnh 🔥
+
+📍 Vị trí: Khu vực Bình Thạnh (Gần HUTECH, ĐH Ngoại Thương, Landmark 81)
+💰 Giá thuê: 7.5 Triệu / tháng
+
+✨ TIỆN NGHI CĂN HỘ (Full nội thất cao cấp):
+- Duplex gác cao đứng thoải mái, máy lạnh, tủ lạnh, giường tủ đầy đủ.
+- Cửa sổ lớn đón gió tự nhiên, cho nuôi pet 🐶🐱.
+
+🏢 TIỆN ÍCH TÒA NHÀ:
+- Giờ giấc tự do 100%, ra vào khóa vân tay.
+- Hầm để xe rộng rãi, bảo vệ an ninh.
+
+📝 Chi tiết thêm từ chủ nhà:
+• Có căn Duplex gác cao không đụng đầu Nguyễn Gia Trí D2, Bình Thạnh
+• Cực gần ĐH Hutech, Ngoại Thương. Cửa sổ lớn, cho nuôi pet
+
+☎️ Hotline / Zalo: 0988.888.888 (Tư vấn & dẫn xem phòng miễn phí 24/7!)
+#chothuecanho #canhodichvu #chdv #binhthanh #duplex""".trimIndent(),
+                roomType = "Duplex Gác Lửng",
+                district = "Bình Thạnh",
+                price = "7.5 Triệu / tháng",
+                status = PostStatus.PENDING,
+                createdAt = System.currentTimeMillis() - 1000 * 60 * 45
+            )
         )
     }
 

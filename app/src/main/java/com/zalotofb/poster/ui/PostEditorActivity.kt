@@ -71,7 +71,7 @@ class PostEditorActivity : AppCompatActivity() {
             val text = etCaption.text.toString()
             val filtered = ContentFilterEngine.processContent(text, settings)
             etCaption.setText(filtered)
-            Toast.makeText(this, "Đã áp dụng thay SĐT & Chữ ký!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Đã áp dụng mẫu AI CHDV & lọc hoa hồng!", Toast.LENGTH_SHORT).show()
         }
 
         // Cấu hình danh sách Group Facebook
@@ -118,6 +118,9 @@ class PostEditorActivity : AppCompatActivity() {
         val text = etCaption.text.toString().trim()
         post.processedContent = text
         post.status = status
+        post.roomType = ContentFilterEngine.extractRoomType(text)
+        post.district = ContentFilterEngine.extractDistrict(text)
+        post.price = ContentFilterEngine.extractPrice(text)
         val selectedGroupIds = repository.getFacebookGroups().filter { it.isSelected }.map { it.id }
         post.targetGroupIds = selectedGroupIds.toMutableList()
         repository.savePost(post)

@@ -23,7 +23,7 @@ class PostAdapter(
     private val onDeleteClick: (PostItem) -> Unit
 ) : RecyclerView.Adapter<PostAdapter.PostViewHolder>() {
 
-    private val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+    private val dateFormat = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault())
 
     fun updateData(newPosts: List<PostItem>) {
         this.posts = newPosts
@@ -42,9 +42,12 @@ class PostAdapter(
     override fun getItemCount(): Int = posts.size
 
     inner class PostViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val tvGroupSource: TextView = itemView.findViewById(R.id.tv_group_source)
+        private val tvChipRoomType: TextView = itemView.findViewById(R.id.tv_chip_room_type)
+        private val tvChipDistrict: TextView = itemView.findViewById(R.id.tv_chip_district)
+        private val tvRoomPrice: TextView = itemView.findViewById(R.id.tv_room_price)
         private val tvStatusBadge: TextView = itemView.findViewById(R.id.tv_status_badge)
         private val tvPostTime: TextView = itemView.findViewById(R.id.tv_post_time)
+        private val tvGroupSource: TextView = itemView.findViewById(R.id.tv_group_source)
         private val ivThumbnail: ImageView = itemView.findViewById(R.id.iv_thumbnail)
         private val tvCaptionPreview: TextView = itemView.findViewById(R.id.tv_caption_preview)
         private val tvTargetGroups: TextView = itemView.findViewById(R.id.tv_target_groups_count)
@@ -53,7 +56,10 @@ class PostAdapter(
         private val btnDelete: ImageButton = itemView.findViewById(R.id.btn_delete_post)
 
         fun bind(post: PostItem) {
-            tvGroupSource.text = "Nhóm Zalo: ${post.zaloGroupName.ifBlank { "Tin nhắn riêng" }}"
+            tvChipRoomType.text = post.roomType
+            tvChipDistrict.text = post.district
+            tvRoomPrice.text = post.price
+            tvGroupSource.text = "Nguồn: ${post.zaloGroupName.ifBlank { "Zalo" }}"
             tvPostTime.text = dateFormat.format(Date(post.createdAt))
             tvCaptionPreview.text = post.processedContent.ifBlank { post.originalContent }
 
@@ -82,8 +88,8 @@ class PostAdapter(
                 }
                 PostStatus.POSTED -> {
                     tvStatusBadge.text = "Đã đăng"
-                    tvStatusBadge.setTextColor(ContextCompat.getColor(itemView.context, R.color.badge_success_text))
-                    tvStatusBadge.setBackgroundColor(ContextCompat.getColor(itemView.context, R.color.badge_success))
+                    tvStatusBadge.setTextColor(ContextCompat.getColor(itemView.context, R.color.badge_posted_text))
+                    tvStatusBadge.setBackgroundColor(ContextCompat.getColor(itemView.context, R.color.badge_posted))
                     btnPostNow.isEnabled = true
                     btnPostNow.text = "🔄 Đăng lại"
                 }
@@ -107,8 +113,8 @@ class PostAdapter(
                 ivThumbnail.visibility = View.GONE
             }
 
-            val groupCount = if (post.targetGroupIds.isNotEmpty()) post.targetGroupIds.size else 2
-            tvTargetGroups.text = "🎯 Đích đến: $groupCount Nhóm Facebook"
+            val groupCount = if (post.targetGroupIds.isNotEmpty()) post.targetGroupIds.size else 5
+            tvTargetGroups.text = "🎯 Đích đến: $groupCount Nhóm Facebook BĐS"
 
             btnPostNow.setOnClickListener { onPostNowClick(post) }
             btnEdit.setOnClickListener { onEditClick(post) }
