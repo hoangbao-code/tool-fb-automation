@@ -24,24 +24,19 @@ class FacebookSessionManager private constructor(context: Context) {
     }
 
     fun saveSession(cookies: String, userId: String? = null, userName: String? = null) {
+        val extractedId = if (!userId.isNullOrBlank()) userId else extractUserIdFromCookie(cookies)
         prefs.edit()
             .putString(KEY_COOKIES, cookies)
-            .putString(KEY_USER_ID, userId ?: extractUserIdFromCookie(cookies))
-            .putString(KEY_USER_NAME, userName ?: "Tài khoản Facebook")
+            .putString(KEY_USER_ID, extractedId)
+            .putString(KEY_USER_NAME, userName ?: "Tài khoản Facebook ($extractedId)")
             .apply()
     }
 
-    fun getCookies(): String {
-        return prefs.getString(KEY_COOKIES, "") ?: ""
-    }
+    fun getCookies(): String = prefs.getString(KEY_COOKIES, "") ?: ""
 
-    fun getUserId(): String {
-        return prefs.getString(KEY_USER_ID, "") ?: ""
-    }
+    fun getUserId(): String = prefs.getString(KEY_USER_ID, "") ?: ""
 
-    fun getUserName(): String {
-        return prefs.getString(KEY_USER_NAME, "Tài khoản Facebook") ?: "Tài khoản Facebook"
-    }
+    fun getUserName(): String = prefs.getString(KEY_USER_NAME, "Tài khoản Facebook") ?: "Tài khoản Facebook"
 
     fun isLoggedIn(): Boolean {
         val cookies = getCookies()
@@ -53,7 +48,7 @@ class FacebookSessionManager private constructor(context: Context) {
     }
 
     private fun extractUserIdFromCookie(cookie: String): String {
-        val pattern = Regex("c_user=(\\d+)")
+        val pattern = Regex("c_user=(\d+)")
         return pattern.find(cookie)?.groupValues?.getOrNull(1) ?: ""
     }
-}
+}\n

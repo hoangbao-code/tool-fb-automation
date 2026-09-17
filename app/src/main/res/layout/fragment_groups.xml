@@ -5,76 +5,157 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
+    android:background="@color/background"
     android:padding="12dp">
 
-    <!-- Card Đăng nhập Facebook -->
+    <!-- Card Hồ Sơ Tài Khoản Facebook -->
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:cardCornerRadius="12dp"
+        app:cardCornerRadius="16dp"
         app:cardElevation="2dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="@color/divider"
         app:cardBackgroundColor="@color/surface">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="12dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Tài khoản Facebook Đăng Bài"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                android:textColor="@color/text_primary" />
-
-            <TextView
-                android:id="@+id/tv_fb_status"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Chưa đăng nhập Facebook"
-                android:textSize="13sp"
-                android:textColor="@color/text_secondary" />
+            android:padding="14dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:layout_marginTop="8dp">
+                android:gravity="center_vertical">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_login_facebook"
+                <ImageView
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:src="@drawable/ic_facebook" />
+
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="@string/btn_login_fb"
-                    android:textSize="13sp"
-                    app:cornerRadius="8dp"
-                    app:backgroundTint="@color/primary" />
+                    android:layout_marginStart="10dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tv_fb_user_name"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Tài khoản Facebook"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_primary" />
+
+                    <TextView
+                        android:id="@+id/tv_fb_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="Chưa đăng nhập"
+                        android:textSize="12sp"
+                        android:textColor="@color/text_secondary" />
+                </LinearLayout>
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_add_group_manual"
+                    android:id="@+id/btn_login_facebook"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="+ Thêm nhóm"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    app:cornerRadius="8dp" />
+                    android:layout_height="36dp"
+                    android:text="Đăng nhập"
+                    android:textSize="12sp"
+                    android:padding="0dp"
+                    app:cornerRadius="8dp"
+                    style="@style/Widget.Material3.Button.TonalButton" />
             </LinearLayout>
+
+            <!-- Nút Quét Nhóm Tự Động -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_scan_groups"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="12dp"
+                android:text="🔄 Tự Động Quét Sạch Nhóm Đã Tham Gia"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                app:icon="@drawable/ic_sparkle"
+                app:cornerRadius="10dp"
+                app:backgroundTint="@color/primary" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <TextView
-        android:layout_width="wrap_content"
+    <!-- Thanh Tìm Kiếm & Thao Tác Nhóm Hàng Loạt -->
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:layout_marginBottom="8dp"
-        android:text="Danh sách Group mục tiêu (Được chọn để đăng bài):"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:textColor="@color/text_primary" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="14dp">
+
+        <EditText
+            android:id="@+id/et_search_groups"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_search_input"
+            android:paddingHorizontal="12dp"
+            android:hint="🔍 Tìm nhóm hoặc Quận..."
+            android:textSize="13sp"
+            android:textColor="@color/text_primary" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_add_group_manual"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:layout_marginStart="8dp"
+            android:text="+ Thủ công"
+            android:textSize="12sp"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            app:cornerRadius="8dp" />
+    </LinearLayout>
+
+    <!-- Hàng Nút Chọn Tất Cả / Đếm Nhóm -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="6dp">
+
+        <TextView
+            android:id="@+id/tv_groups_selected_count"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Đã chọn: 0 nhóm"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_primary" />
+
+        <TextView
+            android:id="@+id/btn_select_all_groups"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Chọn tất cả"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="@color/primary"
+            android:padding="6dp" />
+
+        <TextView
+            android:id="@+id/btn_deselect_all_groups"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:text="Bỏ chọn"
+            android:textSize="13sp"
+            android:textColor="@color/text_secondary"
+            android:padding="6dp" />
+    </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_groups"
@@ -82,4 +163,4 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-</LinearLayout>
+</LinearLayout>\n

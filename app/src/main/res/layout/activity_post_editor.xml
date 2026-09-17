@@ -27,7 +27,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- Caption Editor -->
+            <!-- Caption Editor Card -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -53,17 +53,28 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="Nội Dung Bài Viết Facebook:"
+                            android:text="Nội Dung Bài Đăng FB:"
                             android:textStyle="bold"
                             android:textSize="14sp"
                             android:textColor="@color/text_primary" />
 
                         <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_paste_clipboard"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="📋 Dán tin"
+                            android:textSize="11sp"
+                            android:paddingHorizontal="8dp"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            app:cornerRadius="8dp" />
+
+                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_apply_rules"
                             android:layout_width="wrap_content"
                             android:layout_height="36dp"
+                            android:layout_marginStart="6dp"
                             android:text="🤖 AI Viết Lại"
-                            android:textSize="12sp"
+                            android:textSize="11sp"
                             android:textStyle="bold"
                             app:icon="@drawable/ic_sparkle"
                             app:cornerRadius="8dp"
@@ -78,7 +89,7 @@
                         android:minLines="7"
                         android:gravity="top"
                         android:background="@null"
-                        android:hint="Nội dung bài đăng cho thuê phòng..."
+                        android:hint="Dán tin nhắn Zalo hoặc gõ nội dung phòng..."
                         android:textSize="13sp"
                         android:lineSpacingMultiplier="1.2"
                         android:textColor="@color/text_primary" />
@@ -86,21 +97,38 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Image Preview List -->
-            <TextView
-                android:layout_width="wrap_content"
+            <!-- Album Hình Ảnh Căn Hộ -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
                 android:layout_marginTop="16dp"
-                android:layout_marginBottom="6dp"
-                android:text="📸 Album Hình Ảnh Căn Hộ:"
-                android:textStyle="bold"
-                android:textSize="14sp"
-                android:textColor="@color/text_primary" />
+                android:layout_marginBottom="6dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="📸 Album Hình Ảnh Căn Hộ:"
+                    android:textStyle="bold"
+                    android:textSize="14sp"
+                    android:textColor="@color/text_primary" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_pick_images"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="+ Thêm ảnh HD"
+                    android:textSize="12sp"
+                    app:cornerRadius="8dp"
+                    style="@style/Widget.Material3.Button.TonalButton" />
+            </LinearLayout>
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/rv_editor_images"
                 android:layout_width="match_parent"
-                android:layout_height="100dp"
+                android:layout_height="90dp"
                 android:orientation="horizontal" />
 
             <!-- Select Target FB Groups -->
@@ -145,12 +173,12 @@
             android:id="@+id/btn_editor_post_now"
             android:layout_width="0dp"
             android:layout_height="44dp"
-            android:layout_weight="1.2"
+            android:layout_weight="1.3"
             android:layout_marginStart="8dp"
-            android:text="🚀 Đăng ngay"
+            android:text="🚀 Đăng bài ngay"
             android:textStyle="bold"
             app:backgroundTint="@color/primary"
             app:cornerRadius="10dp" />
     </LinearLayout>
 
-</LinearLayout>
+</LinearLayout>\n

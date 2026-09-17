@@ -1,5 +1,7 @@
 package com.zalotofb.poster.ui.adapters
 
+import android.content.Intent
+import android.net.Uri
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -17,16 +19,27 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class PostAdapter(
-    private var posts: List<PostItem>,
+    private var allPosts: List<PostItem>,
     private val onPostNowClick: (PostItem) -> Unit,
     private val onEditClick: (PostItem) -> Unit,
     private val onDeleteClick: (PostItem) -> Unit
 ) : RecyclerView.Adapter<PostAdapter.PostViewHolder>() {
 
+    private var displayedPosts: List<PostItem> = allPosts
     private val dateFormat = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault())
 
     fun updateData(newPosts: List<PostItem>) {
-        this.posts = newPosts
+        this.allPosts = newPosts
+        this.displayedPosts = newPosts
+        notifyDataSetChanged()
+    }
+
+    fun filterByStatus(status: PostStatus?) {
+        displayedPosts = if (status == null) {
+            allPosts
+        } else {
+            allPosts.filter { it.status == status }
+        }
         notifyDataSetChanged()
     }
 
@@ -36,10 +49,10 @@ class PostAdapter(
     }
 
     override fun onBindViewHolder(holder: PostViewHolder, position: Int) {
-        holder.bind(posts[position])
+        holder.bind(displayedPosts[position])
     }
 
-    override fun getItemCount(): Int = posts.size
+    override fun getItemCount(): Int = displayedPosts.size
 
     inner class PostViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val tvChipRoomType: TextView = itemView.findViewById(R.id.tv_chip_room_type)
@@ -63,35 +76,34 @@ class PostAdapter(
             tvPostTime.text = dateFormat.format(Date(post.createdAt))
             tvCaptionPreview.text = post.processedContent.ifBlank { post.originalContent }
 
-            // Badge trạng thái
             when (post.status) {
                 PostStatus.PENDING -> {
                     tvStatusBadge.text = "Chờ duyệt"
                     tvStatusBadge.setTextColor(ContextCompat.getColor(itemView.context, R.color.badge_pending_text))
                     tvStatusBadge.setBackgroundColor(ContextCompat.getColor(itemView.context, R.color.badge_pending))
                     btnPostNow.isEnabled = true
-                    btnPostNow.text = "🚀 Duyệt & Đăng"
+                    btnPostNow.text = "🚀 Duyệt & Đăng Ngay"
                 }
                 PostStatus.QUEUED -> {
                     tvStatusBadge.text = "Đang đợi đăng"
                     tvStatusBadge.setTextColor(ContextCompat.getColor(itemView.context, R.color.primary))
                     tvStatusBadge.setBackgroundColor(ContextCompat.getColor(itemView.context, R.color.primary_container))
                     btnPostNow.isEnabled = false
-                    btnPostNow.text = "⏳ Đang trong hàng đợi"
+                    btnPostNow.text = "⏳ Trong hàng đợi..."
                 }
                 PostStatus.POSTING -> {
                     tvStatusBadge.text = "Đang đăng..."
                     tvStatusBadge.setTextColor(ContextCompat.getColor(itemView.context, R.color.primary))
                     tvStatusBadge.setBackgroundColor(ContextCompat.getColor(itemView.context, R.color.primary_container))
                     btnPostNow.isEnabled = false
-                    btnPostNow.text = "🔄 Đang tải lên..."
+                    btnPostNow.text = "🔄 Đang tải lên nhóm..."
                 }
                 PostStatus.POSTED -> {
-                    tvStatusBadge.text = "Đã đăng"
+                    tvStatusBadge.text = "Đã đăng xong"
                     tvStatusBadge.setTextColor(ContextCompat.getColor(itemView.context, R.color.badge_posted_text))
                     tvStatusBadge.setBackgroundColor(ContextCompat.getColor(itemView.context, R.color.badge_posted))
                     btnPostNow.isEnabled = true
-                    btnPostNow.text = "🔄 Đăng lại"
+                    btnPostNow.text = if (!post.fbPostUrl.isNullOrBlank()) "🔗 Mở bài trên Facebook" else "🔄 Đăng lại"
                 }
                 PostStatus.FAILED -> {
                     tvStatusBadge.text = "Lỗi đăng bài"
@@ -102,7 +114,6 @@ class PostAdapter(
                 }
             }
 
-            // Ảnh Thumbnail
             if (post.imageUris.isNotEmpty()) {
                 ivThumbnail.visibility = View.VISIBLE
                 Glide.with(itemView.context)
@@ -116,9 +127,23 @@ class PostAdapter(
             val groupCount = if (post.targetGroupIds.isNotEmpty()) post.targetGroupIds.size else 5
             tvTargetGroups.text = "🎯 Đích đến: $groupCount Nhóm Facebook BĐS"
 
-            btnPostNow.setOnClickListener { onPostNowClick(post) }
+            btnPostNow.setOnClickListener {
+                if (post.status == PostStatus.POSTED && !post.fbPostUrl.isNullOrBlank()) {
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(post.fbPostUrl)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        itemView.context.startActivity(intent)
+                    } catch (e: Exception) {
+                        onPostNowClick(post)
+                    }
+                } else {
+                    onPostNowClick(post)
+                }
+            }
+
             btnEdit.setOnClickListener { onEditClick(post) }
             btnDelete.setOnClickListener { onDeleteClick(post) }
         }
     }
-}
+}\n
