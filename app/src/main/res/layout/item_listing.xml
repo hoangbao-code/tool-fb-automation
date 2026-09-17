@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="10dp"
+    app:cardCornerRadius="14dp"
+    app:cardElevation="2dp"
+    app:strokeWidth="1dp"
+    app:strokeColor="@color/divider"
+    app:cardBackgroundColor="@color/surface">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tv_status_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SẴN SÀNG"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:textColor="@color/white"
+                android:background="@drawable/bg_circle_badge"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="3dp" />
+
+            <TextView
+                android:id="@+id/tv_confidence_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="Độ tin cậy: 100%"
+                android:textSize="11sp"
+                android:textColor="@color/text_secondary" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/tv_source_tag"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Zalo"
+                android:textSize="11sp"
+                android:textColor="@color/text_secondary" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/iv_cover"
+                android:layout_width="90dp"
+                android:layout_height="90dp"
+                android:scaleType="centerCrop"
+                android:background="@color/divider"
+                android:src="@drawable/ic_apartment"
+                app:cornerRadius="8dp" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="12dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tv_title_district"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Studio Ban Công • Quận 7"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_primary"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+
+                <TextView
+                    android:id="@+id/tv_price_area"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="6,5 triệu/tháng • 28m²"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/primary" />
+
+                <TextView
+                    android:id="@+id/tv_clean_preview"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Phòng đầy đủ nội thất xịn, ban công thoáng..."
+                    android:textSize="13sp"
+                    android:textColor="@color/text_secondary"
+                    android:maxLines="2"
+                    android:ellipsize="end" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="8dp"
+            android:background="@color/divider" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_edit_listing"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="Sửa tin"
+                android:textSize="12sp"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                app:cornerRadius="8dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_delete_listing"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="6dp"
+                android:text="Xóa"
+                android:textSize="12sp"
+                android:textColor="@color/error"
+                style="@style/Widget.Material3.Button.TextButton" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_post_now"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="Đăng bài ➔"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                app:cornerRadius="8dp"
+                style="@style/Widget.Material3.Button.TonalButton" />
+        </LinearLayout>
+
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

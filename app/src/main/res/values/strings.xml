@@ -1,50 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">CHDV Post Manager</string>
-    <string name="title_share_to_z2fb">Nạp tin phòng Zalo vào Tool</string>
+    <string name="title_share_to_z2fb">Nạp tin phòng vào Tool</string>
     
-    <!-- Tab Titles -->
-    <string name="tab_queue">Giỏ Hàng Phòng</string>
-    <string name="tab_groups">Nhóm Facebook BĐS</string>
-    <string name="tab_settings">Cài Đặt &amp; AI Form</string>
+    <!-- 5 Tab Titles -->
+    <string name="tab_inventory">Kho phòng</string>
+    <string name="tab_post">Đăng bài</string>
+    <string name="tab_groups">Nhóm FB</string>
+    <string name="tab_stats">Thống kê</string>
+    <string name="tab_settings">Cài đặt</string>
     
     <!-- Status Badges -->
-    <string name="status_pending">Chờ duyệt</string>
-    <string name="status_queued">Đang đợi đăng</string>
-    <string name="status_posting">Đang đăng...</string>
-    <string name="status_posted">Đã đăng</string>
-    <string name="status_failed">Lỗi đăng</string>
+    <string name="status_draft">Nháp (Cần kiểm tra)</string>
+    <string name="status_ready">Sẵn sàng</string>
+    <string name="status_listed">Đang đăng</string>
+    <string name="status_rented">Đã cho thuê</string>
+    <string name="status_expired">Hết hạn</string>
     
     <!-- Buttons & Actions -->
-    <string name="btn_approve_and_post">🚀 Duyệt &amp; Đăng Ngay</string>
-    <string name="btn_edit">✏️ Sửa tin</string>
-    <string name="btn_delete">🗑️ Xóa</string>
-    <string name="btn_save">Lưu Cấu Hình</string>
+    <string name="btn_paste_listing">📋 Dán tin</string>
+    <string name="btn_new_listing">+ Tạo tin mới</string>
     <string name="btn_add_group">+ Thêm Nhóm FB</string>
-    <string name="btn_login_fb">Đăng nhập Facebook (Lấy Cookie)</string>
-    <string name="btn_grant_notification">Cấp quyền Bắt thông báo Zalo</string>
-    <string name="btn_grant_overlay">Cấp quyền Bong bóng nổi</string>
-    <string name="btn_ai_rewrite">🤖 AI Viết Lại Theo Form Mẫu</string>
+    <string name="btn_bulk_groups">Nhập hàng loạt</string>
+    <string name="btn_start_post_session">🚀 Bắt đầu đăng bài</string>
+    <string name="btn_add_lead">+ Khách gọi</string>
+    <string name="btn_export_csv">Xuất dữ liệu CSV</string>
+    <string name="btn_grant_notification">Cấp quyền Thông báo Zalo</string>
     
     <!-- Settings Labels -->
-    <string name="setting_mode_title">Chế độ tự động</string>
-    <string name="setting_mode_semi">Bán tự động (AI lên bài ➔ Bạn duyệt trước khi đăng)</string>
-    <string name="setting_mode_auto">Tự động 100% (Zalo có tin ➔ AI tự ráp form ➔ Tự đăng)</string>
-    
-    <string name="setting_zalo_groups">Nhóm Zalo chủ nhà/đầu chủ cần lấy tin</string>
-    <string name="setting_zalo_groups_hint">Nhập tên nhóm Zalo, cách nhau bằng dấu phẩy (Để trống = Quét tất cả nhóm)</string>
-    
-    <string name="setting_replace_phone">Hotline &amp; Zalo của bạn (Môi giới)</string>
-    <string name="setting_replace_phone_hint">VD: 0988.888.888 (Tự động xóa SĐT chủ nhà, thay bằng SĐT của bạn)</string>
-
-    <string name="setting_broker_name">Tên Môi Giới / Thương Hiệu</string>
-    <string name="setting_broker_name_hint">VD: Em Bảo BĐS - Chuyên CHDV Trung Tâm</string>
-    
-    <string name="setting_signature">Chữ ký kết bài (Call To Action)</string>
-    <string name="setting_signature_hint">VD: ☎️ Hotline/Zalo: 0988.888.888 (Tư vấn &amp; dẫn xem phòng 24/7 hoàn toàn miễn phí!)</string>
-    
-    <string name="setting_delay_jitter">Giãn cách chống checkpoint FB (Giây)</string>
-    <string name="setting_delay_hint">180 (Khuyên dùng: 120s - 240s để tài khoản an toàn tuyệt đối)</string>
-
-    <string name="setting_ai_template">Khung Form Mẫu AI Bán Hàng Facebook</string>
+    <string name="setting_broker_hotline">Hotline &amp; Zalo của bạn (Môi giới)</string>
+    <string name="setting_broker_hotline_hint">VD: 0988888888 (Tự động chèn vào bài, bảo vệ bằng mã hóa)</string>
+    <string name="setting_signature">Chữ ký cuối bài</string>
+    <string name="setting_signature_hint">VD: Em Bảo - Dẫn xem phòng 24/7 hoàn toàn miễn phí!</string>
+    <string name="setting_custom_template">Mẫu đăng bài tùy chỉnh</string>
+    <string name="setting_max_groups_warning">Giới hạn cảnh báo số nhóm / phiên</string>
 </resources>

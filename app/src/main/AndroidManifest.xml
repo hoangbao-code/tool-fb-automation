@@ -2,20 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Quyền truy cập mạng để upload bài lên Facebook -->
+    <!-- Quyền truy cập mạng cơ bản -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     
     <!-- Quyền hiển thị thông báo trên Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    
-    <!-- Quyền hiển thị Bong bóng nổi (Floating Bubble) trên màn hình -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-
-    <!-- Quyền chạy dịch vụ nền không bị ngắt -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:name=".Z2FBApplication"
@@ -46,12 +38,7 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
-        <!-- Màn hình Đăng nhập Facebook WebView an toàn -->
-        <activity
-            android:name=".ui.FacebookLoginActivity"
-            android:exported="false" />
-
-        <!-- Điểm tiếp nhận Chia sẻ trực tiếp từ Zalo (Share Intent) -->
+        <!-- Điểm tiếp nhận Chia sẻ trực tiếp từ Zalo & Facebook (Share Intent) -->
         <activity
             android:name=".ui.ShareReceiverActivity"
             android:exported="true"
@@ -79,12 +66,6 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
-
-        <!-- Dịch vụ Bong bóng nổi trên màn hình (Floating Bubble Service) -->
-        <service
-            android:name=".services.FloatingBubbleService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
 
         <!-- File Provider để lưu và chia sẻ file ảnh an toàn -->
         <provider

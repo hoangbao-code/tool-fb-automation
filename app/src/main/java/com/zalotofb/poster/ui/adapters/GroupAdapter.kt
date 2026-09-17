@@ -1,65 +1,33 @@
 package com.zalotofb.poster.ui.adapters
 
-import android.content.Intent
-import android.net.Uri
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.TextView
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.zalotofb.poster.R
-import com.zalotofb.poster.data.models.FacebookGroup
+import com.zalotofb.poster.data.local.entity.FbGroupEntity
 
 class GroupAdapter(
-    private var allGroups: List<FacebookGroup>,
-    private val onToggleSelect: (FacebookGroup, Boolean) -> Unit,
-    private val onDeleteGroup: (FacebookGroup) -> Unit
-) : RecyclerView.Adapter<GroupAdapter.GroupViewHolder>() {
+    private val onToggleSelection: (FbGroupEntity) -> Unit,
+    private val onDeleteClick: (FbGroupEntity) -> Unit,
+    private val onOpenUrlClick: (FbGroupEntity) -> Unit
+) : ListAdapter<FbGroupEntity, GroupAdapter.ViewHolder>(DIFF_CALLBACK) {
 
-    private var displayedGroups: List<FacebookGroup> = allGroups
-
-    fun updateData(newGroups: List<FacebookGroup>) {
-        this.allGroups = newGroups
-        this.displayedGroups = newGroups
-        notifyDataSetChanged()
-    }
-
-    fun filter(query: String) {
-        displayedGroups = if (query.isBlank()) {
-            allGroups
-        } else {
-            val q = query.lowercase().trim()
-            allGroups.filter {
-                it.name.lowercase().contains(q) ||
-                it.districtTag.lowercase().contains(q) ||
-                it.id.contains(q)
-            }
-        }
-        notifyDataSetChanged()
-    }
-
-    fun selectAll(select: Boolean) {
-        displayedGroups.forEach {
-            it.isSelected = select
-            onToggleSelect(it, select)
-        }
-        notifyDataSetChanged()
-    }
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): GroupViewHolder {
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val view = LayoutInflater.from(parent.context).inflate(R.layout.item_group, parent, false)
-        return GroupViewHolder(view)
+        return ViewHolder(view)
     }
 
-    override fun onBindViewHolder(holder: GroupViewHolder, position: Int) {
-        holder.bind(displayedGroups[position])
+    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+        holder.bind(getItem(position))
     }
 
-    override fun getItemCount(): Int = displayedGroups.size
-
-    inner class GroupViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+    inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val cbSelected: MaterialCheckBox = itemView.findViewById(R.id.cb_group_selected)
         private val tvName: TextView = itemView.findViewById(R.id.tv_group_name)
         private val tvDistrictTag: TextView = itemView.findViewById(R.id.tv_group_district_tag)
@@ -67,33 +35,35 @@ class GroupAdapter(
         private val btnOpenFb: ImageButton = itemView.findViewById(R.id.btn_open_fb_group)
         private val btnDelete: ImageButton = itemView.findViewById(R.id.btn_delete_group)
 
-        fun bind(group: FacebookGroup) {
+        fun bind(group: FbGroupEntity) {
             tvName.text = group.name
-            tvDistrictTag.text = group.districtTag
-            tvId.text = "ID: ${group.id}"
+            tvDistrictTag.text = group.districtTag ?: "Chung"
+            tvId.text = "Mã: ${group.trackingCode} • ${group.url}"
 
-            // Tránh trigger listener khi đang bind
             cbSelected.setOnCheckedChangeListener(null)
-            cbSelected.isChecked = group.isSelected
-
-            cbSelected.setOnCheckedChangeListener { _, isChecked ->
-                group.isSelected = isChecked
-                onToggleSelect(group, isChecked)
+            cbSelected.isChecked = group.isActive
+            cbSelected.setOnCheckedChangeListener { _, _ ->
+                onToggleSelection(group)
             }
 
             btnOpenFb.setOnClickListener {
-                try {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://facebook.com/groups/${group.id}")).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    itemView.context.startActivity(intent)
-                } catch (e: Exception) {
-                    // ignore
-                }
+                onOpenUrlClick(group)
             }
 
             btnDelete.setOnClickListener {
-                onDeleteGroup(group)
+                onDeleteClick(group)
+            }
+        }
+    }
+
+    companion object {
+        private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<FbGroupEntity>() {
+            override fun areItemsTheSame(oldItem: FbGroupEntity, newItem: FbGroupEntity): Boolean {
+                return oldItem.id == newItem.id
+            }
+
+            override fun areContentsTheSame(oldItem: FbGroupEntity, newItem: FbGroupEntity): Boolean {
+                return oldItem == newItem
             }
         }
     }

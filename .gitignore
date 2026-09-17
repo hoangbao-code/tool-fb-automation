@@ -12,3 +12,5 @@ app/build/
 *.hprof
 __pycache__/
 *.pyc
+
+.kotlin/
