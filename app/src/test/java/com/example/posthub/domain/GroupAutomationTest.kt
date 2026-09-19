@@ -11,7 +11,7 @@ class GroupAutomationTest {
     @Test
     fun testDiscoveredGroupModelAndUrlCleaning() {
         val rawUrl = "https://www.facebook.com/groups/binhthanhrooms/?ref=share&mibextid=NSMWBT"
-        val cleanUrl = rawUrl.replace("www.facebook.com", "m.facebook.com").substringBefore("?")
+        val cleanUrl = rawUrl.replace("www.facebook.com", "m.facebook.com").substringBefore("?").removeSuffix("/")
         assertEquals("https://m.facebook.com/groups/binhthanhrooms", cleanUrl)
 
         val group = DiscoveredGroup(
