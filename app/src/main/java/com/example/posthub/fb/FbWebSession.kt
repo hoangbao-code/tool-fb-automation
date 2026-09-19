@@ -15,7 +15,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 class FbWebSession(
     private val context: Context,
