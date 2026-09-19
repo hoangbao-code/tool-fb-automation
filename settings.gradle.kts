@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Z2FB-Post-Manager"
+rootProject.name = "Jammy_post_hub"
 include(":app")

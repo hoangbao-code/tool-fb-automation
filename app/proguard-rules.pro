@@ -1,5 +1,6 @@
-# Add project specific ProGuard rules here.
--keep class com.zalotofb.poster.data.models.** { *; }
+# ProGuard rules for Jammy_post_hub
+-keepattributes *Annotation*
 -keepclassmembers class * {
-    @com.google.gson.annotations.SerializedName <fields>;
+    @androidx.room.* <fields>;
+    @androidx.room.* <methods>;
 }

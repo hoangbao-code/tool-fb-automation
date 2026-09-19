@@ -1,37 +1,6 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">CHDV Post Manager</string>
-    <string name="title_share_to_z2fb">Nạp tin phòng vào Tool</string>
-    
-    <!-- 5 Tab Titles -->
-    <string name="tab_inventory">Kho phòng</string>
-    <string name="tab_post">Đăng bài</string>
-    <string name="tab_groups">Nhóm FB</string>
-    <string name="tab_stats">Thống kê</string>
+    <string name="app_name">Jammy_post_hub</string>
+    <string name="tab_feed">Tin</string>
+    <string name="tab_log">Nhật ký</string>
     <string name="tab_settings">Cài đặt</string>
-    
-    <!-- Status Badges -->
-    <string name="status_draft">Nháp (Cần kiểm tra)</string>
-    <string name="status_ready">Sẵn sàng</string>
-    <string name="status_listed">Đang đăng</string>
-    <string name="status_rented">Đã cho thuê</string>
-    <string name="status_expired">Hết hạn</string>
-    
-    <!-- Buttons & Actions -->
-    <string name="btn_paste_listing">📋 Dán tin</string>
-    <string name="btn_new_listing">+ Tạo tin mới</string>
-    <string name="btn_add_group">+ Thêm Nhóm FB</string>
-    <string name="btn_bulk_groups">Nhập hàng loạt</string>
-    <string name="btn_start_post_session">🚀 Bắt đầu đăng bài</string>
-    <string name="btn_add_lead">+ Khách gọi</string>
-    <string name="btn_export_csv">Xuất dữ liệu CSV</string>
-    <string name="btn_grant_notification">Cấp quyền Thông báo Zalo</string>
-    
-    <!-- Settings Labels -->
-    <string name="setting_broker_hotline">Hotline &amp; Zalo của bạn (Môi giới)</string>
-    <string name="setting_broker_hotline_hint">VD: 0988888888 (Tự động chèn vào bài, bảo vệ bằng mã hóa)</string>
-    <string name="setting_signature">Chữ ký cuối bài</string>
-    <string name="setting_signature_hint">VD: Em Bảo - Dẫn xem phòng 24/7 hoàn toàn miễn phí!</string>
-    <string name="setting_custom_template">Mẫu đăng bài tùy chỉnh</string>
-    <string name="setting_max_groups_warning">Giới hạn cảnh báo số nhóm / phiên</string>
 </resources>

@@ -1,27 +1,6 @@
 <resources>
-    <!-- Base application theme. -->
-    <style name="Theme.Z2FBPostManager" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Primary brand color -->
-        <item name="colorPrimary">@color/primary</item>
-        <item name="colorOnPrimary">@color/on_primary</item>
-        <item name="colorPrimaryContainer">@color/primary_container</item>
-        <item name="colorSecondary">@color/secondary</item>
-        <item name="colorSecondaryContainer">@color/secondary_container</item>
-        
-        <item name="android:statusBarColor">@color/surface</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:navigationBarColor">@color/surface</item>
-    </style>
-
-    <style name="App.ActiveIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
-        <item name="android:color">@color/primary_container</item>
-        <item name="shapeAppearance">@style/ShapeAppearance.Material3.Corner.Full</item>
-    </style>
-
-    <!-- Translucent theme for Share receiver dialog -->
-    <style name="Theme.Z2FBPostManager.Translucent" parent="Theme.Material3.DayNight.Dialog">
-        <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:windowIsTranslucent">true</item>
-        <item name="android:windowNoTitle">true</item>
+    <style name="Theme.JammyPostHub" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/primary_dark</item>
+        <item name="android:navigationBarColor">#F5F5F5</item>
     </style>
 </resources>

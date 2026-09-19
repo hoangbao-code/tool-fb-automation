@@ -7,11 +7,16 @@
 /captures
 .externalNativeBuild
 .cxx
-local.properties
-app/build/
-*.hprof
-__pycache__/
-*.pyc
 
-.kotlin/
-*.apk
+# Build outputs
+app/build/
+
+# Do NOT ignore dev keystore (needed for consistent CI debug builds)
+!app/dev.jks
+
+# Ignore release keystore and secret configs
+*.keystore
+release.jks
+secrets.properties
+*.token
+*.cookie
