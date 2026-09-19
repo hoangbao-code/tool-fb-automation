@@ -103,6 +103,24 @@ class SecureStore(context: Context) {
         prefs.edit().putBoolean(KEY_BIOMETRIC_LOCK, enabled).apply()
     }
 
+    // Kho câu trả lời xét duyệt vào nhóm (Answer Pool)
+    fun getAnswerPool(): List<String> {
+        val raw = prefs.getString(KEY_ANSWER_POOL, null)
+        if (raw.isNullOrBlank()) {
+            return listOf(
+                "Tôi đồng ý với tất cả nội quy và quy định của nhóm.",
+                "Tôi là chính chủ / môi giới uy tín, cam kết đăng tin đúng sự thật.",
+                "Cam kết không spam, giữ gìn môi trường nhóm văn minh."
+            )
+        }
+        return raw.split(";;;").filter { it.isNotBlank() }
+    }
+
+    fun saveAnswerPool(answers: List<String>) {
+        val joined = answers.joinToString(";;;")
+        prefs.edit().putString(KEY_ANSWER_POOL, joined).apply()
+    }
+
     companion object {
         private const val KEY_FB_COOKIES = "fb_cookies"
         private const val KEY_FB_ACCOUNT_NAME = "fb_account_name"
@@ -115,5 +133,6 @@ class SecureStore(context: Context) {
         private const val KEY_EMERGENCY_STOP = "emergency_stop"
         private const val KEY_DRY_RUN = "dry_run"
         private const val KEY_BIOMETRIC_LOCK = "biometric_lock"
+        private const val KEY_ANSWER_POOL = "answer_pool"
     }
 }
