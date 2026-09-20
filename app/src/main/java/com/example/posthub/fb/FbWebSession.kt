@@ -9,8 +9,11 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.example.posthub.data.AppLog
 import com.example.posthub.data.local.SecureStore
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,6 +59,10 @@ class FbWebSession(
 
     private val _assistedSession = MutableStateFlow<AssistedSession?>(null)
     val assistedSession = _assistedSession.asStateFlow()
+
+    var isUserBrowsingScreen: Boolean = false
+    var onGroupsAutoDiscovered: ((List<DiscoveredGroup>) -> Unit)? = null
+    private val sessionScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     fun startAssistedSession(groups: List<AssistedPostingGroup>, contentList: List<String>) {
         if (groups.isEmpty()) return
@@ -120,6 +127,23 @@ class FbWebSession(
                 super.onPageFinished(v, url)
                 saveCookies()
                 checkForCheckpoint(v)
+
+                // Tự động quét nhóm ngầm khi người dùng đang lướt bất kỳ trang nhóm nào
+                if (url != null && (url.contains("/groups") || url.contains("/group")) && secureStore.isAutoGroupScanEnabled() && !secureStore.isEmergencyStop()) {
+                    v?.let { wv ->
+                        sessionScope.launch {
+                            try {
+                                delay(2000)
+                                val groups = extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
+                                if (groups.isNotEmpty()) {
+                                    onGroupsAutoDiscovered?.invoke(groups)
+                                }
+                            } catch (e: Exception) {
+                                // Bỏ qua lỗi ngầm không ảnh hưởng trải nghiệm
+                            }
+                        }
+                    }
+                }
             }
 
             override fun shouldOverrideUrlLoading(v: WebView?, request: WebResourceRequest?): Boolean {
@@ -214,6 +238,11 @@ class FbWebSession(
         if (!isLoggedIn()) {
             AppLog.w("FbWebSession", "Chưa phát hiện cookie đăng nhập Facebook (thiếu c_user).")
             return@withContext Result.failure(IllegalStateException("Bạn chưa đăng nhập Facebook. Vui lòng vào tab Facebook để đăng nhập trước."))
+        }
+
+        if (isUserBrowsingScreen) {
+            AppLog.i("FbWebSession", "Bỏ qua quét ngầm tự động vì người dùng đang mở tab màn hình Facebook.")
+            return@withContext Result.success(emptyList())
         }
 
         AppLog.i("FbWebSession", "Bắt đầu quét danh sách nhóm đã tham gia...")

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.OpenInNew
@@ -130,6 +131,8 @@ fun SettingsScreen(
     var postSignature by remember { mutableStateOf(secureStore.getPostSignature()) }
     var autoCleanupDays by remember { mutableFloatStateOf(secureStore.getAutoCleanupDays().toFloat()) }
     var groupScanLookbackDays by remember { mutableFloatStateOf(secureStore.getGroupScanLookbackDays().toFloat()) }
+    var isAutoGroupScan by remember { mutableStateOf(secureStore.isAutoGroupScanEnabled()) }
+    var autoGroupScanInterval by remember { mutableFloatStateOf(secureStore.getAutoGroupScanIntervalMin().toFloat()) }
 
     var showAddFieldDialog by remember { mutableStateOf(false) }
     var showAddTemplateDialog by remember { mutableStateOf(false) }
@@ -586,6 +589,69 @@ fun SettingsScreen(
                     valueRange = 7f..90f,
                     steps = 82
                 )
+            }
+        }
+
+        // Tự Động Quét Nhóm Facebook (Liên Tục)
+        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.Groups, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Tự Động Quét Nhóm FB Liên Tục",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Tự động đồng bộ nhóm đã tham gia chạy ngầm, không cần bấm thủ công",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = isAutoGroupScan,
+                        onCheckedChange = {
+                            isAutoGroupScan = it
+                            secureStore.setAutoGroupScanEnabled(it)
+                            Toast.makeText(
+                                context,
+                                if (it) "Đã bật tự động quét nhóm FB ngầm" else "Đã tắt tự động quét nhóm FB ngầm",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    )
+                }
+
+                if (isAutoGroupScan) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Chu kỳ quét tự động: ${autoGroupScanInterval.toInt()} phút/lần",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Dịch vụ ngầm sẽ tự động cập nhật danh sách nhóm Facebook mới định kỳ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Slider(
+                        value = autoGroupScanInterval,
+                        onValueChange = {
+                            autoGroupScanInterval = it
+                            secureStore.setAutoGroupScanIntervalMin(it.toInt())
+                        },
+                        valueRange = 15f..120f,
+                        steps = 6
+                    )
+                }
             }
         }
 

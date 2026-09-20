@@ -70,7 +70,9 @@ import com.example.posthub.ui.theme.JammyPostHubTheme
 import com.example.posthub.updater.AppUpdater
 import com.example.posthub.updater.UpdateState
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -102,6 +104,16 @@ class MainActivity : FragmentActivity() {
             JammyForegroundService.start(this)
         } catch (e: Exception) {
             AppLog.w("MainActivity", "Không thể tự khởi động JammyForegroundService: ${e.message}")
+        }
+
+        // Tự động quét và đồng bộ nhóm Facebook ngầm khi khởi động ứng dụng
+        lifecycleScope.launch(Dispatchers.IO) {
+            delay(5000L)
+            try {
+                JammyApp.instance.container.syncJoinedGroupsSilently()
+            } catch (e: Exception) {
+                AppLog.e("MainActivity", "Lỗi tự động đồng bộ nhóm FB khi khởi động: ${e.message}")
+            }
         }
 
         val navigatePostId = intent.getLongExtra("EXTRA_NAVIGATE_POST_ID", -1L).takeIf { it != -1L }

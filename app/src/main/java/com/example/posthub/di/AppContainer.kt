@@ -107,8 +107,77 @@ class AppContainer(val context: Context) {
         }
     }
 
+    /**
+     * Tự động quét và đồng bộ nhóm Facebook ngầm
+     */
+    suspend fun syncJoinedGroupsSilently(): Int = withContext(Dispatchers.IO) {
+        try {
+            if (!secureStore.isAutoGroupScanEnabled() || secureStore.isEmergencyStop()) {
+                return@withContext 0
+            }
+            if (!fbWebSession.isLoggedIn()) {
+                return@withContext 0
+            }
+            AppLog.i("AppContainer", "Bắt đầu chu kỳ tự động đồng bộ nhóm Facebook ngầm...")
+            val result = fbWebSession.scanJoinedGroups()
+            if (result.isSuccess) {
+                val discovered = result.getOrNull() ?: emptyList()
+                var newCount = 0
+                for (dg in discovered) {
+                    val existing = database.fbGroupDao().getGroupByUrl(dg.url)
+                    if (existing == null) {
+                        database.fbGroupDao().insertGroup(
+                            com.example.posthub.data.local.entity.FbGroupEntity(
+                                name = dg.name,
+                                url = dg.url,
+                                joinStatus = com.example.posthub.domain.model.JoinStatus.JOINED
+                            )
+                        )
+                        newCount++
+                    }
+                }
+                if (newCount > 0) {
+                    AppLog.i("AppContainer", "Tự động đồng bộ nhóm FB hoàn tất: Đã lưu thêm $newCount nhóm mới.")
+                }
+                return@withContext newCount
+            }
+            0
+        } catch (e: Exception) {
+            AppLog.e("AppContainer", "Lỗi trong chu kỳ tự động quét nhóm Facebook: ${e.message}", e)
+            0
+        }
+    }
+
+    private val containerScope = CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+
     init {
         AppLog.i("AppContainer", "Thủ công DI Container khởi tạo hoàn tất với Room DB, SecureStore, FbWebSession, ZaloWebSession và AiService.")
         purgeOldPostsAndLogs()
+
+        fbWebSession.onGroupsAutoDiscovered = { groups ->
+            containerScope.launch {
+                try {
+                    var newCount = 0
+                    for (dg in groups) {
+                        val existing = database.fbGroupDao().getGroupByUrl(dg.url)
+                        if (existing == null) {
+                            database.fbGroupDao().insertGroup(
+                                com.example.posthub.data.local.entity.FbGroupEntity(
+                                    name = dg.name,
+                                    url = dg.url,
+                                    joinStatus = com.example.posthub.domain.model.JoinStatus.JOINED
+                                )
+                            )
+                            newCount++
+                        }
+                    }
+                    if (newCount > 0) {
+                        AppLog.i("AppContainer", "Tự động phát hiện và lưu $newCount nhóm FB mới vào cơ sở dữ liệu.")
+                    }
+                } catch (e: Exception) {
+                    AppLog.e("AppContainer", "Lỗi lưu nhóm FB tự động phát hiện: ${e.message}")
+                }
+            }
+        }
     }
 }

@@ -84,4 +84,15 @@ class EnhancementsTest {
         assertTrue(oldPostTime < cutoff)
         assertFalse(newPostTime < cutoff)
     }
+
+    @Test
+    fun testAutoGroupScanIntervalBounds() {
+        fun coerceInterval(minutes: Int): Int = minutes.coerceIn(10, 240)
+
+        assertEquals(10, coerceInterval(5))
+        assertEquals(15, coerceInterval(15))
+        assertEquals(30, coerceInterval(30))
+        assertEquals(60, coerceInterval(60))
+        assertEquals(240, coerceInterval(500))
+    }
 }

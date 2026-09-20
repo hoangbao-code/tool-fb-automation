@@ -41,6 +41,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,6 +74,13 @@ fun FacebookScreen(
     val container = JammyApp.instance.container
     val secureStore = container.secureStore
     val fbSession = container.fbWebSession
+
+    DisposableEffect(Unit) {
+        fbSession.isUserBrowsingScreen = true
+        onDispose {
+            fbSession.isUserBrowsingScreen = false
+        }
+    }
 
     val assistedSession by fbSession.assistedSession.collectAsState()
     var isEmergencyStop by remember { mutableStateOf(secureStore.isEmergencyStop()) }

@@ -14,16 +14,52 @@ import com.example.posthub.JammyApp
 import com.example.posthub.R
 import com.example.posthub.data.AppLog
 import com.example.posthub.ui.MainActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 class JammyForegroundService : Service() {
+
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var autoScanJob: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildForegroundNotification("Đang chạy ngầm bắt tin Zalo"))
+        startForeground(NOTIFICATION_ID, buildForegroundNotification("Đang chạy ngầm bắt tin & quét nhóm FB"))
+        startAutoGroupScanLoop()
         AppLog.i("ForegroundService", "JammyForegroundService đã khởi động.")
+    }
+
+    private fun startAutoGroupScanLoop() {
+        autoScanJob?.cancel()
+        autoScanJob = serviceScope.launch {
+            // Chờ 60 giây sau khi khởi động service để hệ thống ổn định
+            delay(60_000L)
+            while (isActive) {
+                val container = JammyApp.instance.container
+                val secureStore = container.secureStore
+                if (secureStore.isAutoGroupScanEnabled() && !secureStore.isEmergencyStop()) {
+                    try {
+                        val newCount = container.syncJoinedGroupsSilently()
+                        if (newCount > 0) {
+                            AppLog.i("ForegroundService", "Quét nhóm FB định kỳ: Đã phát hiện và thêm $newCount nhóm mới.")
+                        }
+                    } catch (e: Exception) {
+                        AppLog.e("ForegroundService", "Lỗi quét nhóm FB định kỳ: ${e.message}")
+                    }
+                }
+                val intervalMin = container.secureStore.getAutoGroupScanIntervalMin().coerceAtLeast(10)
+                delay(intervalMin * 60_000L)
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -81,6 +117,7 @@ class JammyForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        serviceScope.cancel()
         AppLog.i("ForegroundService", "JammyForegroundService đã dừng.")
     }
 

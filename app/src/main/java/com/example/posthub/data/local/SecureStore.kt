@@ -220,6 +220,13 @@ class SecureStore(context: Context) {
         prefs.edit().putString(KEY_LAST_SELECTED_GROUPS, str).apply()
     }
 
+    // Tự động quét nhóm Facebook liên tục chạy ngầm
+    fun isAutoGroupScanEnabled(): Boolean = prefs.getBoolean(KEY_AUTO_GROUP_SCAN_ENABLED, true)
+    fun setAutoGroupScanEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_AUTO_GROUP_SCAN_ENABLED, enabled).apply()
+
+    fun getAutoGroupScanIntervalMin(): Int = prefs.getInt(KEY_AUTO_GROUP_SCAN_INTERVAL_MIN, 30)
+    fun setAutoGroupScanIntervalMin(minutes: Int) = prefs.edit().putInt(KEY_AUTO_GROUP_SCAN_INTERVAL_MIN, minutes.coerceIn(10, 240)).apply()
+
     companion object {
         private const val KEY_FB_COOKIES = "fb_cookies"
         private const val KEY_FB_ACCOUNT_NAME = "fb_account_name"
@@ -243,6 +250,8 @@ class SecureStore(context: Context) {
         private const val KEY_AUTO_CLEANUP_DAYS = "auto_cleanup_days"
         private const val KEY_GROUP_SCAN_LOOKBACK_DAYS = "group_scan_lookback_days"
         private const val KEY_LAST_SELECTED_GROUPS = "last_selected_groups"
+        private const val KEY_AUTO_GROUP_SCAN_ENABLED = "auto_group_scan_enabled"
+        private const val KEY_AUTO_GROUP_SCAN_INTERVAL_MIN = "auto_group_scan_interval_min"
 
         val DEFAULT_AI_PROMPT = """
 Bạn là chuyên gia soạn thảo bài đăng mạng xã hội chuyên nghiệp.
