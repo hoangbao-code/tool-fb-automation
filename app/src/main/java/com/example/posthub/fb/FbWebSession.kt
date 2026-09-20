@@ -218,64 +218,51 @@ class FbWebSession(
 
         AppLog.i("FbWebSession", "Bắt đầu quét danh sách nhóm đã tham gia...")
 
-        // Chiến lược 1: Thử truy cập mbasic.facebook.com/groups/ (HTML tĩnh, bóc tách nhanh & chính xác 100%)
-        AppLog.i("FbWebSession", "[Chiến lược 1 - Trang 1] Tải https://mbasic.facebook.com/groups/ ...")
-        wv.loadUrl("https://mbasic.facebook.com/groups/")
+        // Chiến lược 1: Thử truy cập https://www.facebook.com/groups/joins/ (URL chuẩn của nhóm đã tham gia trên Mobile)
+        AppLog.i("FbWebSession", "[Chiến lược 1] Tải https://www.facebook.com/groups/joins/ ...")
+        wv.loadUrl("https://www.facebook.com/groups/joins/")
         delay(4000)
+        // Cuộn trang để ép React render các nhóm
+        evaluateJs(wv, "window.scrollTo(0, 1000);")
+        delay(2000)
+        evaluateJs(wv, "window.scrollTo(0, 2500);")
+        delay(1500)
 
         val discoveredList = extractGroupsFromCurrentPage(wv, isJoinedOnly = true).toMutableList()
-        AppLog.i("FbWebSession", "[Chiến lược 1 - Trang 1] Kết quả mbasic: tìm thấy ${discoveredList.size} nhóm.")
+        AppLog.i("FbWebSession", "[Chiến lược 1] Kết quả www.facebook.com/groups/joins/: tìm thấy ${discoveredList.size} nhóm.")
 
-        // Lặp tối đa 15 trang nếu có nút Xem thêm nhóm (seemore) để quét full nhóm
-        var page = 1
-        while (page < 15) {
-            val seeMoreJs = """
-                (function() {
-                    var a = document.querySelector("a[href*='seemore'], a[href*='group_browse']");
-                    return a ? a.href : '';
-                })();
-            """.trimIndent()
-            val nextUrl = evaluateJs(wv, seeMoreJs).trim()
-            if (nextUrl.isNotBlank() && nextUrl.startsWith("http")) {
-                page++
-                AppLog.i("FbWebSession", "[Chiến lược 1 - Trang $page] Tải tiếp: $nextUrl ...")
-                wv.loadUrl(nextUrl)
-                delay(3000)
-                val more = extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
-                if (more.isEmpty()) break
-                for (g in more) {
-                    if (discoveredList.none { it.url == g.url }) {
-                        discoveredList.add(g)
-                    }
-                }
-                AppLog.i("FbWebSession", "[Chiến lược 1 - Trang $page] Tổng tích lũy: ${discoveredList.size} nhóm.")
-            } else {
-                break
-            }
-        }
-
-        // Chiến lược 2: Nếu mbasic trống, thử m.facebook.com/groups/ kèm cuộn trang
+        // Chiến lược 2: Nếu chưa thấy, thử m.facebook.com/groups/joins/
         if (discoveredList.isEmpty()) {
-            AppLog.i("FbWebSession", "[Chiến lược 2] Thử https://m.facebook.com/groups/ ...")
-            wv.loadUrl("https://m.facebook.com/groups/")
-            delay(4000)
-            evaluateJs(wv, "window.scrollTo(0, 1000);")
-            delay(2000)
-            val fbMobileList = extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
-            discoveredList.addAll(fbMobileList)
-            AppLog.i("FbWebSession", "[Chiến lược 2] Kết quả m.facebook.com/groups/: tìm thấy ${fbMobileList.size} nhóm.")
-        }
-
-        // Chiến lược 3: Thử https://m.facebook.com/groups/joins/
-        if (discoveredList.isEmpty()) {
-            AppLog.i("FbWebSession", "[Chiến lược 3] Thử https://m.facebook.com/groups/joins/ ...")
+            AppLog.i("FbWebSession", "[Chiến lược 2] Thử https://m.facebook.com/groups/joins/ ...")
             wv.loadUrl("https://m.facebook.com/groups/joins/")
             delay(4000)
-            evaluateJs(wv, "window.scrollTo(0, 1000);")
+            evaluateJs(wv, "window.scrollTo(0, 1500);")
             delay(2000)
             val joinsList = extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
             discoveredList.addAll(joinsList)
-            AppLog.i("FbWebSession", "[Chiến lược 3] Kết quả groups/joins: tìm thấy ${joinsList.size} nhóm.")
+            AppLog.i("FbWebSession", "[Chiến lược 2] Kết quả m.facebook.com/groups/joins/: tìm thấy ${joinsList.size} nhóm.")
+        }
+
+        // Chiến lược 3: Thử https://m.facebook.com/groups/?category=membership
+        if (discoveredList.isEmpty()) {
+            AppLog.i("FbWebSession", "[Chiến lược 3] Thử https://m.facebook.com/groups/?category=membership ...")
+            wv.loadUrl("https://m.facebook.com/groups/?category=membership")
+            delay(4000)
+            evaluateJs(wv, "window.scrollTo(0, 1000);")
+            delay(2000)
+            val memberList = extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
+            discoveredList.addAll(memberList)
+            AppLog.i("FbWebSession", "[Chiến lược 3] Kết quả category=membership: tìm thấy ${memberList.size} nhóm.")
+        }
+
+        // Chiến lược 4: Thử mbasic.facebook.com/groups/ (dự phòng)
+        if (discoveredList.isEmpty()) {
+            AppLog.i("FbWebSession", "[Chiến lược 4] Thử https://mbasic.facebook.com/groups/ ...")
+            wv.loadUrl("https://mbasic.facebook.com/groups/")
+            delay(3000)
+            val mbasicList = extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
+            discoveredList.addAll(mbasicList)
+            AppLog.i("FbWebSession", "[Chiến lược 4] Kết quả mbasic: tìm thấy ${mbasicList.size} nhóm.")
         }
 
         val finalUrl = wv.url ?: ""
@@ -319,6 +306,13 @@ class FbWebSession(
     }
 
     /**
+     * Bóc tách danh sách nhóm từ màn hình hiện tại đang hiển thị trong WebView
+     */
+    suspend fun extractGroupsFromCurrentView(wv: WebView): List<DiscoveredGroup> {
+        return extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
+    }
+
+    /**
      * Bóc tách danh sách nhóm thông minh từ trang hiện tại trong WebView
      */
     private suspend fun extractGroupsFromCurrentPage(wv: WebView, isJoinedOnly: Boolean): List<DiscoveredGroup> {
@@ -326,30 +320,63 @@ class FbWebSession(
             (function() {
                 var list = [];
                 var seen = {};
-                var anchors = document.querySelectorAll("a[href*='/groups/']");
-                var ignored = ['create', 'discover', 'feed', 'joins', 'category', 'notifications', 'settings', 'search', 'admin', 'about', 'your_posts'];
+                
+                // Đóng tự động các popup/banner che chắn nếu có
+                var dismissSelectors = [
+                    "[aria-label='Close']", "[aria-label='Đóng']", 
+                    "[aria-label='Not Now']", "[aria-label='Lúc khác']"
+                ];
+                for (var d = 0; d < dismissSelectors.length; d++) {
+                    try {
+                        var cb = document.querySelector(dismissSelectors[d]);
+                        if (cb) cb.click();
+                    } catch(e) {}
+                }
+
+                var anchors = document.querySelectorAll("a[href*='/groups/'], a[href*='facebook.com/groups/'], div[role='link'][data-href*='/groups/']");
+                var ignored = ['create', 'discover', 'feed', 'joins', 'category', 'notifications', 'settings', 'search', 'admin', 'about', 'your_posts', 'membership', 'me'];
 
                 for (var i = 0; i < anchors.length; i++) {
                     var a = anchors[i];
-                    var href = a.href || a.getAttribute("href") || "";
+                    var href = a.href || a.getAttribute("href") || a.getAttribute("data-href") || "";
                     var m = href.match(/\/groups\/([^\/?#&]+)/i);
                     if (m && m[1]) {
                         var id = m[1].toLowerCase();
                         if (ignored.indexOf(id) === -1) {
                             var cleanUrl = "https://m.facebook.com/groups/" + m[1];
                             if (!seen[cleanUrl]) {
-                                var name = (a.innerText || a.textContent || a.getAttribute("aria-label") || a.getAttribute("title") || "").trim();
+                                var container = a.closest("[role='listitem']") || a.closest("tr") || a.closest("li") || a.closest("div[role='article']") || a.parentElement;
+                                var name = "";
+                                
+                                // 1. Tìm tiêu đề trong container cấu trúc React Facebook
+                                if (container) {
+                                    var heading = container.querySelector("h2, h3, h4, strong, [role='heading'], span[dir='auto']");
+                                    if (heading && heading.textContent && heading.textContent.trim().length > 2) {
+                                        name = heading.textContent.trim();
+                                    }
+                                }
+                                
+                                // 2. Lấy từ chính thẻ a nếu chưa có
                                 if (!name || name.length < 2) {
-                                    var container = a.closest("tr") || a.closest("li") || a.closest("div[role='article']") || a.parentElement;
+                                    name = (a.innerText || a.textContent || a.getAttribute("aria-label") || a.getAttribute("title") || "").trim();
+                                }
+                                
+                                // 3. Lấy từ container cha
+                                if (!name || name.length < 2) {
                                     if (container) {
                                         name = (container.innerText || container.textContent || "").trim();
                                     }
                                 }
+                                
                                 if (name.indexOf('\n') !== -1) {
                                     var lines = name.split('\n');
                                     for (var l = 0; l < lines.length; l++) {
                                         var line = lines[l].trim();
-                                        if (line.length > 2 && line.toLowerCase() !== 'nhóm của bạn' && line.toLowerCase() !== 'nhóm') {
+                                        if (line.length > 2 && 
+                                            line.toLowerCase() !== 'nhóm của bạn' && 
+                                            line.toLowerCase() !== 'nhóm' && 
+                                            line.toLowerCase() !== 'đã tham gia' &&
+                                            line.toLowerCase() !== 'joined') {
                                             name = line;
                                             break;
                                         }
@@ -365,15 +392,11 @@ class FbWebSession(
                                     lower !== 'tạo nhóm' && 
                                     lower !== 'nhóm') {
                                     
-                                    var parent = a.closest("div[role='article']") || a.closest("tr") || a.parentElement;
-                                    var parentText = (parent ? (parent.innerText || parent.textContent) : "").toLowerCase();
-                                    var isJoined = parentText.indexOf("đã tham gia") !== -1 || parentText.indexOf("joined") !== -1;
-                                    
                                     seen[cleanUrl] = true;
                                     list.push({
                                         name: name,
                                         url: cleanUrl,
-                                        isJoined: ${if (isJoinedOnly) "true" else "isJoined"}
+                                        isJoined: ${if (isJoinedOnly) "true" else "true"}
                                     });
                                 }
                             }

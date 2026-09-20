@@ -136,7 +136,7 @@ fun GroupScreen(
                                         if (discovered.isEmpty()) {
                                             Toast.makeText(
                                                 context,
-                                                "Chưa tìm thấy nhóm nào. Bạn hãy vào tab Facebook kiểm tra tài khoản đã đăng nhập chưa, hoặc xem tab Nhật ký nhé!",
+                                                "Chưa tìm thấy nhóm. Bạn hãy sang tab 'Facebook', bấm 'Đến trang nhóm' rồi bấm 'Quét nhóm từ màn hình' nhé!",
                                                 Toast.LENGTH_LONG
                                             ).show()
                                         } else {

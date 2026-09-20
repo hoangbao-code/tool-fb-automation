@@ -24,6 +24,8 @@ import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
@@ -56,7 +58,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.posthub.JammyApp
 import com.example.posthub.data.AppLog
+import com.example.posthub.data.local.entity.FbGroupEntity
+import com.example.posthub.domain.model.JoinStatus
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun FacebookScreen(
@@ -154,6 +160,64 @@ fun FacebookScreen(
                         ) {
                             Text("Đăng xuất", fontSize = 12.sp)
                         }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Phím tắt mở trang Nhóm và Quét nhóm trực tiếp từ màn hình Facebook
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            webViewInstance?.loadUrl("https://www.facebook.com/groups/joins/")
+                            Toast.makeText(context, "Đang mở trang danh sách nhóm...", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f).height(38.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Icon(Icons.Default.Groups, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Đến trang nhóm", fontSize = 12.sp)
+                    }
+
+                    Button(
+                        onClick = {
+                            val wv = webViewInstance
+                            if (wv == null) {
+                                Toast.makeText(context, "WebView chưa sẵn sàng!", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            scope.launch {
+                                Toast.makeText(context, "Đang bóc tách nhóm từ màn hình...", Toast.LENGTH_SHORT).show()
+                                val groups = fbSession.extractGroupsFromCurrentView(wv)
+                                if (groups.isEmpty()) {
+                                    Toast.makeText(context, "Chưa thấy nhóm trên màn hình. Bạn hãy cuộn trang đến danh sách nhóm rồi bấm lại nhé!", Toast.LENGTH_LONG).show()
+                                } else {
+                                    var newCount = 0
+                                    withContext(Dispatchers.IO) {
+                                        for (g in groups) {
+                                            val existing = container.database.fbGroupDao().getGroupByUrl(g.url)
+                                            if (existing == null) {
+                                                container.database.fbGroupDao().insertGroup(
+                                                    FbGroupEntity(name = g.name, url = g.url, joinStatus = JoinStatus.JOINED)
+                                                )
+                                                newCount++
+                                            }
+                                        }
+                                    }
+                                    Toast.makeText(context, "Quét thành công ${groups.size} nhóm (thêm mới $newCount nhóm)!", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1.3f).height(38.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Quét nhóm từ màn hình", fontSize = 12.sp)
                     }
                 }
             }
