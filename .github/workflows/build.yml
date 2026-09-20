@@ -39,7 +39,26 @@ jobs:
           gradle-version: '8.7'
 
       - name: Run Unit Tests
-        run: gradle test --console=plain --info --stacktrace
+        run: |
+          gradle test --console=plain --stacktrace || {
+            echo "::error::Unit tests failed! Inspecting results..."
+            python3 -c "
+          import os, glob, xml.etree.ElementTree as ET
+          for f in glob.glob('**/test-results/**/*.xml', recursive=True):
+              try:
+                  tree = ET.parse(f)
+                  for tc in tree.findall('.//testcase'):
+                      fail = tc.find('failure')
+                      if fail is not None:
+                          classname = tc.get('classname')
+                          name = tc.get('name')
+                          msg = (fail.text or fail.get('message', ''))[:300].replace('\n', ' ')
+                          print(f'::error title=Test Failure::{classname}.{name} - {msg}')
+              except Exception as e:
+                  print(f'Error: {e}')
+          "
+            exit 1
+          }
 
       - name: Assemble Debug APK
         run: gradle assembleDebug --console=plain --stacktrace
