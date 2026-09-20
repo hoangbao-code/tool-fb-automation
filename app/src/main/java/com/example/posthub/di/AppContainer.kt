@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.example.posthub.domain.ai.AiService
+import com.example.posthub.gemini.GeminiWebSession
 import com.example.posthub.zalo.ZaloWebSession
 import org.json.JSONArray
 
@@ -23,6 +24,7 @@ class AppContainer(val context: Context) {
     val database = AppDatabase.getInstance(context)
     val fbWebSession = FbWebSession(context, secureStore)
     val zaloWebSession = ZaloWebSession(context, secureStore)
+    val geminiWebSession = GeminiWebSession(context)
     val aiService = AiService(secureStore)
 
     val messageMerger = MessageMerger(

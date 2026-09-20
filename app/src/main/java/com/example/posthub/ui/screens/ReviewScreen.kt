@@ -61,6 +61,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -117,6 +118,20 @@ fun ReviewScreen(
     var isAssistedMode by remember { mutableStateOf(true) }
     var isAiGenerating by remember { mutableStateOf(false) }
     var previousPostText by remember { mutableStateOf<String?>(null) }
+    var isViewingGeminiWeb by rememberSaveable { mutableStateOf(false) }
+
+    // Nếu đang mở trang Gemini Web để tương tác cuộc trò chuyện
+    if (isViewingGeminiWeb) {
+        GeminiWebScreen(
+            onBack = { isViewingGeminiWeb = false },
+            onApplyResult = { resultText ->
+                previousPostText = finalPostText
+                finalPostText = resultText
+                isViewingGeminiWeb = false
+            }
+        )
+        return
+    }
 
     // Load bài đăng từ Database
     LaunchedEffect(postId) {
@@ -276,44 +291,65 @@ fun ReviewScreen(
                             fontWeight = FontWeight.Bold
                         )
 
-                        // Nút AI Rewrite
-                        OutlinedButton(
-                            onClick = {
-                                if (isAiGenerating) return@OutlinedButton
-                                val secureStore = JammyApp.instance.container.secureStore
-                                val apiKey = secureStore.getGeminiApiKey()
-                                if (apiKey.isBlank()) {
-                                    Toast.makeText(context, "Vui lòng vào Cài đặt để nhập Gemini API Key miễn phí trước!", Toast.LENGTH_LONG).show()
-                                    return@OutlinedButton
-                                }
-                                isAiGenerating = true
-                                scope.launch {
-                                    val aiService = JammyApp.instance.container.aiService
-                                    val result = aiService.rewritePost(
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            // Nút Mở trong Gemini Web (kết nối trực tiếp cuộc trò chuyện của người dùng)
+                            Button(
+                                onClick = {
+                                    val container = JammyApp.instance.container
+                                    val template = container.secureStore.getAiPromptTemplate()
+                                    val fullPrompt = container.aiService.buildPrompt(
+                                        template = template,
                                         content = if (rawText.isNotBlank()) rawText else finalPostText,
                                         senderOrGroup = post?.senderOrGroup ?: ""
                                     )
-                                    isAiGenerating = false
-                                    result.onSuccess { rewritten ->
-                                        previousPostText = finalPostText
-                                        finalPostText = rewritten
-                                        Toast.makeText(context, "AI đã viết lại bài đăng thành công!", Toast.LENGTH_SHORT).show()
-                                    }.onFailure { err ->
-                                        Toast.makeText(context, "Lỗi AI: ${err.message}", Toast.LENGTH_LONG).show()
+                                    container.geminiWebSession.sendPromptToWeb(fullPrompt)
+                                    isViewingGeminiWeb = true
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF673AB7)),
+                                modifier = Modifier.height(34.dp)
+                            ) {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Gemini Web", fontSize = 11.sp)
+                            }
+
+                            // Nút AI Rewrite tự động qua API
+                            OutlinedButton(
+                                onClick = {
+                                    if (isAiGenerating) return@OutlinedButton
+                                    val secureStore = JammyApp.instance.container.secureStore
+                                    val apiKey = secureStore.getGeminiApiKey()
+                                    if (apiKey.isBlank()) {
+                                        Toast.makeText(context, "Vui lòng nhập API Key hoặc dùng nút 'Gemini Web' bên cạnh để mở chat trực tiếp!", Toast.LENGTH_LONG).show()
+                                        return@OutlinedButton
                                     }
+                                    isAiGenerating = true
+                                    scope.launch {
+                                        val aiService = JammyApp.instance.container.aiService
+                                        val result = aiService.rewritePost(
+                                            content = if (rawText.isNotBlank()) rawText else finalPostText,
+                                            senderOrGroup = post?.senderOrGroup ?: ""
+                                        )
+                                        isAiGenerating = false
+                                        result.onSuccess { rewritten ->
+                                            previousPostText = finalPostText
+                                            finalPostText = rewritten
+                                            Toast.makeText(context, "AI đã viết lại bài đăng thành công!", Toast.LENGTH_SHORT).show()
+                                        }.onFailure { err ->
+                                            Toast.makeText(context, "Lỗi AI: ${err.message}", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                },
+                                enabled = !isAiGenerating,
+                                modifier = Modifier.height(34.dp)
+                            ) {
+                                if (isAiGenerating) {
+                                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Đang chạy...", fontSize = 11.sp)
+                                } else {
+                                    Text("Tự động (API)", fontSize = 11.sp)
                                 }
-                            },
-                            enabled = !isAiGenerating,
-                            modifier = Modifier.height(36.dp)
-                        ) {
-                            if (isAiGenerating) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Đang viết...", fontSize = 12.sp)
-                            } else {
-                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF673AB7), modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Viết lại bằng AI", fontSize = 12.sp)
                             }
                         }
                     }

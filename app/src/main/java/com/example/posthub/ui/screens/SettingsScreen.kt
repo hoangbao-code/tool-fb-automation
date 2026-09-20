@@ -64,6 +64,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -120,6 +121,12 @@ fun SettingsScreen(
     var showAddFieldDialog by remember { mutableStateOf(false) }
     var showAddTemplateDialog by remember { mutableStateOf(false) }
     var showImportExportDialog by remember { mutableStateOf(false) }
+    var isViewingGeminiWebSettings by rememberSaveable { mutableStateOf(false) }
+
+    if (isViewingGeminiWebSettings) {
+        GeminiWebScreen(onBack = { isViewingGeminiWebSettings = false })
+        return
+    }
 
     Column(
         modifier = Modifier
@@ -331,21 +338,71 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Sử dụng Google Gemini API để tự động viết lại bài theo phong cách riêng của bạn.",
+                    text = "Sử dụng Google Gemini API hoặc kết nối trực tiếp Gemini Web để viết lại bài theo phong cách riêng của bạn.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Ô nhập API Key
+                // Nút mở Gemini Web để đăng nhập và xem cuộc trò chuyện
+                Button(
+                    onClick = { isViewingGeminiWebSettings = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF673AB7)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Mở Gemini Web (Đăng nhập / Xem chat)", fontSize = 12.sp)
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Ô nhập Prompt
+                Text("Prompt tùy chỉnh của bạn:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = "💡 Bạn chỉ cần dán đoạn Prompt đã có sẵn. App sẽ tự động gửi kèm nội dung tin Zalo để AI chỉnh sửa đúng theo ý bạn.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = aiPromptTemplate,
+                    onValueChange = {
+                        aiPromptTemplate = it
+                        secureStore.setAiPromptTemplate(it)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(140.dp),
+                    textStyle = MaterialTheme.typography.bodySmall
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(
+                        onClick = {
+                            aiPromptTemplate = SecureStore.DEFAULT_AI_PROMPT
+                            secureStore.setAiPromptTemplate(SecureStore.DEFAULT_AI_PROMPT)
+                            Toast.makeText(context, "Đã khôi phục Prompt mẫu mặc định", Toast.LENGTH_SHORT).show()
+                        }
+                    ) {
+                        Text("Khôi phục mẫu chuẩn", fontSize = 11.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Ô nhập API Key (nếu muốn dùng API tự động)
+                Text("Cấu hình API Key (để tự động chạy ngầm không cần mở web):", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                Spacer(modifier = Modifier.height(4.dp))
                 OutlinedTextField(
                     value = geminiApiKey,
                     onValueChange = {
                         geminiApiKey = it
                         secureStore.setGeminiApiKey(it)
                     },
-                    label = { Text("Gemini API Key") },
+                    label = { Text("Gemini API Key (Tùy chọn)") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     visualTransformation = if (isApiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -372,36 +429,6 @@ fun SettingsScreen(
                         Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Lấy API Key miễn phí (Google AI Studio)", fontSize = 11.sp)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                // Ô nhập Prompt Template
-                Text("Prompt tùy chỉnh của bạn:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                Spacer(modifier = Modifier.height(4.dp))
-                OutlinedTextField(
-                    value = aiPromptTemplate,
-                    onValueChange = {
-                        aiPromptTemplate = it
-                        secureStore.setAiPromptTemplate(it)
-                    },
-                    modifier = Modifier.fillMaxWidth().height(140.dp),
-                    textStyle = MaterialTheme.typography.bodySmall
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(
-                        onClick = {
-                            aiPromptTemplate = SecureStore.DEFAULT_AI_PROMPT
-                            secureStore.setAiPromptTemplate(SecureStore.DEFAULT_AI_PROMPT)
-                            Toast.makeText(context, "Đã khôi phục Prompt mẫu mặc định", Toast.LENGTH_SHORT).show()
-                        }
-                    ) {
-                        Text("Khôi phục mẫu chuẩn", fontSize = 11.sp)
                     }
                 }
 
