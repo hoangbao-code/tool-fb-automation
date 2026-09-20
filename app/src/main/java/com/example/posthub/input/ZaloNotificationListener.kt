@@ -49,8 +49,11 @@ class ZaloNotificationListener : NotificationListenerService() {
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
         val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString() ?: ""
+        val textLines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
+        val linesJoined = textLines?.joinToString("\n") { it.toString() }?.takeIf { it.isNotBlank() }
 
         val finalMessageContent = when {
+            !linesJoined.isNullOrBlank() -> linesJoined
             !bigText.isNullOrBlank() -> bigText
             text.isNotBlank() -> text
             else -> ""

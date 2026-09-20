@@ -1,5 +1,8 @@
 package com.example.posthub.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -90,7 +93,8 @@ import org.json.JSONArray
 @Composable
 fun ReviewScreen(
     postId: Long,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenInFacebook: ((groupUrl: String) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -366,25 +370,41 @@ fun ReviewScreen(
                                     finalPostText = finalPostText,
                                     templateId = selectedTemplateId,
                                     targetGroupIdsJson = targetArray.toString(),
-                                    status = PostStatus.QUEUED
+                                    status = if (isAssistedMode) PostStatus.APPROVED else PostStatus.QUEUED
                                 )
                                 if (updatedPost != null) {
                                     withContext(Dispatchers.IO) { db.postDao().updatePost(updatedPost) }
                                 }
 
-                                // Kích hoạt Worker đăng bài
-                                val workRequest = OneTimeWorkRequestBuilder<PostWorker>()
-                                    .setInputData(
-                                        workDataOf(
-                                            PostWorker.KEY_POST_ID to postId,
-                                            PostWorker.KEY_IS_ASSISTED to isAssistedMode
-                                        )
-                                    )
-                                    .build()
+                                // Tự động copy bài viết vào Clipboard để dán ngay lập tức
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("Jammy Post", finalPostText)
+                                clipboard.setPrimaryClip(clip)
 
-                                WorkManager.getInstance(context).enqueue(workRequest)
-                                Toast.makeText(context, "Đã đưa bài viết vào hàng đợi đăng bài!", Toast.LENGTH_SHORT).show()
-                                onBack()
+                                if (isAssistedMode) {
+                                    val firstGroup = withContext(Dispatchers.IO) { db.fbGroupDao().getGroupById(pickedGroupIds.first()) }
+                                    val targetUrl = firstGroup?.url ?: "https://m.facebook.com"
+                                    Toast.makeText(context, "Đã sao chép nội dung! Đang mở nhóm Facebook...", Toast.LENGTH_SHORT).show()
+                                    if (onOpenInFacebook != null) {
+                                        onOpenInFacebook(targetUrl)
+                                    } else {
+                                        onBack()
+                                    }
+                                } else {
+                                    // Kích hoạt Worker đăng bài tự động
+                                    val workRequest = OneTimeWorkRequestBuilder<PostWorker>()
+                                        .setInputData(
+                                            workDataOf(
+                                                PostWorker.KEY_POST_ID to postId,
+                                                PostWorker.KEY_IS_ASSISTED to false
+                                            )
+                                        )
+                                        .build()
+
+                                    WorkManager.getInstance(context).enqueue(workRequest)
+                                    Toast.makeText(context, "Đã đưa bài viết vào hàng đợi đăng tự động!", Toast.LENGTH_SHORT).show()
+                                    onBack()
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth()

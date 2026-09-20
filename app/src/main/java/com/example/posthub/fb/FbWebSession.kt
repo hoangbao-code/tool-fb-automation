@@ -169,12 +169,40 @@ class FbWebSession(
         AppLog.i("FbWebSession", "Bắt đầu quét danh sách nhóm đã tham gia...")
 
         // Chiến lược 1: Thử truy cập mbasic.facebook.com/groups/ (HTML tĩnh, bóc tách nhanh & chính xác 100%)
-        AppLog.i("FbWebSession", "[Chiến lược 1] Tải https://mbasic.facebook.com/groups/ ...")
+        AppLog.i("FbWebSession", "[Chiến lược 1 - Trang 1] Tải https://mbasic.facebook.com/groups/ ...")
         wv.loadUrl("https://mbasic.facebook.com/groups/")
         delay(4000)
 
-        var discoveredList = extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
-        AppLog.i("FbWebSession", "[Chiến lược 1] Kết quả mbasic: tìm thấy ${discoveredList.size} nhóm.")
+        val discoveredList = extractGroupsFromCurrentPage(wv, isJoinedOnly = true).toMutableList()
+        AppLog.i("FbWebSession", "[Chiến lược 1 - Trang 1] Kết quả mbasic: tìm thấy ${discoveredList.size} nhóm.")
+
+        // Lặp tối đa 5 trang nếu có nút Xem thêm nhóm (seemore)
+        var page = 1
+        while (page < 5) {
+            val seeMoreJs = """
+                (function() {
+                    var a = document.querySelector("a[href*='seemore'], a[href*='group_browse']");
+                    return a ? a.href : '';
+                })();
+            """.trimIndent()
+            val nextUrl = evaluateJs(wv, seeMoreJs).trim()
+            if (nextUrl.isNotBlank() && nextUrl.startsWith("http")) {
+                page++
+                AppLog.i("FbWebSession", "[Chiến lược 1 - Trang $page] Tải tiếp: $nextUrl ...")
+                wv.loadUrl(nextUrl)
+                delay(3000)
+                val more = extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
+                if (more.isEmpty()) break
+                for (g in more) {
+                    if (discoveredList.none { it.url == g.url }) {
+                        discoveredList.add(g)
+                    }
+                }
+                AppLog.i("FbWebSession", "[Chiến lược 1 - Trang $page] Tổng tích lũy: ${discoveredList.size} nhóm.")
+            } else {
+                break
+            }
+        }
 
         // Chiến lược 2: Nếu mbasic trống, thử m.facebook.com/groups/ kèm cuộn trang
         if (discoveredList.isEmpty()) {
@@ -183,8 +211,9 @@ class FbWebSession(
             delay(4000)
             evaluateJs(wv, "window.scrollTo(0, 1000);")
             delay(2000)
-            discoveredList = extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
-            AppLog.i("FbWebSession", "[Chiến lược 2] Kết quả m.facebook.com/groups/: tìm thấy ${discoveredList.size} nhóm.")
+            val fbMobileList = extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
+            discoveredList.addAll(fbMobileList)
+            AppLog.i("FbWebSession", "[Chiến lược 2] Kết quả m.facebook.com/groups/: tìm thấy ${fbMobileList.size} nhóm.")
         }
 
         // Chiến lược 3: Thử https://m.facebook.com/groups/joins/
@@ -194,8 +223,9 @@ class FbWebSession(
             delay(4000)
             evaluateJs(wv, "window.scrollTo(0, 1000);")
             delay(2000)
-            discoveredList = extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
-            AppLog.i("FbWebSession", "[Chiến lược 3] Kết quả groups/joins: tìm thấy ${discoveredList.size} nhóm.")
+            val joinsList = extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
+            discoveredList.addAll(joinsList)
+            AppLog.i("FbWebSession", "[Chiến lược 3] Kết quả groups/joins: tìm thấy ${joinsList.size} nhóm.")
         }
 
         val finalUrl = wv.url ?: ""
@@ -336,7 +366,8 @@ class FbWebSession(
             return@withContext Result.failure(IllegalStateException("Đang trong trạng thái DỪNG KHẨN CẤP!"))
         }
 
-        val wv = webView ?: return@withContext Result.failure(IllegalStateException("WebView chưa được khởi tạo."))
+        val wv = getOrCreateWebView(context)
+        restoreCookies()
 
         AppLog.i("FbWebSession", "Bắt đầu quy trình tham gia nhóm: $groupUrl")
         openGroup(groupUrl)
@@ -424,7 +455,8 @@ class FbWebSession(
             return@withContext Result.success("DRY-RUN thành công")
         }
 
-        val wv = webView ?: return@withContext Result.failure(IllegalStateException("WebView chưa được khởi tạo."))
+        val wv = getOrCreateWebView(context)
+        restoreCookies()
 
         // 1. Mở nhóm
         openGroup(groupUrl)

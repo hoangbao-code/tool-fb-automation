@@ -138,7 +138,12 @@ fun MainAppLayout(
     if (activeReviewPostId != null) {
         ReviewScreen(
             postId = activeReviewPostId!!,
-            onBack = { activeReviewPostId = null }
+            onBack = { activeReviewPostId = null },
+            onOpenInFacebook = { groupUrl ->
+                activeReviewPostId = null
+                fbInitialUrl = groupUrl
+                selectedTabIndex = 2 // Chuyển sang Tab Facebook
+            }
         )
         return
     }
