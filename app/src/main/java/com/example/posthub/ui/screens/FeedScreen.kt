@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
@@ -352,6 +353,8 @@ private fun PostCardItem(
         PostSource.NOTIFICATION -> Icons.Default.Notifications
         PostSource.CLIPBOARD -> Icons.Default.ContentPaste
         PostSource.MANUAL -> Icons.Default.Edit
+        PostSource.ZALO_WEB -> Icons.Default.Notifications
+        else -> Icons.Default.Edit
     }
 
     Card(

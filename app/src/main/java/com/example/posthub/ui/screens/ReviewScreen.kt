@@ -103,8 +103,9 @@ fun ReviewScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val db = JammyApp.instance.container.database
-    val converters = JammyApp.instance.container.converters
+    val container = JammyApp.instance.container
+    val db = container.database
+    val converters = container.converters
 
     var post by remember { mutableStateOf<PostEntity?>(null) }
     var rawText by remember { mutableStateOf("") }
