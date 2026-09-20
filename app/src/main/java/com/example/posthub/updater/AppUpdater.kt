@@ -22,9 +22,79 @@ sealed class UpdateState {
     data class Error(val message: String) : UpdateState()
 }
 
+data class VersionInfo(
+    val currentBuildNumber: Int,
+    val remoteBuildNumber: Int?,
+    val releaseName: String?,
+    val hasUpdate: Boolean,
+    val isChecking: Boolean = false,
+    val error: String? = null
+)
+
 object AppUpdater {
 
     const val NIGHTLY_APK_URL = "https://github.com/hoangbao-code/tool-fb-automation/releases/download/nightly/app-debug.apk"
+    const val NIGHTLY_RELEASE_API = "https://api.github.com/repos/hoangbao-code/tool-fb-automation/releases/tags/nightly"
+
+    fun getInstalledBuildNumber(context: Context): Int {
+        return try {
+            val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pInfo.longVersionCode.toInt()
+            } else {
+                @Suppress("DEPRECATION")
+                pInfo.versionCode
+            }
+        } catch (e: Exception) {
+            1
+        }
+    }
+
+    suspend fun checkLatestVersion(context: Context): VersionInfo = withContext(Dispatchers.IO) {
+        val currentBuild = getInstalledBuildNumber(context)
+        try {
+            val url = URL(NIGHTLY_RELEASE_API)
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.setRequestProperty("User-Agent", "JammyPostHub-Updater")
+            conn.connect()
+
+            val code = conn.responseCode
+            if (code == 200) {
+                val jsonStr = conn.inputStream.bufferedReader().use { it.readText() }
+                conn.disconnect()
+                val regex = Regex("""Build #(\d+)""")
+                val match = regex.find(jsonStr)
+                val remoteBuild = match?.groupValues?.getOrNull(1)?.toIntOrNull()
+                if (remoteBuild != null) {
+                    return@withContext VersionInfo(
+                        currentBuildNumber = currentBuild,
+                        remoteBuildNumber = remoteBuild,
+                        releaseName = "Build #$remoteBuild",
+                        hasUpdate = remoteBuild > currentBuild
+                    )
+                }
+            }
+            conn.disconnect()
+            VersionInfo(
+                currentBuildNumber = currentBuild,
+                remoteBuildNumber = null,
+                releaseName = null,
+                hasUpdate = false
+            )
+        } catch (e: Exception) {
+            AppLog.w("AppUpdater", "Kiểm tra phiên bản thất bại: ${e.message}")
+            VersionInfo(
+                currentBuildNumber = currentBuild,
+                remoteBuildNumber = null,
+                releaseName = null,
+                hasUpdate = false,
+                error = e.message
+            )
+        }
+    }
 
     /**
      * Tải file APK mới nhất từ GitHub Releases và tự động kích hoạt trình cài đặt hệ thống
@@ -139,6 +209,7 @@ object AppUpdater {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 context.startActivity(permissionIntent)
+                return
             }
         }
 

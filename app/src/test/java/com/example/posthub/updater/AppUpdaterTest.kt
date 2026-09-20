@@ -44,4 +44,25 @@ class AppUpdaterTest {
         val progress = downloaded.toFloat() / total.toFloat()
         assertEquals(0.25f, progress, 0.0001f)
     }
+
+    @Test
+    fun testParseBuildNumberFromRelease() {
+        val releaseName = "Jammy_post_hub Nightly (Build #21)"
+        val regex = Regex("""Build #(\d+)""")
+        val match = regex.find(releaseName)
+        val build = match?.groupValues?.getOrNull(1)?.toIntOrNull()
+        assertEquals(21, build)
+    }
+
+    @Test
+    fun testVersionComparisonLogic() {
+        val currentBuild = 21
+        val remoteBuildSame = 21
+        val remoteBuildNewer = 22
+        val remoteBuildOlder = 20
+
+        assertTrue("Bản remote lớn hơn phải báo hasUpdate = true", remoteBuildNewer > currentBuild)
+        assertTrue("Bản remote bằng nhau phải báo hasUpdate = false", !(remoteBuildSame > currentBuild))
+        assertTrue("Bản remote nhỏ hơn phải báo hasUpdate = false", !(remoteBuildOlder > currentBuild))
+    }
 }

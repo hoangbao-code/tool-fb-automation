@@ -91,6 +91,7 @@ import com.example.posthub.domain.model.TemplateSelectionMode
 import com.example.posthub.service.JammyForegroundService
 import com.example.posthub.updater.AppUpdater
 import com.example.posthub.updater.UpdateState
+import com.example.posthub.updater.VersionInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -127,6 +128,16 @@ fun SettingsScreen(
     var testAiResultDialog by remember { mutableStateOf<String?>(null) }
 
     var updateState by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
+    var versionInfo by remember { mutableStateOf<VersionInfo?>(null) }
+    var isCheckingVersion by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (versionInfo == null) {
+            isCheckingVersion = true
+            versionInfo = AppUpdater.checkLatestVersion(context)
+            isCheckingVersion = false
+        }
+    }
     var isAutoCheckUpdates by remember { mutableStateOf(secureStore.isAutoCheckUpdatesEnabled()) }
     var postSignature by remember { mutableStateOf(secureStore.getPostSignature()) }
     var autoCleanupDays by remember { mutableFloatStateOf(secureStore.getAutoCleanupDays().toFloat()) }
@@ -810,24 +821,155 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.outline
                 )
 
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Thông tin phiên bản chi tiết
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        val installedBuild = versionInfo?.currentBuildNumber ?: AppUpdater.getInstalledBuildNumber(context)
+                        Text(
+                            text = "📱 Phiên bản trên máy: Build #$installedBuild",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                        val remoteText = when {
+                            isCheckingVersion -> "Đang kiểm tra máy chủ..."
+                            versionInfo?.remoteBuildNumber != null -> "Build #${versionInfo?.remoteBuildNumber}"
+                            else -> "Chưa rõ (bấm làm mới)"
+                        }
+                        Text(
+                            text = "☁️ Bản mới nhất trên server: $remoteText",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                isCheckingVersion = true
+                                versionInfo = AppUpdater.checkLatestVersion(context)
+                                isCheckingVersion = false
+                            }
+                        }
+                    ) {
+                        if (isCheckingVersion) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.Refresh, contentDescription = "Kiểm tra bản mới")
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Trạng thái tiến trình tải
+                // Bảng trạng thái phiên bản
+                if (versionInfo != null) {
+                    if (versionInfo!!.hasUpdate) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFFFFF3E0), RoundedCornerShape(8.dp))
+                                .padding(10.dp)
+                        ) {
+                            Column {
+                                Text(
+                                    text = "⚡ ĐÃ CÓ BẢN MỚI: ${versionInfo?.releaseName}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFFE65100)
+                                )
+                                Text(
+                                    text = "Máy bạn đang ở Build #${versionInfo?.currentBuildNumber}. Bạn hãy bấm nút bên dưới để nâng cấp đè trực tiếp.",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF5D4037)
+                                )
+                            }
+                        }
+                    } else if (versionInfo!!.remoteBuildNumber != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFFE8F5E9), RoundedCornerShape(8.dp))
+                                .padding(10.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = "✅ BẠN ĐANG DÙNG BẢN MỚI NHẤT (Build #${versionInfo?.currentBuildNumber})",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF2E7D32)
+                                    )
+                                    Text(
+                                        text = "Ứng dụng đã được cập nhật đầy đủ, không cần cài đặt lại.",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF1B5E20)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
+                // Trạng thái tiến trình tải / Hành động cập nhật
                 when (val state = updateState) {
                     is UpdateState.Idle -> {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    AppUpdater.downloadAndInstall(context) { s ->
-                                        updateState = s
+                        if (versionInfo?.hasUpdate == true) {
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        AppUpdater.downloadAndInstall(context) { s ->
+                                            updateState = s
+                                        }
                                     }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("🚀 Tải & Nâng Cấp Lên ${versionInfo?.releaseName}")
+                            }
+                        } else {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(
+                                    onClick = {
+                                        scope.launch {
+                                            isCheckingVersion = true
+                                            versionInfo = AppUpdater.checkLatestVersion(context)
+                                            isCheckingVersion = false
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Kiểm tra bản mới", fontSize = 12.sp)
                                 }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.Download, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Tải & Cài Đặt Bản Mới Ngay")
+
+                                OutlinedButton(
+                                    onClick = {
+                                        scope.launch {
+                                            AppUpdater.downloadAndInstall(context) { s ->
+                                                updateState = s
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Cài đè lại APK", fontSize = 12.sp)
+                                }
+                            }
                         }
                     }
                     is UpdateState.Downloading -> {
@@ -873,12 +1015,18 @@ fun SettingsScreen(
                                 Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Đã tải xong! Hệ thống đang mở bảng cài đặt...",
+                                    text = "Đã tải xong! Đang mở bảng cài đặt hệ thống...",
                                     fontSize = 12.sp,
                                     color = Color(0xFF2E7D32),
                                     fontWeight = FontWeight.Bold
                                 )
                             }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "💡 Nếu máy yêu cầu 'Cho phép cài đặt từ nguồn này', hãy gạt Cho phép để cập nhật đè ngay.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.outline
+                            )
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(
                                 onClick = {
@@ -887,7 +1035,7 @@ fun SettingsScreen(
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Mở lại bảng cài đặt")
+                                Text("Mở lại bảng cài đặt APK")
                             }
                         }
                     }

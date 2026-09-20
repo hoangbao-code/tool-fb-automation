@@ -168,28 +168,21 @@ fun MainAppLayout(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val container = JammyApp.instance.container
-    var showStartupUpdateDialog by remember { mutableStateOf(false) }
-    var startupUpdateState by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
+    var hasUpdateAvailable by remember { mutableStateOf(false) }
 
-    // Tự động kiểm tra bản cập nhật mới khi mở app
+    // Kiểm tra ngầm có bản cập nhật mới không (CHỈ hiện chấm đỏ nhẹ trên tab Cài đặt, không hiện popup làm phiền)
     LaunchedEffect(Unit) {
         if (container.secureStore.isAutoCheckUpdatesEnabled()) {
             withContext(Dispatchers.IO) {
                 try {
-                    val conn = java.net.URL(AppUpdater.NIGHTLY_APK_URL).openConnection() as java.net.HttpURLConnection
-                    conn.requestMethod = "HEAD"
-                    conn.connectTimeout = 4000
-                    conn.readTimeout = 4000
-                    conn.instanceFollowRedirects = true
-                    val code = conn.responseCode
-                    if (code in 200..399) {
+                    val info = AppUpdater.checkLatestVersion(context)
+                    if (info.hasUpdate) {
                         withContext(Dispatchers.Main) {
-                            showStartupUpdateDialog = true
+                            hasUpdateAvailable = true
                         }
                     }
-                    conn.disconnect()
                 } catch (e: Exception) {
-                    // Chạy ngầm, không làm phiền người dùng nếu mất mạng
+                    // Chạy ngầm im lặng
                 }
             }
         }
@@ -202,72 +195,6 @@ fun MainAppLayout(
         MainTab.Facebook,
         MainTab.Settings
     )
-
-    // Hộp thoại cập nhật khi mở app
-    if (showStartupUpdateDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                if (startupUpdateState !is UpdateState.Downloading) {
-                    showStartupUpdateDialog = false
-                }
-            },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Bản Cập Nhật Mới", fontWeight = FontWeight.Bold)
-                }
-            },
-            text = {
-                Column {
-                    Text("Đã có bản cập nhật mới nhất cho Jammy_post_hub. Bạn có muốn tải và cài đè trực tiếp ngay không?")
-                    Spacer(modifier = Modifier.height(10.dp))
-                    when (val s = startupUpdateState) {
-                        is UpdateState.Downloading -> {
-                            if (s.totalBytes > 0) {
-                                LinearProgressIndicator(progress = { s.progress }, modifier = Modifier.fillMaxWidth())
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text("Đang tải: ${(s.progress * 100).toInt()}%", fontSize = 11.sp)
-                            } else {
-                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text("Đang tải bản cập nhật...", fontSize = 11.sp)
-                            }
-                        }
-                        is UpdateState.ReadyToInstall -> {
-                            Text("Đã tải xong! Đang mở hộp thoại cài đặt...", color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                        is UpdateState.Error -> {
-                            Text("Lỗi tải: ${s.message}", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
-                        }
-                        else -> {}
-                    }
-                }
-            },
-            confirmButton = {
-                if (startupUpdateState !is UpdateState.Downloading) {
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                AppUpdater.downloadAndInstall(context) { s ->
-                                    startupUpdateState = s
-                                }
-                            }
-                        }
-                    ) {
-                        Text("Cập nhật ngay")
-                    }
-                }
-            },
-            dismissButton = {
-                if (startupUpdateState !is UpdateState.Downloading) {
-                    TextButton(onClick = { showStartupUpdateDialog = false }) {
-                        Text("Để sau")
-                    }
-                }
-            }
-        )
-    }
 
     // Nếu đang mở trang Nhật ký
     if (isViewingLog) {
@@ -325,7 +252,15 @@ fun MainAppLayout(
                         selected = selectedTabIndex == tab.index,
                         onClick = { selectedTabIndex = tab.index },
                         icon = {
-                            Icon(imageVector = tab.icon, contentDescription = tab.title)
+                            if (tab == MainTab.Settings && hasUpdateAvailable) {
+                                androidx.compose.material3.BadgedBox(
+                                    badge = { androidx.compose.material3.Badge() }
+                                ) {
+                                    Icon(imageVector = tab.icon, contentDescription = tab.title)
+                                }
+                            } else {
+                                Icon(imageVector = tab.icon, contentDescription = tab.title)
+                            }
                         },
                         label = {
                             Text(text = tab.title)
