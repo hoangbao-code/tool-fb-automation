@@ -181,6 +181,12 @@ class SecureStore(context: Context) {
         prefs.edit().putString(KEY_AI_MODEL, model).apply()
     }
 
+    fun isAutoCheckUpdatesEnabled(): Boolean = prefs.getBoolean(KEY_AUTO_CHECK_UPDATES, true)
+
+    fun setAutoCheckUpdatesEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_CHECK_UPDATES, enabled).apply()
+    }
+
     companion object {
         private const val KEY_FB_COOKIES = "fb_cookies"
         private const val KEY_FB_ACCOUNT_NAME = "fb_account_name"
@@ -199,6 +205,7 @@ class SecureStore(context: Context) {
         private const val KEY_AI_PROMPT_TEMPLATE = "ai_prompt_template"
         private const val KEY_AI_AUTO_REWRITE = "ai_auto_rewrite"
         private const val KEY_AI_MODEL = "ai_model"
+        private const val KEY_AUTO_CHECK_UPDATES = "auto_check_updates"
 
         val DEFAULT_AI_PROMPT = """
 Bạn là chuyên gia soạn thảo bài đăng mạng xã hội chuyên nghiệp.

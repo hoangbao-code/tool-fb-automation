@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -49,6 +51,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -83,6 +86,8 @@ import com.example.posthub.data.local.entity.TemplateEntity
 import com.example.posthub.domain.model.IfMissingPolicy
 import com.example.posthub.domain.model.TemplateSelectionMode
 import com.example.posthub.service.JammyForegroundService
+import com.example.posthub.updater.AppUpdater
+import com.example.posthub.updater.UpdateState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -117,6 +122,9 @@ fun SettingsScreen(
 
     var isTestingAi by remember { mutableStateOf(false) }
     var testAiResultDialog by remember { mutableStateOf<String?>(null) }
+
+    var updateState by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
+    var isAutoCheckUpdates by remember { mutableStateOf(secureStore.isAutoCheckUpdatesEnabled()) }
 
     var showAddFieldDialog by remember { mutableStateOf(false) }
     var showAddTemplateDialog by remember { mutableStateOf(false) }
@@ -616,31 +624,172 @@ fun SettingsScreen(
             }
         }
 
-        // Cập nhật APK từ GitHub Releases
-        Card(modifier = Modifier.fillMaxWidth()) {
+        // Tự Động Cập Nhật Trực Tiếp Trong Ứng Dụng (In-App Auto Update)
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+            )
+        ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                Text(
-                    text = "Kiểm tra phiên bản mới",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.SystemUpdate,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Tự động cập nhật (In-App Auto Update)",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Bản build Nightly luôn được cập nhật tự động mỗi khi có code mới.",
+                    text = "Tải và cài đè trực tiếp 1-chạm ngay trong app mà không cần mở trình duyệt và tuyệt đối không bao giờ cần xóa app!",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline
                 )
+
                 Spacer(modifier = Modifier.height(10.dp))
+
+                // Trạng thái tiến trình tải
+                when (val state = updateState) {
+                    is UpdateState.Idle -> {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    AppUpdater.downloadAndInstall(context) { s ->
+                                        updateState = s
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Tải & Cài Đặt Bản Mới Ngay")
+                        }
+                    }
+                    is UpdateState.Downloading -> {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            if (state.totalBytes > 0) {
+                                LinearProgressIndicator(
+                                    progress = { state.progress },
+                                    modifier = Modifier.fillMaxWidth().height(8.dp),
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Đang tải: ${(state.progress * 100).toInt()}%",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    val mbDownloaded = state.downloadedBytes / (1024f * 1024f)
+                                    val mbTotal = state.totalBytes / (1024f * 1024f)
+                                    Text(
+                                        text = String.format("%.1f / %.1f MB", mbDownloaded, mbTotal),
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                            } else {
+                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Đang tải bản cập nhật...",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                    is UpdateState.ReadyToInstall -> {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Đã tải xong! Hệ thống đang mở bảng cài đặt...",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF2E7D32),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = {
+                                    val apkFile = java.io.File(context.cacheDir, "updates/jammy_update.apk")
+                                    AppUpdater.installApk(context, apkFile)
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Mở lại bảng cài đặt")
+                            }
+                        }
+                    }
+                    is UpdateState.Error -> {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = "❌ ${state.message}",
+                                fontSize = 12.sp,
+                                color = Color(0xFFD32F2F)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        AppUpdater.downloadAndInstall(context) { s ->
+                                            updateState = s
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Thử lại")
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Switch tự động kiểm tra khi mở app
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Tự động kiểm tra khi mở app", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text("Nhắc nhở cập nhật mỗi khi khởi động nếu có bản mới", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                    }
+                    Switch(
+                        checked = isAutoCheckUpdates,
+                        onCheckedChange = {
+                            isAutoCheckUpdates = it
+                            secureStore.setAutoCheckUpdatesEnabled(it)
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Nút fallback mở GitHub Releases trên web
                 OutlinedButton(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/hoangbao-code/tool-fb-automation/releases/tag/nightly"))
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/hoangbao-code/tool-fb-automation/releases"))
                         context.startActivity(intent)
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Default.Download, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Tải APK Nightly Mới Nhất")
+                    Text("Mở trang GitHub Releases trên trình duyệt", fontSize = 11.sp)
                 }
             }
         }
