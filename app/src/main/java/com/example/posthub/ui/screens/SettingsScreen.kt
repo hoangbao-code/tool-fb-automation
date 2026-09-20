@@ -125,6 +125,9 @@ fun SettingsScreen(
 
     var updateState by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
     var isAutoCheckUpdates by remember { mutableStateOf(secureStore.isAutoCheckUpdatesEnabled()) }
+    var postSignature by remember { mutableStateOf(secureStore.getPostSignature()) }
+    var autoCleanupDays by remember { mutableFloatStateOf(secureStore.getAutoCleanupDays().toFloat()) }
+    var groupScanLookbackDays by remember { mutableFloatStateOf(secureStore.getGroupScanLookbackDays().toFloat()) }
 
     var showAddFieldDialog by remember { mutableStateOf(false) }
     var showAddTemplateDialog by remember { mutableStateOf(false) }
@@ -495,6 +498,92 @@ fun SettingsScreen(
                         Text("Kiểm tra kết nối AI (Test thử nghiệm)", fontSize = 12.sp)
                     }
                 }
+            }
+        }
+
+        // Chữ Ký Bài Viết & Tự Động Dọn Dẹp
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Chữ Ký Bài Viết & Tự Động Dọn Dẹp",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Ô nhập chữ ký
+                Text(
+                    text = "Chữ ký bài đăng cố định (Hotline / Zalo / Chân bài viết)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Tự động chèn thông tin liên hệ này ở cuối mọi bài viết đã duyệt hoặc sau khi AI viết lại",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = postSignature,
+                    onValueChange = {
+                        postSignature = it
+                        secureStore.setPostSignature(it)
+                    },
+                    placeholder = { Text("VD: 📞 Hotline/Zalo: 09xx.xxx.xxx - Hỗ trợ xem nhà 24/7", fontSize = 12.sp) },
+                    modifier = Modifier.fillMaxWidth().height(80.dp),
+                    textStyle = MaterialTheme.typography.bodySmall
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Slider tự động dọn dẹp bài đã đăng
+                Text(
+                    text = "Tự động dọn dẹp bài đã đăng: ${autoCleanupDays.toInt()} ngày",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Tự động xóa các bài 'Đã đăng' cũ hơn ${autoCleanupDays.toInt()} ngày khỏi app để nhẹ máy",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Slider(
+                    value = autoCleanupDays,
+                    onValueChange = {
+                        autoCleanupDays = it
+                        secureStore.setAutoCleanupDays(it.toInt())
+                    },
+                    valueRange = 1f..30f,
+                    steps = 29
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Slider lookback quét nhóm
+                Text(
+                    text = "Thời gian quét nhóm FB: ${groupScanLookbackDays.toInt()} ngày",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Quét nhóm đã tham gia và hoạt động trong vòng ${groupScanLookbackDays.toInt()} ngày trở lại",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Slider(
+                    value = groupScanLookbackDays,
+                    onValueChange = {
+                        groupScanLookbackDays = it
+                        secureStore.setGroupScanLookbackDays(it.toInt())
+                    },
+                    valueRange = 7f..90f,
+                    steps = 82
+                )
             }
         }
 

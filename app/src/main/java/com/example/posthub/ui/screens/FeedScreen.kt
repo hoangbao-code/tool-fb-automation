@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Notifications
@@ -42,6 +43,7 @@ import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -81,6 +83,11 @@ fun FeedScreen(
     val posts by db.postDao().getAllPostsFlow().collectAsState(initial = emptyList())
     var selectedFilter by remember { mutableStateOf<PostStatus?>(null) }
     var showNewPostDialog by remember { mutableStateOf(false) }
+    var showCleanConfirmDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        JammyApp.instance.container.purgeOldPostsAndLogs()
+    }
 
     val filteredPosts = remember(posts, selectedFilter) {
         if (selectedFilter == null) posts else posts.filter { it.status == selectedFilter }
@@ -112,6 +119,13 @@ fun FeedScreen(
                     }
 
                     Row {
+                        // Nút dọn dẹp các bài đã đăng
+                        if (postedCount > 0) {
+                            IconButton(onClick = { showCleanConfirmDialog = true }) {
+                                Icon(Icons.Default.DeleteSweep, contentDescription = "Dọn dẹp bài đã đăng", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+
                         // Nút dán nhanh từ clipboard
                         IconButton(
                             onClick = {
@@ -198,7 +212,7 @@ fun FeedScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Hãy chia sẻ từ Zalo hoặc bấm nút dán từ Clipboard ở trên!",
+                        text = "Hãy mở Zalo Web hoặc chia sẻ tin nhắn để gom bài đăng!",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline
                     )
@@ -225,6 +239,36 @@ fun FeedScreen(
                 }
             }
         }
+    }
+
+    // Dialog xác nhận dọn dẹp các bài đã đăng
+    if (showCleanConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showCleanConfirmDialog = false },
+            title = { Text("Dọn dẹp bài đã đăng?") },
+            text = { Text("Thao tác này sẽ xóa tất cả $postedCount bài viết 'Đã đăng' khỏi danh sách trong app để làm gọn hộp thư (tuyệt đối không xóa bài trên Facebook).") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showCleanConfirmDialog = false
+                        scope.launch(Dispatchers.IO) {
+                            val count = db.postDao().deleteAllPostedPosts()
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "Đã dọn dẹp $count bài đã đăng!", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Xóa dọn dẹp")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCleanConfirmDialog = false }) {
+                    Text("Hủy")
+                }
+            }
+        )
     }
 
     // Dialog tạo tin mới bằng tay

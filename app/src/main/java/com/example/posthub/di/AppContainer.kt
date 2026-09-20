@@ -37,6 +37,15 @@ class AppContainer(val context: Context) {
     private fun saveMergedPostToDatabase(post: Post) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                val textHash = com.example.posthub.domain.dedup.Deduplicator.computeSimHash(post.rawText)
+                if (textHash != 0L) {
+                    val existing = database.postDao().findPostByHash(textHash)
+                    if (existing != null) {
+                        AppLog.w("AppContainer", "Bỏ qua tin nhắn từ [${post.senderOrGroup}] vì trùng lặp hoàn toàn với bài viết #${existing.id}")
+                        return@launch
+                    }
+                }
+
                 var finalText = post.finalPostText
                 // Nếu bật tự động viết lại bằng AI và đã cấu hình API Key
                 if (secureStore.isAiAutoRewriteEnabled() && secureStore.getGeminiApiKey().isNotBlank()) {
@@ -50,6 +59,12 @@ class AppContainer(val context: Context) {
                     }
                 }
 
+                // Tự động chèn chữ ký / Hotline / Zalo cố định nếu có cấu hình
+                val signature = secureStore.getPostSignature()
+                if (signature.isNotBlank() && !finalText.contains(signature)) {
+                    finalText = "$finalText\n\n$signature".trim()
+                }
+
                 val photoArray = JSONArray()
                 post.photoPaths.forEach { photoArray.put(it) }
 
@@ -60,7 +75,8 @@ class AppContainer(val context: Context) {
                     photoPathsJson = photoArray.toString(),
                     source = post.source,
                     senderOrGroup = post.senderOrGroup,
-                    status = post.status
+                    status = post.status,
+                    textHash = textHash
                 )
                 val id = database.postDao().insertPost(entity)
                 AppLog.i("AppContainer", "Đã lưu bài viết gộp vào Cơ sở dữ liệu Room (ID: #$id, Nguồn: ${post.source})")
@@ -70,7 +86,29 @@ class AppContainer(val context: Context) {
         }
     }
 
+    /**
+     * Tự động dọn dẹp các bài đã đăng (POSTED) và logs cũ hơn số ngày cấu hình (mặc định 7 ngày)
+     */
+    fun purgeOldPostsAndLogs() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val days = secureStore.getAutoCleanupDays()
+                if (days > 0) {
+                    val cutoff = System.currentTimeMillis() - (days * 24L * 3600L * 1000L)
+                    val deletedPosts = database.postDao().deleteOldPostedPosts(cutoff)
+                    val deletedLogs = database.postLogDao().deleteOldLogs(cutoff)
+                    if (deletedPosts > 0 || deletedLogs > 0) {
+                        AppLog.i("AppContainer", "Tự động dọn dẹp: Đã xóa $deletedPosts bài đã đăng và $deletedLogs logs cũ hơn $days ngày.")
+                    }
+                }
+            } catch (e: Exception) {
+                AppLog.e("AppContainer", "Lỗi trong quá trình tự động dọn dẹp bài cũ", e)
+            }
+        }
+    }
+
     init {
         AppLog.i("AppContainer", "Thủ công DI Container khởi tạo hoàn tất với Room DB, SecureStore, FbWebSession, ZaloWebSession và AiService.")
+        purgeOldPostsAndLogs()
     }
 }

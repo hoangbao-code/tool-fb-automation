@@ -7,36 +7,54 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Facebook
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.posthub.JammyApp
 import com.example.posthub.data.AppLog
@@ -49,7 +67,12 @@ import com.example.posthub.ui.screens.ReviewScreen
 import com.example.posthub.ui.screens.SettingsScreen
 import com.example.posthub.ui.screens.ZaloWebScreen
 import com.example.posthub.ui.theme.JammyPostHubTheme
+import com.example.posthub.updater.AppUpdater
+import com.example.posthub.updater.UpdateState
 import androidx.fragment.app.FragmentActivity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 sealed class MainTab(val index: Int, val title: String, val icon: ImageVector) {
     object Feed : MainTab(0, "Tin", Icons.Default.Article)
@@ -130,6 +153,36 @@ fun MainAppLayout(
     var isViewingLog by rememberSaveable { mutableStateOf(false) }
     var fbInitialUrl by remember { mutableStateOf<String?>(null) }
 
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val container = JammyApp.instance.container
+    var showStartupUpdateDialog by remember { mutableStateOf(false) }
+    var startupUpdateState by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
+
+    // Tự động kiểm tra bản cập nhật mới khi mở app
+    LaunchedEffect(Unit) {
+        if (container.secureStore.isAutoCheckUpdatesEnabled()) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val conn = java.net.URL(AppUpdater.NIGHTLY_APK_URL).openConnection() as java.net.HttpURLConnection
+                    conn.requestMethod = "HEAD"
+                    conn.connectTimeout = 4000
+                    conn.readTimeout = 4000
+                    conn.instanceFollowRedirects = true
+                    val code = conn.responseCode
+                    if (code in 200..399) {
+                        withContext(Dispatchers.Main) {
+                            showStartupUpdateDialog = true
+                        }
+                    }
+                    conn.disconnect()
+                } catch (e: Exception) {
+                    // Chạy ngầm, không làm phiền người dùng nếu mất mạng
+                }
+            }
+        }
+    }
+
     val tabs = listOf(
         MainTab.Feed,
         MainTab.Zalo,
@@ -137,6 +190,72 @@ fun MainAppLayout(
         MainTab.Facebook,
         MainTab.Settings
     )
+
+    // Hộp thoại cập nhật khi mở app
+    if (showStartupUpdateDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (startupUpdateState !is UpdateState.Downloading) {
+                    showStartupUpdateDialog = false
+                }
+            },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Bản Cập Nhật Mới", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column {
+                    Text("Đã có bản cập nhật mới nhất cho Jammy_post_hub. Bạn có muốn tải và cài đè trực tiếp ngay không?")
+                    Spacer(modifier = Modifier.height(10.dp))
+                    when (val s = startupUpdateState) {
+                        is UpdateState.Downloading -> {
+                            if (s.totalBytes > 0) {
+                                LinearProgressIndicator(progress = { s.progress }, modifier = Modifier.fillMaxWidth())
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Đang tải: ${(s.progress * 100).toInt()}%", fontSize = 11.sp)
+                            } else {
+                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Đang tải bản cập nhật...", fontSize = 11.sp)
+                            }
+                        }
+                        is UpdateState.ReadyToInstall -> {
+                            Text("Đã tải xong! Đang mở hộp thoại cài đặt...", color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                        is UpdateState.Error -> {
+                            Text("Lỗi tải: ${s.message}", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                        }
+                        else -> {}
+                    }
+                }
+            },
+            confirmButton = {
+                if (startupUpdateState !is UpdateState.Downloading) {
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                AppUpdater.downloadAndInstall(context) { s ->
+                                    startupUpdateState = s
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Cập nhật ngay")
+                    }
+                }
+            },
+            dismissButton = {
+                if (startupUpdateState !is UpdateState.Downloading) {
+                    TextButton(onClick = { showStartupUpdateDialog = false }) {
+                        Text("Để sau")
+                    }
+                }
+            }
+        )
+    }
 
     // Nếu đang mở trang Nhật ký
     if (isViewingLog) {

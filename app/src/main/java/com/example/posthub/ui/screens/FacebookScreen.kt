@@ -1,5 +1,8 @@
 package com.example.posthub.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebView
@@ -12,15 +15,22 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,30 +39,36 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.posthub.JammyApp
 import com.example.posthub.data.AppLog
+import kotlinx.coroutines.launch
 
 @Composable
 fun FacebookScreen(
     initialUrl: String? = null
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val container = JammyApp.instance.container
     val secureStore = container.secureStore
     val fbSession = container.fbWebSession
 
+    val assistedSession by fbSession.assistedSession.collectAsState()
     var isEmergencyStop by remember { mutableStateOf(secureStore.isEmergencyStop()) }
     var accountName by remember { mutableStateOf(secureStore.getFbAccountName()) }
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
@@ -158,6 +174,98 @@ fun FacebookScreen(
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
+            }
+        }
+
+        // Thanh điều hướng Đăng trợ lực nhiều nhóm liên tiếp
+        assistedSession?.let { session ->
+            ElevatedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "🚀 Đang Đăng Trợ Lực (${session.progressDisplay})",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                text = session.currentGroup()?.name ?: "",
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                            )
+                        }
+                        IconButton(onClick = { fbSession.cancelAssistedSession() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Hủy chuỗi", tint = MaterialTheme.colorScheme.error)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                val clip = ClipData.newPlainText("PostContent", session.currentContent())
+                                (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
+                                Toast.makeText(context, "Đã sao chép bài viết vào bộ nhớ tạm!", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.weight(1f).height(36.dp)
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Copy", fontSize = 11.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    Toast.makeText(context, "Đang mở và điền bài viết...", Toast.LENGTH_SHORT).show()
+                                    fbSession.fillActiveComposer(session.currentContent())
+                                }
+                            },
+                            modifier = Modifier.weight(1f).height(36.dp)
+                        ) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Điền bài", fontSize = 11.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                if (session.hasNext()) {
+                                    fbSession.nextAssistedGroup()
+                                } else {
+                                    fbSession.cancelAssistedSession()
+                                    Toast.makeText(context, "🎉 Đã hoàn tất đăng trợ lực tất cả các nhóm!", Toast.LENGTH_LONG).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1.4f).height(36.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                        ) {
+                            Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (session.hasNext()) "Sang nhóm ${session.currentIndex + 2}" else "Hoàn tất",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
             }
         }
 

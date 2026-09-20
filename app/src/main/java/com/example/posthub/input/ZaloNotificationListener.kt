@@ -66,6 +66,18 @@ class ZaloNotificationListener : NotificationListenerService() {
             return
         }
 
+        // Kiểm tra danh sách nhóm theo dõi chỉ định từ Zalo Web/Settings
+        val secureStore = JammyApp.instance.container.secureStore
+        val monitoredGroups = secureStore.getMonitoredZaloGroups()
+        if (monitoredGroups.isNotEmpty()) {
+            val isMonitored = secureStore.isGroupMonitored(title) ||
+                    (subText.isNotBlank() && secureStore.isGroupMonitored(subText))
+            if (!isMonitored) {
+                AppLog.d("ZaloNotifListener", "Bỏ qua thông báo từ '$title' (SubText: '$subText') vì không nằm trong danh sách nhóm theo dõi.")
+                return
+            }
+        }
+
         val postTime = sbn.postTime
         val keysList = extras.keySet().joinToString(", ")
 

@@ -40,6 +40,12 @@ interface PostDao {
 
     @Query("DELETE FROM posts WHERE id = :id")
     suspend fun deletePostById(id: Long)
+
+    @Query("DELETE FROM posts WHERE status = 'POSTED' AND createdAt < :beforeTimestamp")
+    suspend fun deleteOldPostedPosts(beforeTimestamp: Long): Int
+
+    @Query("DELETE FROM posts WHERE status = 'POSTED'")
+    suspend fun deleteAllPostedPosts(): Int
 }
 
 @Dao
@@ -136,4 +142,7 @@ interface PostLogDao {
 
     @Insert
     suspend fun insertLog(log: PostLogEntity): Long
+
+    @Query("DELETE FROM post_logs WHERE timestamp < :beforeTimestamp")
+    suspend fun deleteOldLogs(beforeTimestamp: Long): Int
 }

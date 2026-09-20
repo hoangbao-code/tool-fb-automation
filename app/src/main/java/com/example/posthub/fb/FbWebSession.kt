@@ -12,6 +12,8 @@ import com.example.posthub.data.local.SecureStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.net.URLEncoder
@@ -25,6 +27,24 @@ data class DiscoveredGroup(
     val isJoined: Boolean = false
 )
 
+data class AssistedPostingGroup(
+    val id: Long,
+    val name: String,
+    val url: String
+)
+
+data class AssistedSession(
+    val groups: List<AssistedPostingGroup>,
+    val contentList: List<String>,
+    var currentIndex: Int = 0
+) {
+    fun currentGroup(): AssistedPostingGroup? = groups.getOrNull(currentIndex)
+    fun currentContent(): String = if (contentList.isNotEmpty()) contentList[currentIndex % contentList.size] else ""
+    fun isLast(): Boolean = currentIndex >= groups.size - 1
+    fun hasNext(): Boolean = currentIndex < groups.size - 1
+    val progressDisplay: String get() = "${currentIndex + 1}/${groups.size}"
+}
+
 class FbWebSession(
     private val context: Context,
     private val secureStore: SecureStore,
@@ -33,6 +53,36 @@ class FbWebSession(
     private val mainHandler = Handler(Looper.getMainLooper())
     private var webView: WebView? = null
     private val isInitializing = AtomicBoolean(false)
+
+    private val _assistedSession = MutableStateFlow<AssistedSession?>(null)
+    val assistedSession = _assistedSession.asStateFlow()
+
+    fun startAssistedSession(groups: List<AssistedPostingGroup>, contentList: List<String>) {
+        if (groups.isEmpty()) return
+        val session = AssistedSession(groups, contentList, 0)
+        _assistedSession.value = session
+        AppLog.i("FbWebSession", "Bắt đầu chuỗi đăng trợ lực cho ${groups.size} nhóm.")
+        openGroup(groups.first().url)
+    }
+
+    fun nextAssistedGroup() {
+        val session = _assistedSession.value ?: return
+        if (session.hasNext()) {
+            session.currentIndex++
+            _assistedSession.value = session.copy(currentIndex = session.currentIndex)
+            val next = session.currentGroup() ?: return
+            AppLog.i("FbWebSession", "Chuyển sang nhóm trợ lực tiếp theo: [${next.name}] (${session.progressDisplay})")
+            openGroup(next.url)
+        } else {
+            AppLog.i("FbWebSession", "Đã hoàn thành tất cả các nhóm trong phiên trợ lực.")
+            _assistedSession.value = null
+        }
+    }
+
+    fun cancelAssistedSession() {
+        _assistedSession.value = null
+        AppLog.i("FbWebSession", "Đã hủy phiên đăng trợ lực.")
+    }
 
     /**
      * Lấy hoặc khởi tạo WebView bền bỉ trong toàn bộ vòng đời ứng dụng
@@ -176,9 +226,9 @@ class FbWebSession(
         val discoveredList = extractGroupsFromCurrentPage(wv, isJoinedOnly = true).toMutableList()
         AppLog.i("FbWebSession", "[Chiến lược 1 - Trang 1] Kết quả mbasic: tìm thấy ${discoveredList.size} nhóm.")
 
-        // Lặp tối đa 5 trang nếu có nút Xem thêm nhóm (seemore)
+        // Lặp tối đa 15 trang nếu có nút Xem thêm nhóm (seemore) để quét full nhóm
         var page = 1
-        while (page < 5) {
+        while (page < 15) {
             val seeMoreJs = """
                 (function() {
                     var a = document.querySelector("a[href*='seemore'], a[href*='group_browse']");
@@ -541,6 +591,40 @@ class FbWebSession(
             }
             continuation.resume(text)
         }
+    }
+
+    suspend fun fillActiveComposer(content: String): Result<String> = withContext(Dispatchers.Main) {
+        val wv = webView ?: return@withContext Result.failure(IllegalStateException("WebView chưa khởi tạo"))
+        val clickComposerJs = """
+            (function() {
+                var btn = document.querySelector("${selectorConfig.composerOpenButton}");
+                if (btn) { btn.click(); return 'OPENED'; }
+                return 'NOT_FOUND';
+            })();
+        """.trimIndent()
+        evaluateJs(wv, clickComposerJs)
+        delay(1500)
+
+        val escapedContent = content.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+        val fillTextJs = """
+            (function() {
+                var el = document.querySelector("${selectorConfig.composerTextArea}");
+                if (el) {
+                    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+                        el.value = `$escapedContent`;
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    } else {
+                        el.innerText = `$escapedContent`;
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    return 'FILLED';
+                }
+                return 'TEXTAREA_NOT_FOUND';
+            })();
+        """.trimIndent()
+        val fillStatus = evaluateJs(wv, fillTextJs)
+        Result.success("Đã điền nội dung ($fillStatus)")
     }
 
     fun updateSelectorConfig(newConfig: SelectorConfig) {

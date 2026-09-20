@@ -187,6 +187,39 @@ class SecureStore(context: Context) {
         prefs.edit().putBoolean(KEY_AUTO_CHECK_UPDATES, enabled).apply()
     }
 
+    // Chữ ký bài đăng (Hotline / Zalo / Thông tin liên hệ cố định)
+    fun getPostSignature(): String = prefs.getString(KEY_POST_SIGNATURE, "") ?: ""
+
+    fun setPostSignature(signature: String) {
+        prefs.edit().putString(KEY_POST_SIGNATURE, signature.trim()).apply()
+    }
+
+    // Số ngày tự động dọn dẹp tin đã đăng (mặc định 7 ngày = 1 tuần)
+    fun getAutoCleanupDays(): Int = prefs.getInt(KEY_AUTO_CLEANUP_DAYS, 7)
+
+    fun setAutoCleanupDays(days: Int) {
+        prefs.edit().putInt(KEY_AUTO_CLEANUP_DAYS, days).apply()
+    }
+
+    // Số ngày giới hạn quét nhóm tham gia (mặc định 30 ngày = 1 tháng)
+    fun getGroupScanLookbackDays(): Int = prefs.getInt(KEY_GROUP_SCAN_LOOKBACK_DAYS, 30)
+
+    fun setGroupScanLookbackDays(days: Int) {
+        prefs.edit().putInt(KEY_GROUP_SCAN_LOOKBACK_DAYS, days).apply()
+    }
+
+    // Ghi nhớ nhóm Facebook đã chọn gần nhất
+    fun getLastSelectedGroupIds(): Set<Long> {
+        val str = prefs.getString(KEY_LAST_SELECTED_GROUPS, "") ?: ""
+        if (str.isBlank()) return emptySet()
+        return str.split(",").mapNotNull { it.trim().toLongOrNull() }.toSet()
+    }
+
+    fun setLastSelectedGroupIds(ids: Set<Long>) {
+        val str = ids.joinToString(",")
+        prefs.edit().putString(KEY_LAST_SELECTED_GROUPS, str).apply()
+    }
+
     companion object {
         private const val KEY_FB_COOKIES = "fb_cookies"
         private const val KEY_FB_ACCOUNT_NAME = "fb_account_name"
@@ -206,6 +239,10 @@ class SecureStore(context: Context) {
         private const val KEY_AI_AUTO_REWRITE = "ai_auto_rewrite"
         private const val KEY_AI_MODEL = "ai_model"
         private const val KEY_AUTO_CHECK_UPDATES = "auto_check_updates"
+        private const val KEY_POST_SIGNATURE = "post_signature"
+        private const val KEY_AUTO_CLEANUP_DAYS = "auto_cleanup_days"
+        private const val KEY_GROUP_SCAN_LOOKBACK_DAYS = "group_scan_lookback_days"
+        private const val KEY_LAST_SELECTED_GROUPS = "last_selected_groups"
 
         val DEFAULT_AI_PROMPT = """
 Bạn là chuyên gia soạn thảo bài đăng mạng xã hội chuyên nghiệp.

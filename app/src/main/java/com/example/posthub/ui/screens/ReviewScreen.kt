@@ -29,9 +29,11 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Queue
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -115,6 +117,7 @@ fun ReviewScreen(
 
     val selectedGroupIds = remember { mutableStateMapOf<Long, Boolean>() }
     var selectedTemplateId by remember { mutableStateOf<Long?>(null) }
+    var groupSearchKeyword by remember { mutableStateOf("") }
     var isAssistedMode by remember { mutableStateOf(true) }
     var isAiGenerating by remember { mutableStateOf(false) }
     var previousPostText by remember { mutableStateOf<String?>(null) }
@@ -142,9 +145,14 @@ fun ReviewScreen(
             finalPostText = loaded.finalPostText.ifBlank { loaded.rawText }
             selectedTemplateId = loaded.templateId
 
-            // Nạp các nhóm đã chọn trước đó
+            // Nạp các nhóm đã chọn trước đó hoặc nạp nhóm đã chọn gần nhất
             val savedGroupIds = converters.toLongList(loaded.targetGroupIdsJson)
-            savedGroupIds.forEach { selectedGroupIds[it] = true }
+            if (savedGroupIds.isNotEmpty()) {
+                savedGroupIds.forEach { selectedGroupIds[it] = true }
+            } else {
+                val lastSelected = container.secureStore.getLastSelectedGroupIds()
+                lastSelected.forEach { selectedGroupIds[it] = true }
+            }
         }
     }
 
@@ -354,19 +362,34 @@ fun ReviewScreen(
                         }
                     }
 
-                    if (previousPostText != null) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("Jammy Post", finalPostText)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Đã sao chép nội dung bài viết!", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.height(30.dp)
                         ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Sao chép bài", fontSize = 11.sp)
+                        }
+
+                        if (previousPostText != null) {
                             TextButton(
                                 onClick = {
                                     finalPostText = previousPostText!!
                                     previousPostText = null
                                     Toast.makeText(context, "Đã hoàn tác lại nội dung trước", Toast.LENGTH_SHORT).show()
                                 },
-                                modifier = Modifier.height(28.dp)
+                                modifier = Modifier.height(30.dp)
                             ) {
                                 Text("↩ Hoàn tác bản cũ", fontSize = 11.sp)
                             }
@@ -386,28 +409,111 @@ fun ReviewScreen(
             // Phần 4: Chọn nhóm Facebook đăng bài
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(12.dp)) {
+                    val matchingGroups = remember(allGroups, groupSearchKeyword) {
+                        if (groupSearchKeyword.isBlank()) allGroups
+                        else allGroups.filter { it.name.contains(groupSearchKeyword, ignoreCase = true) }
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Nhóm Facebook nhận bài (${selectedGroupIds.filterValues { it }.size})",
+                            text = "Nhóm Facebook nhận bài (${selectedGroupIds.filterValues { it }.size}/${allGroups.size})",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
                         Icon(Icons.Default.Groups, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Phím bấm Chọn tất cả / Bỏ chọn
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                allGroups.forEach { selectedGroupIds[it.id] = true }
+                            },
+                            modifier = Modifier.weight(1f).height(32.dp)
+                        ) {
+                            Text("Chọn tất cả (${allGroups.size})", fontSize = 11.sp)
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                selectedGroupIds.clear()
+                            },
+                            modifier = Modifier.weight(1f).height(32.dp)
+                        ) {
+                            Text("Bỏ chọn hết", fontSize = 11.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Ô nhập từ khóa lọc/chọn nhóm
+                    OutlinedTextField(
+                        value = groupSearchKeyword,
+                        onValueChange = { groupSearchKeyword = it },
+                        placeholder = { Text("Lọc hoặc chọn theo từ khóa (VD: BĐS, Hà Nội...)", fontSize = 12.sp) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        trailingIcon = {
+                            if (groupSearchKeyword.isNotEmpty()) {
+                                IconButton(onClick = { groupSearchKeyword = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Xóa", modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    if (groupSearchKeyword.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    matchingGroups.forEach { selectedGroupIds[it.id] = true }
+                                    Toast.makeText(context, "Đã chọn ${matchingGroups.size} nhóm khớp từ khóa!", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.weight(1.2f).height(32.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                            ) {
+                                Text("Tick nhóm khớp (${matchingGroups.size})", fontSize = 10.sp)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    matchingGroups.forEach { selectedGroupIds[it.id] = false }
+                                },
+                                modifier = Modifier.weight(1f).height(32.dp)
+                            ) {
+                                Text("Bỏ tick khớp", fontSize = 10.sp)
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(8.dp))
 
                     if (allGroups.isEmpty()) {
                         Text(
-                            text = "Chưa có nhóm nào. Hãy vào tab 'Nhóm' để dán link thêm nhóm!",
+                            text = "Chưa có nhóm nào. Hãy vào tab 'Nhóm FB' bấm 'Quét nhóm đã tham gia' để nạp toàn bộ nhóm của bạn!",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    } else if (matchingGroups.isEmpty()) {
+                        Text(
+                            text = "Không có nhóm nào khớp với từ khóa '$groupSearchKeyword'",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline
                         )
                     } else {
-                        allGroups.forEach { group ->
+                        matchingGroups.forEach { group ->
                             val isChecked = selectedGroupIds[group.id] ?: false
                             Row(
                                 modifier = Modifier
@@ -488,10 +594,15 @@ fun ReviewScreen(
                                 val clip = ClipData.newPlainText("Jammy Post", finalPostText)
                                 clipboard.setPrimaryClip(clip)
 
+                                // Ghi nhớ các nhóm đã chọn để lần sau tự động tick
+                                container.secureStore.setLastSelectedGroupIds(pickedGroupIds.toSet())
+
                                 if (isAssistedMode) {
-                                    val firstGroup = withContext(Dispatchers.IO) { db.fbGroupDao().getGroupById(pickedGroupIds.first()) }
-                                    val targetUrl = firstGroup?.url ?: "https://m.facebook.com"
-                                    Toast.makeText(context, "Đã sao chép nội dung! Đang mở nhóm Facebook...", Toast.LENGTH_SHORT).show()
+                                    val pickedGroups = allGroups.filter { pickedGroupIds.contains(it.id) }
+                                    val assistedList = pickedGroups.map { com.example.posthub.fb.AssistedPostingGroup(it.id, it.name, it.url) }
+                                    container.fbWebSession.startAssistedSession(assistedList, listOf(finalPostText))
+                                    val targetUrl = pickedGroups.firstOrNull()?.url ?: "https://m.facebook.com"
+                                    Toast.makeText(context, "Đã khởi chạy Đăng Trợ Lực (${pickedGroups.size} nhóm)!", Toast.LENGTH_SHORT).show()
                                     if (onOpenInFacebook != null) {
                                         onOpenInFacebook(targetUrl)
                                     } else {
