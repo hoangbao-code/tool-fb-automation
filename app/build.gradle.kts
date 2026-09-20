@@ -70,6 +70,12 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            it.testLogging {
+                events("passed", "skipped", "failed", "standardError")
+                showStandardStreams = true
+            }
+        }
     }
 }
 

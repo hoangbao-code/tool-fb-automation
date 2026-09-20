@@ -39,7 +39,7 @@ jobs:
           gradle-version: '8.7'
 
       - name: Run Unit Tests
-        run: gradle test --console=plain --stacktrace
+        run: gradle test --console=plain --info --stacktrace
 
       - name: Assemble Debug APK
         run: gradle assembleDebug --console=plain --stacktrace
