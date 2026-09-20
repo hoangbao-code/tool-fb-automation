@@ -14,7 +14,8 @@ enum class PostSource {
     SHARE_TARGET,
     NOTIFICATION,
     CLIPBOARD,
-    MANUAL
+    MANUAL,
+    ZALO_WEB
 }
 
 enum class IfMissingPolicy {

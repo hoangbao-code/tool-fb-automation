@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Facebook
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.ReceiptLong
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -45,15 +47,16 @@ import com.example.posthub.ui.screens.GroupScreen
 import com.example.posthub.ui.screens.LogScreen
 import com.example.posthub.ui.screens.ReviewScreen
 import com.example.posthub.ui.screens.SettingsScreen
+import com.example.posthub.ui.screens.ZaloWebScreen
 import com.example.posthub.ui.theme.JammyPostHubTheme
 import androidx.fragment.app.FragmentActivity
 
 sealed class MainTab(val index: Int, val title: String, val icon: ImageVector) {
     object Feed : MainTab(0, "Tin", Icons.Default.Article)
-    object Groups : MainTab(1, "Nhóm", Icons.Default.Groups)
-    object Facebook : MainTab(2, "Facebook", Icons.Default.Facebook)
-    object Settings : MainTab(3, "Cài đặt", Icons.Default.Settings)
-    object Log : MainTab(4, "Nhật ký", Icons.Default.ReceiptLong)
+    object Zalo : MainTab(1, "Zalo Web", Icons.Default.Chat)
+    object Groups : MainTab(2, "Nhóm FB", Icons.Default.Groups)
+    object Facebook : MainTab(3, "Facebook", Icons.Default.Facebook)
+    object Settings : MainTab(4, "Cài đặt", Icons.Default.Settings)
 }
 
 class MainActivity : FragmentActivity() {
@@ -124,15 +127,22 @@ fun MainAppLayout(
 ) {
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     var activeReviewPostId by rememberSaveable { mutableStateOf(initialReviewPostId) }
+    var isViewingLog by rememberSaveable { mutableStateOf(false) }
     var fbInitialUrl by remember { mutableStateOf<String?>(null) }
 
     val tabs = listOf(
         MainTab.Feed,
+        MainTab.Zalo,
         MainTab.Groups,
         MainTab.Facebook,
-        MainTab.Settings,
-        MainTab.Log
+        MainTab.Settings
     )
+
+    // Nếu đang mở trang Nhật ký
+    if (isViewingLog) {
+        LogScreen(onBack = { isViewingLog = false })
+        return
+    }
 
     // Nếu đang trong màn hình Duyệt bài chi tiết
     if (activeReviewPostId != null) {
@@ -142,7 +152,7 @@ fun MainAppLayout(
             onOpenInFacebook = { groupUrl ->
                 activeReviewPostId = null
                 fbInitialUrl = groupUrl
-                selectedTabIndex = 2 // Chuyển sang Tab Facebook
+                selectedTabIndex = 3 // Chuyển sang Tab Facebook
             }
         )
         return
@@ -159,6 +169,12 @@ fun MainAppLayout(
                     )
                 },
                 actions = {
+                    IconButton(onClick = { isViewingLog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.ReceiptLong,
+                            contentDescription = "Mở nhật ký hệ thống"
+                        )
+                    }
                     Badge(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -197,19 +213,19 @@ fun MainAppLayout(
                 0 -> FeedScreen(
                     onOpenPostReview = { postId -> activeReviewPostId = postId }
                 )
-                1 -> GroupScreen(
+                1 -> ZaloWebScreen()
+                2 -> GroupScreen(
                     onOpenGroupInFb = { url ->
                         fbInitialUrl = url
-                        selectedTabIndex = 2 // Chuyển sang tab Facebook
+                        selectedTabIndex = 3 // Chuyển sang tab Facebook
                     }
                 )
-                2 -> FacebookScreen(
+                3 -> FacebookScreen(
                     initialUrl = fbInitialUrl
                 )
-                3 -> SettingsScreen(
-                    onNavigateToLog = { selectedTabIndex = 4 }
+                4 -> SettingsScreen(
+                    onNavigateToLog = { isViewingLog = true }
                 )
-                4 -> LogScreen()
             }
         }
     }

@@ -60,7 +60,9 @@ import com.example.posthub.ui.theme.LogWarnColor
 import kotlinx.coroutines.launch
 
 @Composable
-fun LogScreen() {
+fun LogScreen(
+    onBack: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -81,7 +83,7 @@ fun LogScreen() {
         }
     }
 
-    val filteredLogs = remember(logEntries.size, selectedLevel) {
+    val filteredLogs = remember(logEntries, selectedLevel) {
         if (selectedLevel == null) {
             logEntries.toList()
         } else {
@@ -102,11 +104,19 @@ fun LogScreen() {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Nhật ký hoạt động (${filteredLogs.size})",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (onBack != null) {
+                                IconButton(onClick = onBack) {
+                                    Icon(Icons.Default.ArrowBack, contentDescription = "Quay lại")
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                            }
+                            Text(
+                                text = "Nhật ký hoạt động (${filteredLogs.size})",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                         Row {
                             // Nút Sao chép
                             IconButton(

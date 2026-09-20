@@ -38,6 +38,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -50,6 +51,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -113,6 +115,8 @@ fun ReviewScreen(
     val selectedGroupIds = remember { mutableStateMapOf<Long, Boolean>() }
     var selectedTemplateId by remember { mutableStateOf<Long?>(null) }
     var isAssistedMode by remember { mutableStateOf(true) }
+    var isAiGenerating by remember { mutableStateOf(false) }
+    var previousPostText by remember { mutableStateOf<String?>(null) }
 
     // Load bài đăng từ Database
     LaunchedEffect(postId) {
@@ -258,14 +262,81 @@ fun ReviewScreen(
                 }
             }
 
-            // Phần 3: Nội dung bài viết cuối cùng (Final Preview)
+            // Phần 3: Nội dung bài viết cuối cùng (Final Preview) + Trợ lý AI
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "Nội dung bài viết sẽ đăng lên Facebook",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Nội dung bài viết sẽ đăng",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        // Nút AI Rewrite
+                        OutlinedButton(
+                            onClick = {
+                                if (isAiGenerating) return@OutlinedButton
+                                val secureStore = JammyApp.instance.container.secureStore
+                                val apiKey = secureStore.getGeminiApiKey()
+                                if (apiKey.isBlank()) {
+                                    Toast.makeText(context, "Vui lòng vào Cài đặt để nhập Gemini API Key miễn phí trước!", Toast.LENGTH_LONG).show()
+                                    return@OutlinedButton
+                                }
+                                isAiGenerating = true
+                                scope.launch {
+                                    val aiService = JammyApp.instance.container.aiService
+                                    val result = aiService.rewritePost(
+                                        content = if (rawText.isNotBlank()) rawText else finalPostText,
+                                        senderOrGroup = post?.senderOrGroup ?: ""
+                                    )
+                                    isAiGenerating = false
+                                    result.onSuccess { rewritten ->
+                                        previousPostText = finalPostText
+                                        finalPostText = rewritten
+                                        Toast.makeText(context, "AI đã viết lại bài đăng thành công!", Toast.LENGTH_SHORT).show()
+                                    }.onFailure { err ->
+                                        Toast.makeText(context, "Lỗi AI: ${err.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            },
+                            enabled = !isAiGenerating,
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            if (isAiGenerating) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Đang viết...", fontSize = 12.sp)
+                            } else {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF673AB7), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Viết lại bằng AI", fontSize = 12.sp)
+                            }
+                        }
+                    }
+
+                    if (previousPostText != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    finalPostText = previousPostText!!
+                                    previousPostText = null
+                                    Toast.makeText(context, "Đã hoàn tác lại nội dung trước", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Text("↩ Hoàn tác bản cũ", fontSize = 11.sp)
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = finalPostText,

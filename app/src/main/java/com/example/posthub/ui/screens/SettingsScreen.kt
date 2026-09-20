@@ -25,8 +25,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.OpenInNew
@@ -34,10 +38,13 @@ import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -63,10 +70,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.posthub.JammyApp
 import com.example.posthub.data.AppLog
+import com.example.posthub.data.local.SecureStore
 import com.example.posthub.data.local.entity.FieldDefEntity
 import com.example.posthub.data.local.entity.TemplateEntity
 import com.example.posthub.domain.model.IfMissingPolicy
@@ -97,6 +107,15 @@ fun SettingsScreen(
     var isDryRun by remember { mutableStateOf(secureStore.isDryRun()) }
     var isBiometric by remember { mutableStateOf(secureStore.isBiometricEnabled()) }
     var mergeWindowSec by remember { mutableFloatStateOf(secureStore.getMergeWindowSeconds().toFloat()) }
+
+    var geminiApiKey by remember { mutableStateOf(secureStore.getGeminiApiKey()) }
+    var isApiKeyVisible by remember { mutableStateOf(false) }
+    var aiPromptTemplate by remember { mutableStateOf(secureStore.getAiPromptTemplate()) }
+    var isAiAutoRewrite by remember { mutableStateOf(secureStore.isAiAutoRewriteEnabled()) }
+    var monitoredZaloGroups by remember { mutableStateOf(secureStore.getMonitoredZaloGroups().toList()) }
+
+    var isTestingAi by remember { mutableStateOf(false) }
+    var testAiResultDialog by remember { mutableStateOf<String?>(null) }
 
     var showAddFieldDialog by remember { mutableStateOf(false) }
     var showAddTemplateDialog by remember { mutableStateOf(false) }
@@ -208,6 +227,237 @@ fun SettingsScreen(
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Mở App Info (3 chấm)", fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        // Quản lý Nhóm Zalo Đang Theo Dõi
+        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Chat, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Nhóm Zalo theo dõi (${monitoredZaloGroups.size})",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    if (monitoredZaloGroups.isNotEmpty()) {
+                        TextButton(
+                            onClick = {
+                                secureStore.setMonitoredZaloGroups(emptySet())
+                                monitoredZaloGroups = emptyList()
+                                Toast.makeText(context, "Đã xóa toàn bộ nhóm theo dõi", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Text("Xóa hết", fontSize = 11.sp, color = Color(0xFFD32F2F))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Chỉ các nhóm trong danh sách này mới được app thu thập tin để tạo bài đăng:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+                if (monitoredZaloGroups.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFE8F5E9), RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    ) {
+                        Text(
+                            text = "💡 Chưa có nhóm nào được chọn.\n👉 Hãy sang tab 'Zalo Web', mở nhóm bất kỳ và bấm 'Theo dõi nhóm này' để chọn nhanh bằng 1 chạm (không cần nhập tay)!",
+                            fontSize = 12.sp,
+                            color = Color(0xFF1B5E20)
+                        )
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        monitoredZaloGroups.forEach { groupName ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(text = groupName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                }
+                                IconButton(
+                                    onClick = {
+                                        secureStore.removeMonitoredZaloGroup(groupName)
+                                        monitoredZaloGroups = secureStore.getMonitoredZaloGroups().toList()
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Xóa nhóm", tint = Color(0xFFD32F2F), modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Cấu hình Trí tuệ nhân tạo (AI Gemini)
+        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF673AB7))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Trợ lý AI Gemini (Viết lại bài đăng)",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Sử dụng Google Gemini API để tự động viết lại bài theo phong cách riêng của bạn.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Ô nhập API Key
+                OutlinedTextField(
+                    value = geminiApiKey,
+                    onValueChange = {
+                        geminiApiKey = it
+                        secureStore.setGeminiApiKey(it)
+                    },
+                    label = { Text("Gemini API Key") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    visualTransformation = if (isApiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { isApiKeyVisible = !isApiKeyVisible }) {
+                            Icon(
+                                imageVector = if (isApiKeyVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = if (isApiKeyVisible) "Ẩn API Key" else "Hiện API Key"
+                            )
+                        }
+                    }
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/app/apikey"))
+                            context.startActivity(intent)
+                        }
+                    ) {
+                        Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Lấy API Key miễn phí (Google AI Studio)", fontSize = 11.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Ô nhập Prompt Template
+                Text("Prompt tùy chỉnh của bạn:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = aiPromptTemplate,
+                    onValueChange = {
+                        aiPromptTemplate = it
+                        secureStore.setAiPromptTemplate(it)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(140.dp),
+                    textStyle = MaterialTheme.typography.bodySmall
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(
+                        onClick = {
+                            aiPromptTemplate = SecureStore.DEFAULT_AI_PROMPT
+                            secureStore.setAiPromptTemplate(SecureStore.DEFAULT_AI_PROMPT)
+                            Toast.makeText(context, "Đã khôi phục Prompt mẫu mặc định", Toast.LENGTH_SHORT).show()
+                        }
+                    ) {
+                        Text("Khôi phục mẫu chuẩn", fontSize = 11.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Switch tự động viết lại
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Tự động viết lại bằng AI", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text("Khi có tin Zalo mới, AI sẽ tự động viết lại trước khi lưu bài", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                    }
+                    Switch(
+                        checked = isAiAutoRewrite,
+                        onCheckedChange = {
+                            isAiAutoRewrite = it
+                            secureStore.setAiAutoRewriteEnabled(it)
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Nút kiểm tra kết nối AI
+                OutlinedButton(
+                    onClick = {
+                        if (geminiApiKey.isBlank()) {
+                            Toast.makeText(context, "Vui lòng nhập API Key trước!", Toast.LENGTH_SHORT).show()
+                            return@OutlinedButton
+                        }
+                        isTestingAi = true
+                        scope.launch {
+                            val aiService = container.aiService
+                            val res = aiService.testConnection(geminiApiKey, aiPromptTemplate)
+                            isTestingAi = false
+                            res.onSuccess { output ->
+                                testAiResultDialog = output
+                            }.onFailure { err ->
+                                testAiResultDialog = "❌ Kiểm tra thất bại:\n${err.message}"
+                            }
+                        }
+                    },
+                    enabled = !isTestingAi,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isTestingAi) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Đang kiểm tra kết nối AI...", fontSize = 12.sp)
+                    } else {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Kiểm tra kết nối AI (Test thử nghiệm)", fontSize = 12.sp)
                     }
                 }
             }
@@ -572,6 +822,37 @@ fun SettingsScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showImportExportDialog = false }) { Text("Đóng") }
+            }
+        )
+    }
+
+    // Dialog kết quả kiểm tra kết nối AI Gemini
+    if (testAiResultDialog != null) {
+        AlertDialog(
+            onDismissRequest = { testAiResultDialog = null },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF673AB7))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Kết quả thử nghiệm AI")
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        text = testAiResultDialog!!,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = { testAiResultDialog = null }) {
+                    Text("Đóng")
+                }
             }
         )
     }

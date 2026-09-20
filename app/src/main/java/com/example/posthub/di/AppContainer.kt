@@ -12,6 +12,8 @@ import com.example.posthub.fb.FbWebSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import com.example.posthub.domain.ai.AiService
+import com.example.posthub.zalo.ZaloWebSession
 import org.json.JSONArray
 
 class AppContainer(val context: Context) {
@@ -20,6 +22,8 @@ class AppContainer(val context: Context) {
     val secureStore = SecureStore(context)
     val database = AppDatabase.getInstance(context)
     val fbWebSession = FbWebSession(context, secureStore)
+    val zaloWebSession = ZaloWebSession(context, secureStore)
+    val aiService = AiService(secureStore)
 
     val messageMerger = MessageMerger(
         windowSecondsProvider = { secureStore.getMergeWindowSeconds() }
@@ -31,20 +35,33 @@ class AppContainer(val context: Context) {
     private fun saveMergedPostToDatabase(post: Post) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                var finalText = post.finalPostText
+                // Nếu bật tự động viết lại bằng AI và đã cấu hình API Key
+                if (secureStore.isAiAutoRewriteEnabled() && secureStore.getGeminiApiKey().isNotBlank()) {
+                    AppLog.i("AppContainer", "Đang tự động viết lại bài đăng bằng AI Gemini...")
+                    val aiResult = aiService.rewritePost(post.rawText, post.senderOrGroup)
+                    aiResult.onSuccess { rewritten ->
+                        finalText = rewritten
+                        AppLog.i("AppContainer", "Tự động viết lại bằng AI thành công!")
+                    }.onFailure { err ->
+                        AppLog.w("AppContainer", "Tự động viết lại bằng AI thất bại (sử dụng văn bản gốc): ${err.message}")
+                    }
+                }
+
                 val photoArray = JSONArray()
                 post.photoPaths.forEach { photoArray.put(it) }
 
                 val entity = PostEntity(
                     rawText = post.rawText,
                     cleanedText = post.cleanedText,
-                    finalPostText = post.finalPostText,
+                    finalPostText = finalText,
                     photoPathsJson = photoArray.toString(),
                     source = post.source,
                     senderOrGroup = post.senderOrGroup,
                     status = post.status
                 )
                 val id = database.postDao().insertPost(entity)
-                AppLog.i("AppContainer", "Đã lưu bài viết gộp vào Cơ sở dữ liệu Room (ID: #$id)")
+                AppLog.i("AppContainer", "Đã lưu bài viết gộp vào Cơ sở dữ liệu Room (ID: #$id, Nguồn: ${post.source})")
             } catch (e: Exception) {
                 AppLog.e("AppContainer", "Lỗi lưu bài viết gộp vào DB", e)
             }
@@ -52,6 +69,6 @@ class AppContainer(val context: Context) {
     }
 
     init {
-        AppLog.i("AppContainer", "Thủ công DI Container khởi tạo hoàn tất với Room DB, SecureStore, FbWebSession và MessageMerger.")
+        AppLog.i("AppContainer", "Thủ công DI Container khởi tạo hoàn tất với Room DB, SecureStore, FbWebSession, ZaloWebSession và AiService.")
     }
 }
