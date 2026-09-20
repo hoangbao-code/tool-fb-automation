@@ -42,8 +42,11 @@ jobs:
         run: |
           set -o pipefail
           gradle test --console=plain --stacktrace 2>&1 | tee build.log || {
-            ERR_MSG=$(tail -n 40 build.log | tr '\r\n' '  ' | sed 's/::/%3A%3A/g')
-            echo "::error title=Build/Test Error::$ERR_MSG"
+            ERR_MSG=$(grep -E "^e: " build.log | head -n 10 | tr '\r\n' '  ' | sed 's/::/%3A%3A/g')
+            if [ -z "$ERR_MSG" ]; then
+              ERR_MSG=$(grep -B 2 -A 5 -E "error:|Compilation error|FAILURE:" build.log | head -n 30 | tr '\r\n' '  ' | sed 's/::/%3A%3A/g')
+            fi
+            echo "::error title=Build Failure::$ERR_MSG"
             exit 1
           }
 
