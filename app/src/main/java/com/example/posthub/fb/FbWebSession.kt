@@ -35,6 +35,17 @@ class FbWebSession(
     private val isInitializing = AtomicBoolean(false)
 
     /**
+     * Lấy hoặc khởi tạo WebView bền bỉ trong toàn bộ vòng đời ứng dụng
+     */
+    fun getOrCreateWebView(ctx: Context = context): WebView {
+        if (webView == null) {
+            val wv = WebView(ctx.applicationContext)
+            attachWebView(wv)
+        }
+        return webView!!
+    }
+
+    /**
      * Gắn WebView từ giao diện hoặc khởi tạo ngầm
      */
     fun attachWebView(view: WebView) {
@@ -76,11 +87,13 @@ class FbWebSession(
             for (part in parts) {
                 val clean = part.trim()
                 if (clean.isNotEmpty()) {
+                    cookieManager.setCookie("https://facebook.com", clean)
                     cookieManager.setCookie("https://m.facebook.com", clean)
+                    cookieManager.setCookie("https://mbasic.facebook.com", clean)
                 }
             }
             cookieManager.flush()
-            AppLog.i("FbWebSession", "Đã khôi phục cookie phiên Facebook từ SecureStore.")
+            AppLog.i("FbWebSession", "Đã khôi phục cookie phiên Facebook đa miền.")
         }
     }
 
@@ -145,109 +158,142 @@ class FbWebSession(
      * Tự động quét toàn bộ nhóm người dùng ĐÃ THAM GIA trên Facebook
      */
     suspend fun scanJoinedGroups(): Result<List<DiscoveredGroup>> = withContext(Dispatchers.Main) {
+        val wv = getOrCreateWebView(context)
+        restoreCookies()
+
         if (!isLoggedIn()) {
-            return@withContext Result.failure(IllegalStateException("Bạn chưa đăng nhập Facebook. Vui lòng vào tab Facebook để đăng nhập."))
+            AppLog.w("FbWebSession", "Chưa phát hiện cookie đăng nhập Facebook (thiếu c_user).")
+            return@withContext Result.failure(IllegalStateException("Bạn chưa đăng nhập Facebook. Vui lòng vào tab Facebook để đăng nhập trước."))
         }
 
-        val wv = webView ?: return@withContext Result.failure(IllegalStateException("WebView chưa được khởi tạo."))
+        AppLog.i("FbWebSession", "Bắt đầu quét danh sách nhóm đã tham gia...")
 
-        AppLog.i("FbWebSession", "Bắt đầu quét danh sách nhóm đã tham gia từ https://m.facebook.com/groups/joins/...")
-        wv.loadUrl("https://m.facebook.com/groups/joins/")
-        delay(JitterPolicy.calculateActionDelayMillis(4, 7))
+        // Chiến lược 1: Thử truy cập mbasic.facebook.com/groups/ (HTML tĩnh, bóc tách nhanh & chính xác 100%)
+        AppLog.i("FbWebSession", "[Chiến lược 1] Tải https://mbasic.facebook.com/groups/ ...")
+        wv.loadUrl("https://mbasic.facebook.com/groups/")
+        delay(4000)
 
-        val scanScript = """
-            (function() {
-                var list = [];
-                var seen = {};
-                var anchors = document.querySelectorAll("a[href*='/groups/']");
-                for (var i = 0; i < anchors.length; i++) {
-                    var a = anchors[i];
-                    var href = a.href || "";
-                    var m = href.match(/facebook\.com\/groups\/([^\/?#]+)/i);
-                    if (m && m[1]) {
-                        var id = m[1];
-                        if (id !== 'create' && id !== 'discover' && id !== 'feed' && id !== 'joins' && id !== 'category') {
-                            var cleanUrl = "https://m.facebook.com/groups/" + id;
-                            if (!seen[cleanUrl]) {
-                                seen[cleanUrl] = true;
-                                var text = (a.innerText || a.textContent || "").trim();
-                                if (text.length > 1 && text.indexOf('\n') === -1) {
-                                    list.push({ name: text, url: cleanUrl, isJoined: true });
-                                } else if (text.length > 1) {
-                                    var firstLine = text.split('\n')[0].trim();
-                                    list.push({ name: firstLine, url: cleanUrl, isJoined: true });
-                                }
-                            }
-                        }
-                    }
-                }
-                return JSON.stringify(list);
-            })();
-        """.trimIndent()
+        var discoveredList = extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
+        AppLog.i("FbWebSession", "[Chiến lược 1] Kết quả mbasic: tìm thấy ${discoveredList.size} nhóm.")
 
-        val jsonResult = evaluateJs(wv, scanScript)
-        val discoveredList = mutableListOf<DiscoveredGroup>()
-
-        try {
-            val jsonArray = JSONArray(jsonResult)
-            for (i in 0 until jsonArray.length()) {
-                val item = jsonArray.getJSONObject(i)
-                discoveredList.add(
-                    DiscoveredGroup(
-                        name = item.optString("name", "Nhóm Facebook"),
-                        url = item.optString("url"),
-                        isJoined = true
-                    )
-                )
-            }
-            AppLog.i("FbWebSession", "Quét thành công! Tìm thấy ${discoveredList.size} nhóm đã tham gia.")
-            Result.success(discoveredList)
-        } catch (e: Exception) {
-            AppLog.e("FbWebSession", "Lỗi phân tích JSON kết quả quét nhóm", e)
-            Result.failure(e)
+        // Chiến lược 2: Nếu mbasic trống, thử m.facebook.com/groups/ kèm cuộn trang
+        if (discoveredList.isEmpty()) {
+            AppLog.i("FbWebSession", "[Chiến lược 2] Thử https://m.facebook.com/groups/ ...")
+            wv.loadUrl("https://m.facebook.com/groups/")
+            delay(4000)
+            evaluateJs(wv, "window.scrollTo(0, 1000);")
+            delay(2000)
+            discoveredList = extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
+            AppLog.i("FbWebSession", "[Chiến lược 2] Kết quả m.facebook.com/groups/: tìm thấy ${discoveredList.size} nhóm.")
         }
+
+        // Chiến lược 3: Thử https://m.facebook.com/groups/joins/
+        if (discoveredList.isEmpty()) {
+            AppLog.i("FbWebSession", "[Chiến lược 3] Thử https://m.facebook.com/groups/joins/ ...")
+            wv.loadUrl("https://m.facebook.com/groups/joins/")
+            delay(4000)
+            evaluateJs(wv, "window.scrollTo(0, 1000);")
+            delay(2000)
+            discoveredList = extractGroupsFromCurrentPage(wv, isJoinedOnly = true)
+            AppLog.i("FbWebSession", "[Chiến lược 3] Kết quả groups/joins: tìm thấy ${discoveredList.size} nhóm.")
+        }
+
+        val finalUrl = wv.url ?: ""
+        AppLog.i("FbWebSession", "Hoàn tất quét nhóm! Tìm thấy tổng cộng ${discoveredList.size} nhóm. (URL cuối: $finalUrl)")
+        Result.success(discoveredList)
     }
 
     /**
      * Tìm kiếm nhóm theo từ khóa trên Facebook Mobile Web
      */
     suspend fun searchGroupsByKeyword(keyword: String): Result<List<DiscoveredGroup>> = withContext(Dispatchers.Main) {
+        val wv = getOrCreateWebView(context)
+        restoreCookies()
+
         if (!isLoggedIn()) {
-            return@withContext Result.failure(IllegalStateException("Bạn chưa đăng nhập Facebook."))
+            return@withContext Result.failure(IllegalStateException("Bạn chưa đăng nhập Facebook. Vui lòng vào tab Facebook để đăng nhập."))
         }
 
-        val wv = webView ?: return@withContext Result.failure(IllegalStateException("WebView chưa được khởi tạo."))
-
         val encodedQuery = URLEncoder.encode(keyword.trim(), "UTF-8")
-        val searchUrl = "https://m.facebook.com/search/groups/?q=$encodedQuery"
-        AppLog.i("FbWebSession", "Tìm kiếm nhóm theo từ khóa: '$keyword' ($searchUrl)")
-        wv.loadUrl(searchUrl)
-        delay(JitterPolicy.calculateActionDelayMillis(4, 7))
+        AppLog.i("FbWebSession", "Bắt đầu tìm kiếm nhóm theo từ khóa: '$keyword'...")
 
-        val parseScript = """
+        // Chiến lược 1: Thử tìm kiếm trên mbasic
+        val mbasicSearchUrl = "https://mbasic.facebook.com/search/groups/?q=$encodedQuery"
+        wv.loadUrl(mbasicSearchUrl)
+        delay(4000)
+
+        var discoveredList = extractGroupsFromCurrentPage(wv, isJoinedOnly = false)
+
+        // Chiến lược 2: Nếu mbasic trống, thử m.facebook
+        if (discoveredList.isEmpty()) {
+            val mobileSearchUrl = "https://m.facebook.com/search/groups/?q=$encodedQuery"
+            wv.loadUrl(mobileSearchUrl)
+            delay(4000)
+            evaluateJs(wv, "window.scrollTo(0, 1000);")
+            delay(2000)
+            discoveredList = extractGroupsFromCurrentPage(wv, isJoinedOnly = false)
+        }
+
+        AppLog.i("FbWebSession", "Tìm kiếm hoàn tất! Tìm thấy ${discoveredList.size} nhóm phù hợp với từ khóa '$keyword'.")
+        Result.success(discoveredList)
+    }
+
+    /**
+     * Bóc tách danh sách nhóm thông minh từ trang hiện tại trong WebView
+     */
+    private suspend fun extractGroupsFromCurrentPage(wv: WebView, isJoinedOnly: Boolean): List<DiscoveredGroup> {
+        val extractScript = """
             (function() {
                 var list = [];
                 var seen = {};
                 var anchors = document.querySelectorAll("a[href*='/groups/']");
+                var ignored = ['create', 'discover', 'feed', 'joins', 'category', 'notifications', 'settings', 'search', 'admin', 'about', 'your_posts'];
+
                 for (var i = 0; i < anchors.length; i++) {
                     var a = anchors[i];
-                    var href = a.href || "";
-                    var m = href.match(/facebook\.com\/groups\/([^\/?#]+)/i);
+                    var href = a.href || a.getAttribute("href") || "";
+                    var m = href.match(/\/groups\/([^\/?#&]+)/i);
                     if (m && m[1]) {
-                        var id = m[1];
-                        if (id !== 'create' && id !== 'discover' && id !== 'feed') {
-                            var cleanUrl = "https://m.facebook.com/groups/" + id;
+                        var id = m[1].toLowerCase();
+                        if (ignored.indexOf(id) === -1) {
+                            var cleanUrl = "https://m.facebook.com/groups/" + m[1];
                             if (!seen[cleanUrl]) {
-                                seen[cleanUrl] = true;
-                                var name = (a.innerText || a.textContent || "").trim();
-                                if (name.length > 2) {
-                                    var parent = a.closest("div[role='article']") || a.parentElement?.parentElement || a.parentElement;
-                                    var parentText = (parent ? parent.innerText : "").toLowerCase();
+                                var name = (a.innerText || a.textContent || a.getAttribute("aria-label") || a.getAttribute("title") || "").trim();
+                                if (!name || name.length < 2) {
+                                    var container = a.closest("tr") || a.closest("li") || a.closest("div[role='article']") || a.parentElement;
+                                    if (container) {
+                                        name = (container.innerText || container.textContent || "").trim();
+                                    }
+                                }
+                                if (name.indexOf('\n') !== -1) {
+                                    var lines = name.split('\n');
+                                    for (var l = 0; l < lines.length; l++) {
+                                        var line = lines[l].trim();
+                                        if (line.length > 2 && line.toLowerCase() !== 'nhóm của bạn' && line.toLowerCase() !== 'nhóm') {
+                                            name = line;
+                                            break;
+                                        }
+                                    }
+                                }
+                                name = name.replace(/\s+/g, ' ').trim();
+                                var lower = name.toLowerCase();
+                                if (name.length >= 2 && 
+                                    lower !== 'tham gia' && 
+                                    lower !== 'join' && 
+                                    lower !== 'xem thêm' && 
+                                    lower !== 'xem tất cả' && 
+                                    lower !== 'tạo nhóm' && 
+                                    lower !== 'nhóm') {
+                                    
+                                    var parent = a.closest("div[role='article']") || a.closest("tr") || a.parentElement;
+                                    var parentText = (parent ? (parent.innerText || parent.textContent) : "").toLowerCase();
                                     var isJoined = parentText.indexOf("đã tham gia") !== -1 || parentText.indexOf("joined") !== -1;
+                                    
+                                    seen[cleanUrl] = true;
                                     list.push({
-                                        name: name.split('\n')[0].trim(),
+                                        name: name,
                                         url: cleanUrl,
-                                        isJoined: isJoined
+                                        isJoined: ${if (isJoinedOnly) "true" else "isJoined"}
                                     });
                                 }
                             }
@@ -258,27 +304,25 @@ class FbWebSession(
             })();
         """.trimIndent()
 
-        val jsonResult = evaluateJs(wv, parseScript)
-        val discoveredList = mutableListOf<DiscoveredGroup>()
+        val jsonResult = evaluateJs(wv, extractScript)
+        if (jsonResult.isBlank() || jsonResult == "[]") return emptyList()
 
+        val list = mutableListOf<DiscoveredGroup>()
         try {
             val jsonArray = JSONArray(jsonResult)
             for (i in 0 until jsonArray.length()) {
                 val item = jsonArray.getJSONObject(i)
-                discoveredList.add(
-                    DiscoveredGroup(
-                        name = item.optString("name", "Nhóm Facebook"),
-                        url = item.optString("url"),
-                        isJoined = item.optBoolean("isJoined", false)
-                    )
-                )
+                val name = item.optString("name", "").trim()
+                val url = item.optString("url", "").trim()
+                val isJoined = item.optBoolean("isJoined", false)
+                if (name.isNotEmpty() && url.isNotEmpty()) {
+                    list.add(DiscoveredGroup(name = name, url = url, isJoined = isJoined))
+                }
             }
-            AppLog.i("FbWebSession", "Tìm kiếm hoàn tất! Tìm thấy ${discoveredList.size} nhóm phù hợp với từ khóa '$keyword'.")
-            Result.success(discoveredList)
         } catch (e: Exception) {
-            AppLog.e("FbWebSession", "Lỗi phân tích kết quả tìm kiếm nhóm", e)
-            Result.failure(e)
+            AppLog.e("FbWebSession", "Lỗi phân tích JSON kết quả bóc tách: '$jsonResult'", e)
         }
+        return list
     }
 
     /**
@@ -449,9 +493,21 @@ class FbWebSession(
     }
 
     private suspend fun evaluateJs(wv: WebView, script: String): String = suspendCancellableCoroutine { continuation ->
-        wv.evaluateJavascript(script) { result ->
-            val cleanResult = result?.trim('"') ?: ""
-            continuation.resume(cleanResult)
+        wv.evaluateJavascript(script) { rawResult ->
+            if (rawResult == null || rawResult == "null") {
+                continuation.resume("")
+                return@evaluateJavascript
+            }
+            var text = rawResult.trim()
+            if (text.startsWith("\"") && text.endsWith("\"") && text.length >= 2) {
+                text = text.substring(1, text.length - 1)
+                text = text.replace("\\\"", "\"")
+                    .replace("\\\\", "\\")
+                    .replace("\\n", "\n")
+                    .replace("\\r", "\r")
+                    .replace("\\t", "\t")
+            }
+            continuation.resume(text)
         }
     }
 

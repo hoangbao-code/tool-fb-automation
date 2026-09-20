@@ -133,7 +133,19 @@ fun GroupScreen(
                                                 }
                                             }
                                         }
-                                        Toast.makeText(context, "Đã quét và thêm $newAddedCount nhóm mới từ Facebook!", Toast.LENGTH_LONG).show()
+                                        if (discovered.isEmpty()) {
+                                            Toast.makeText(
+                                                context,
+                                                "Chưa tìm thấy nhóm nào. Bạn hãy vào tab Facebook kiểm tra tài khoản đã đăng nhập chưa, hoặc xem tab Nhật ký nhé!",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        } else {
+                                            Toast.makeText(
+                                                context,
+                                                "Quét thành công! Tìm thấy ${discovered.size} nhóm (thêm mới $newAddedCount nhóm)!",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
                                     } else {
                                         val err = result.exceptionOrNull()?.message ?: "Lỗi quét nhóm"
                                         Toast.makeText(context, "Lỗi: $err", Toast.LENGTH_LONG).show()

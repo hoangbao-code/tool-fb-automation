@@ -164,16 +164,21 @@ fun FacebookScreen(
         // WebView Facebook di động
         AndroidView(
             factory = { ctx ->
-                WebView(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                    fbSession.attachWebView(this)
-                    webViewInstance = this
+                val wv = fbSession.getOrCreateWebView(ctx)
+                (wv.parent as? ViewGroup)?.removeView(wv)
+                wv.layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                webViewInstance = wv
+                if (wv.url.isNullOrBlank()) {
                     val target = initialUrl ?: "https://m.facebook.com"
-                    loadUrl(target)
+                    wv.loadUrl(target)
                 }
+                wv
+            },
+            update = { wv ->
+                webViewInstance = wv
             },
             modifier = Modifier.fillMaxSize()
         )
