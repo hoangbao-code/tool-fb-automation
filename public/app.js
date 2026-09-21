@@ -634,8 +634,14 @@ async function triggerZaloKhacScan() {
     const wv = document.getElementById('zalo-wv');
     if (!wv) return;
 
+    // Đảm bảo tab Zalo Web đang hiển thị trực tiếp để Chromium render layout đầy đủ
+    if (state.currentTab !== 'zalo') {
+        switchTab('zalo');
+        await new Promise(r => setTimeout(r, 350));
+    }
+
     showScanModal('Zalo', 'Đang Quét Các Nhóm Trong Mục "Khác"...');
-    appendScanModalLog('Kiểm tra và tự động mở mục "Khác" trên Zalo Web...');
+    appendScanModalLog('Kiểm tra tab "Khác" trên Zalo Web...');
 
     try {
         const currentUrl = wv.getURL();
@@ -647,113 +653,162 @@ async function triggerZaloKhacScan() {
             return;
         }
 
-        updateScanModalStatus('Đang chuyển đến tab "Khác" và quét danh sách nhóm...', 35);
+        updateScanModalStatus('Đang định vị mục "Khác" và quét danh sách nhóm...', 35);
 
         const scanResult = await wv.executeJavaScript(`
             (async function() {
-                function robustClick(el) {
-                    if (!el) return false;
-                    try {
-                        el.scrollIntoView({ block: 'center' });
-                        ['mousedown', 'mouseup', 'click'].forEach(function(evt) {
-                            el.dispatchEvent(new MouseEvent(evt, { bubbles: true, cancelable: true, view: window }));
-                        });
-                        if (typeof el.click === 'function') el.click();
-                        return true;
-                    } catch(e) { return false; }
-                }
-
-                // 1. Đảm bảo đang ở tab Tin Nhắn
-                var msgTab = document.querySelector('[data-id="btn_Main_Tab_Message"], [title*="Tin nhắn"], [aria-label*="Tin nhắn"], div[icon="outline-chat"]');
-                if (msgTab) robustClick(msgTab);
-
-                // 2. Tìm và click vào tab "Khác" (ngay cạnh "Ưu tiên")
-                var khacBtn = null;
-                var snap = document.evaluate("//*[normalize-space(text())='Khác' or normalize-space(text())='Other']", document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
-                for (var i = 0; i < snap.snapshotLength; i++) {
-                    var el = snap.snapshotItem(i);
-                    if (el && el.offsetParent !== null) {
-                        var parentText = (el.parentElement ? el.parentElement.innerText : '') + (el.parentElement?.parentElement ? el.parentElement.parentElement.innerText : '');
-                        if (parentText.indexOf('Ưu tiên') !== -1 || parentText.indexOf('Priority') !== -1 || el.classList.contains('tab-item') || el.classList.contains('sub-tab-item')) {
-                            khacBtn = el;
-                            break;
-                        }
-                    }
-                }
-
-                if (!khacBtn) {
-                    khacBtn = document.querySelector('[data-id="sub_tab_other"], [data-id*="other"], div[title="Khác"]');
-                }
-
-                if (khacBtn) {
-                    robustClick(khacBtn);
-                    await new Promise(function(r) { setTimeout(r, 600); });
-                }
-
-                // 3. Tìm container cuộn danh sách hội thoại
-                var container = document.querySelector('#conversationList, [data-id="virtual-list"], .conv-list, .virtualized-scroll, div[class*="conv-list"]');
-                if (!container) {
-                    var all = document.querySelectorAll('div');
-                    for (var j = 0; j < all.length; j++) {
-                        var d = all[j];
-                        var rect = d.getBoundingClientRect();
-                        if (rect.left < 450 && rect.width > 120 && rect.height > 250) {
-                            var s = window.getComputedStyle(d);
-                            if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
-                                container = d;
-                                break;
-                            }
-                        }
-                    }
-                }
-
                 var names = [];
                 var seen = {};
 
-                function extractItems() {
-                    var items = document.querySelectorAll('.conv-item, [data-id*="conv_item"], div[id^="conv-item-"], div[class*="chat-item"], div[class*="conv-item"], .group-item');
-                    for (var k = 0; k < items.length; k++) {
-                        var it = items[k];
-                        var titleEl = it.querySelector('.conv-item-title__more, [class*="conv-item-title"], [class*="name"], [class*="title"], h4, p, span');
-                        var name = titleEl ? titleEl.innerText.trim() : (it.getAttribute('title') || it.innerText.split('\\n')[0].trim());
-                        if (name) {
-                            var firstLine = name.split('\\n')[0].trim();
-                            if (firstLine.length >= 2 && firstLine !== 'Zalo' && firstLine !== 'Cloud của tôi' && firstLine !== 'Truyền File' && firstLine !== 'Khác' && firstLine !== 'Ưu tiên') {
-                                var key = firstLine.toLowerCase();
-                                if (!seen[key]) {
-                                    seen[key] = true;
-                                    names.push(firstLine);
+                function isValidName(str) {
+                    if (!str || str.length < 2) return false;
+                    if (/^\\d{1,2}:\\d{2}$/.test(str)) return false;
+                    if (/^\\d+\\s*(ngày|giờ|phút|giây|tháng)/.test(str)) return false;
+                    var lower = str.toLowerCase().trim();
+                    var systemWords = ['ưu tiên', 'khác', 'zalo', 'cloud của tôi', 'truyền file', 'hôm qua', 'vừa xong', 'đã gửi', 'tin nhắn', 'danh bạ'];
+                    if (systemWords.indexOf(lower) !== -1) return false;
+                    return true;
+                }
+
+                function extractNameFromRow(row) {
+                    // 1. Thử các selector title chuẩn
+                    var titleEl = row.querySelector('.conv-item-title__more, [class*="conv-item-title"], [class*="title"], [class*="name"], h4, h5, [data-id="chat-title"]');
+                    if (titleEl && titleEl.innerText && titleEl.innerText.trim()) {
+                        var t = titleEl.innerText.trim().split('\\n')[0].trim();
+                        if (isValidName(t)) return t;
+                    }
+
+                    // 2. Tìm thẻ con có chữ in đậm (bold/strong) là tên nhóm
+                    var allChildren = row.querySelectorAll('div, span, p, h4, strong, b');
+                    for (var c = 0; c < allChildren.length; c++) {
+                        var child = allChildren[c];
+                        if (child.children.length === 0 && child.innerText && child.innerText.trim()) {
+                            var text = child.innerText.trim();
+                            if (isValidName(text)) {
+                                var fw = window.getComputedStyle(child).fontWeight;
+                                if (fw === 'bold' || fw === 'bolder' || parseInt(fw) >= 500) {
+                                    return text;
                                 }
                             }
                         }
                     }
+
+                    // 3. Fallback: Lấy dòng đầu tiên trong innerText
+                    var lines = (row.innerText || '').split('\\n').map(function(l) { return l.trim(); }).filter(Boolean);
+                    for (var l = 0; l < lines.length; l++) {
+                        if (isValidName(lines[l])) return lines[l];
+                    }
+                    return '';
                 }
 
-                if (container) container.scrollTop = 0;
-                await new Promise(function(r) { setTimeout(r, 300); });
-                extractItems();
+                // BƯỚC 1: Kiểm tra xem đã ở tab "Khác" chưa. TUYỆT ĐỐI KHÔNG bấm vào tab "Tin nhắn" vì sẽ bị reset về "Ưu tiên"
+                var isKhacActive = false;
+                var khacCandidate = null;
+                var allNodes = document.querySelectorAll('*');
+                for (var i = 0; i < allNodes.length; i++) {
+                    var node = allNodes[i];
+                    var t = (node.innerText || '').trim();
+                    if (t === 'Khác' || t.indexOf('Khác') === 0) {
+                        if (node.children.length <= 2 && node.clientHeight < 55 && node.clientWidth < 140) {
+                            khacCandidate = node;
+                            var parentEl = node.closest('div, li, [role="tab"]');
+                            var combinedClass = (node.className || '') + ' ' + (parentEl ? parentEl.className : '');
+                            var style = window.getComputedStyle(node);
+                            if (combinedClass.indexOf('active') !== -1 || combinedClass.indexOf('selected') !== -1 || style.color.indexOf('255') !== -1) {
+                                isKhacActive = true;
+                            }
+                        }
+                    }
+                }
 
-                // Cuộn 25 bước để vét toàn bộ danh sách trong mục Khác
+                // Nếu chưa ở tab Khác, click vào Khác
+                if (!isKhacActive && khacCandidate) {
+                    var clickTarget = khacCandidate.closest('div, li, [role="tab"]') || khacCandidate;
+                    ['mousedown', 'mouseup', 'click'].forEach(function(evt) {
+                        clickTarget.dispatchEvent(new MouseEvent(evt, { bubbles: true, cancelable: true, view: window }));
+                    });
+                    if (typeof clickTarget.click === 'function') clickTarget.click();
+                    await new Promise(function(r) { setTimeout(r, 600); });
+                }
+
+                // BƯỚC 2: Tìm container cuộn danh sách hội thoại
+                var scrollContainer = null;
+                var allDivs = document.querySelectorAll('div, ul, main, section');
+                for (var d = 0; d < allDivs.length; d++) {
+                    var el = allDivs[d];
+                    var s = window.getComputedStyle(el);
+                    if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && el.clientHeight > 140) {
+                        var rect = el.getBoundingClientRect();
+                        if (rect.left < 500 && rect.width > 150) {
+                            if (!scrollContainer || el.scrollHeight >= scrollContainer.scrollHeight) {
+                                scrollContainer = el;
+                            }
+                        }
+                    }
+                }
+
+                // BƯỚC 3: Hàm bóc tách hội thoại (Kết hợp cả Selector class lẫn Quét Hình Học)
+                function harvestVisible() {
+                    // A. Selector class
+                    var rows = Array.from(document.querySelectorAll('.conv-item, [data-id*="conv"], [data-id*="thread"], div[class*="chat-item"], div[class*="conv-item"], div[class*="rel-item"], [role="listitem"]'));
+
+                    // B. Geometrical fallback: tìm div dạng hàng hội thoại có avatar và text
+                    if (rows.length === 0) {
+                        var root = scrollContainer || document.body;
+                        var allBoxes = Array.from(root.querySelectorAll('div'));
+                        var customRows = [];
+                        for (var b = 0; b < allBoxes.length; b++) {
+                            var box = allBoxes[b];
+                            var bRect = box.getBoundingClientRect();
+                            if (bRect.height >= 45 && bRect.height <= 95 && bRect.width >= 160 && bRect.left < 450) {
+                                var hasImg = box.querySelector('img, [class*="avatar"], svg, [class*="thumb"]');
+                                if (hasImg) {
+                                    customRows.push(box);
+                                }
+                            }
+                        }
+                        rows = customRows.filter(function(item, idx, arr) {
+                            return !arr.some(function(other) { return other !== item && other.contains(item); });
+                        });
+                    }
+
+                    for (var k = 0; k < rows.length; k++) {
+                        var name = extractNameFromRow(rows[k]);
+                        if (name) {
+                            var key = name.toLowerCase();
+                            if (!seen[key]) {
+                                seen[key] = true;
+                                names.push(name);
+                            }
+                        }
+                    }
+                }
+
+                // Đưa container lên đầu
+                if (scrollContainer) scrollContainer.scrollTop = 0;
+                await new Promise(function(r) { setTimeout(r, 250); });
+                harvestVisible();
+
+                // BƯỚC 4: Cuộn 25 bước để lấy hết toàn bộ nhóm trong mục Khác
                 var maxSteps = 25;
                 for (var step = 1; step <= maxSteps; step++) {
-                    if (container) {
-                        container.scrollTop += 320;
+                    if (scrollContainer) {
+                        scrollContainer.scrollTop += 320;
                     } else {
                         window.scrollBy(0, 320);
                     }
                     await new Promise(function(r) { setTimeout(r, 220); });
-                    extractItems();
+                    harvestVisible();
                 }
 
                 return {
-                    clickedKhac: Boolean(khacBtn),
                     groups: names
                 };
             })();
         `);
 
         const groups = scanResult?.groups || [];
-        appendScanModalLog(`Đã quét xong mục "Khác"! Tìm thấy ${groups.length} nhóm/hội thoại.`);
+        appendScanModalLog(`Đã quét xong mục "Khác"! Tìm thấy ${groups.length} nhóm.`);
         updateScanModalStatus(`Đã thu thập ${groups.length} nhóm từ mục "Khác"...`, 85, groups.length);
 
         if (groups.length > 0) {
@@ -765,15 +820,21 @@ async function triggerZaloKhacScan() {
             }
 
             const res = await window.electronApi.addZaloGroupsBulk(groups);
+            if (window.electronApi.addLog) {
+                await window.electronApi.addLog('info', `[Zalo Scanner] Đã quét thành công ${groups.length} nhóm từ mục "Khác": ${groups.join(', ')}`);
+            }
             appendScanModalLog(`✅ Đã lưu ${res.count} nhóm vào danh sách theo dõi (Thêm mới: ${res.added}).`);
             updateScanModalStatus('Hoàn tất quét mục "Khác"!', 100, groups.length);
-            showToast(`✅ Đã quét thành công ${groups.length} nhóm từ mục "Khác"!`, 'success');
+            showToast(`✅ Đã quét thành công ${groups.length} nhóm: ${groups.slice(0, 3).join(', ')}${groups.length > 3 ? '...' : ''}!`, 'success');
             await loadZaloGroups();
-            setTimeout(closeScanModal, 1500);
+            setTimeout(() => {
+                closeScanModal();
+                switchTab('zalo-groups');
+            }, 1500);
         } else {
-            appendScanModalLog('⚠️ Không tìm thấy nhóm nào trong mục "Khác". Vui lòng kiểm tra xem bạn đã chuyển các nhóm sang mục "Khác" trên Zalo chưa.');
+            appendScanModalLog('⚠️ Không tìm thấy nhóm nào trong mục "Khác".');
             updateScanModalStatus('Không có nhóm trong mục Khác', 100, 0);
-            showToast('Chưa tìm thấy nhóm nào trong mục "Khác". Bạn hãy chuyển các nhóm cần theo dõi sang mục "Khác" trên Zalo Web rồi bấm quét lại nhé!', 'warning');
+            showToast('Không tìm thấy nhóm trong mục "Khác". Vui lòng kiểm tra lại Zalo Web xem đã có nhóm trong tab Khác chưa nhé!', 'warning');
             setTimeout(closeScanModal, 3000);
         }
     } catch (e) {

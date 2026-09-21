@@ -170,8 +170,11 @@
                         <span id="zalo-active-group-name" class="font-bold text-blue-400 bg-blue-950/60 px-2.5 py-1 rounded-md border border-blue-800/50">
                             Chưa phát hiện
                         </span>
+                        <button onclick="triggerZaloKhacScan()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Chỉ quét các nhóm bạn đã đưa vào mục 'Khác'">
+                            <i data-lucide="folder-check" class="w-3.5 h-3.5 text-sky-200"></i> Quét Mục "Khác"
+                        </button>
                         <button onclick="triggerZaloGroupScan()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Tự động quét toàn bộ danh sách nhóm từ Zalo Web">
-                            <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét Nhóm Zalo
+                            <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét Toàn Bộ Danh Bạ
                         </button>
                         <button onclick="monitorCurrentZaloGroup()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 transition-all">
                             <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-blue-400"></i> Theo dõi nhóm này
