@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     lucide.createIcons();
     setupWebviews();
     setupEventListeners();
+    switchTab('feed');
     await loadInitialData();
 });
 
@@ -153,17 +154,31 @@ function setupEventListeners() {
 function switchTab(tabId) {
     state.currentTab = tabId;
 
-    // Cập nhật hiển thị Pane
-    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-    const target = document.getElementById(`tab-${tabId}`);
-    if (target) target.classList.add('active');
+    // 1. Cập nhật hiển thị Pane (Ẩn hoàn toàn các pane khác)
+    document.querySelectorAll('.tab-pane').forEach(p => {
+        p.classList.remove('active');
+        p.style.setProperty('display', 'none', 'important');
+        p.style.setProperty('visibility', 'hidden', 'important');
+        p.style.setProperty('pointer-events', 'none', 'important');
+        p.style.setProperty('z-index', '1', 'important');
+    });
 
-    // Cập nhật nút bấm Sidebar
+    const target = document.getElementById(`tab-${tabId}`);
+    if (target) {
+        target.classList.add('active');
+        const displayMode = target.classList.contains('tab-block') ? 'block' : 'flex';
+        target.style.setProperty('display', displayMode, 'important');
+        target.style.setProperty('visibility', 'visible', 'important');
+        target.style.setProperty('pointer-events', 'auto', 'important');
+        target.style.setProperty('z-index', '10', 'important');
+    }
+
+    // 2. Cập nhật nút bấm Sidebar
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
     const activeBtn = document.getElementById(`tab-btn-${tabId}`);
     if (activeBtn) activeBtn.classList.add('active');
 
-    // Cập nhật tiêu đề trang
+    // 3. Cập nhật tiêu đề trang
     const titles = {
         feed: { title: 'BẢNG TIN & HÀNG ĐỢI DUYỆT', sub: 'Xem xét và xuất bản bài viết tự động' },
         zalo: { title: 'ZALO WEB TRỰC TIẾP', sub: 'Đăng nhập 1 lần lưu vĩnh viễn - Tự động bắt tin ngầm' },

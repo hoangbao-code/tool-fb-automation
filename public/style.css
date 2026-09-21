@@ -40,12 +40,32 @@
 }
 
 .tab-pane {
-    display: none;
-    animation: fadeIn 0.15s ease-in-out;
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    z-index: 1 !important;
 }
 
 .tab-pane.active {
-    display: flex;
+    display: flex !important;
+    visibility: visible !important;
+    position: relative !important;
+    pointer-events: auto !important;
+    opacity: 1 !important;
+    z-index: 10 !important;
+    animation: fadeIn 0.15s ease-in-out;
+}
+
+.tab-pane.active.tab-block {
+    display: block !important;
 }
 
 @keyframes fadeIn {
