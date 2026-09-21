@@ -339,8 +339,30 @@ function reloadZaloWebview() {
 // 4. Facebook Webview Controls
 function triggerFbGroupScan() {
     const wv = document.getElementById('fb-wv');
-    if (wv) {
-        showToast('Đang quét danh sách nhóm trên Facebook...', 'info');
+    if (!wv) return;
+
+    try {
+        const currentUrl = wv.getURL();
+        if (!currentUrl || currentUrl === 'about:blank' || !currentUrl.includes('facebook.com')) {
+            wv.loadURL('https://www.facebook.com/groups/joins/');
+            showToast('Đang mở trang Nhóm Đã Tham Gia trên Facebook...', 'info');
+            return;
+        }
+
+        if (!currentUrl.includes('/groups')) {
+            showToast('Đang mở trang Danh Sách Nhóm và quét...', 'info');
+            wv.loadURL('https://www.facebook.com/groups/joins/');
+            wv.addEventListener('did-finish-load', function onLoaded() {
+                wv.removeEventListener('did-finish-load', onLoaded);
+                setTimeout(() => {
+                    wv.send('scan-groups-cmd');
+                }, 2000);
+            });
+        } else {
+            showToast('Đang quét danh sách nhóm Facebook trên trang...', 'info');
+            wv.send('scan-groups-cmd');
+        }
+    } catch (e) {
         wv.send('scan-groups-cmd');
     }
 }

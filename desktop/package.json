@@ -6,7 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev"
+    "dev": "electron . --dev",
+    "test": "node tests/test_fb_scan.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
