@@ -159,7 +159,7 @@ class GroupScannerEngine(
                     }
                 }
             }
-            wv.loadURL(targetUrl)
+            wv.loadUrl(targetUrl)
         }
     }
 
@@ -178,7 +178,7 @@ class GroupScannerEngine(
                     }
                 }
             }
-            wv.loadURL(targetUrl)
+            wv.loadUrl(targetUrl)
         }
     }
 
