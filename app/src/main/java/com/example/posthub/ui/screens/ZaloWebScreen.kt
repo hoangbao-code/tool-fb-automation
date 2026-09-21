@@ -454,16 +454,15 @@ fun ZaloWebScreen() {
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Cách lấy Cookie trên máy tính (3 bước):",
+                        text = "Cách lấy Session từ Zalo Web trên máy tính:",
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
-                        text = "1. Mở trang chat.zalo.me trên máy tính (nơi bạn đã đăng nhập).\n" +
-                               "2. Bấm F12 trên bàn phím -> Chọn tab 'Console' -> Gõ dòng này rồi ấn Enter:\n" +
-                               "   document.cookie\n" +
-                               "   (Hoặc gõ: localStorage.getItem('zpw_sek'))\n" +
-                               "3. Copy toàn bộ kết quả hiện ra, gửi qua điện thoại rồi dán vào ô bên dưới:",
+                        text = "Cách 1 (Chuẩn nhất 100%): Mở chat.zalo.me trên PC -> Bấm F12 -> Chọn tab 'Console' -> Gõ lệnh rồi ấn Enter:\n" +
+                               "   copy(JSON.stringify(localStorage))\n" +
+                               "   (Lệnh này sẽ tự động copy trọn bộ phiên đăng nhập vào bộ nhớ tạm máy tính).\n" +
+                               "Cách 2: Dán chuỗi cookie (document.cookie) hoặc mã zpw_sek.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -471,12 +470,12 @@ fun ZaloWebScreen() {
                         value = inputCookieText,
                         onValueChange = { inputCookieText = it },
                         modifier = Modifier.fillMaxWidth().height(120.dp),
-                        placeholder = { Text("Dán Cookie hoặc mã zpw_sek vào đây...", fontSize = 11.sp) },
+                        placeholder = { Text("Dán toàn bộ mã JSON localStorage hoặc Cookie vào đây...", fontSize = 11.sp) },
                         maxLines = 5,
                         textStyle = MaterialTheme.typography.bodySmall
                     )
                     Text(
-                        text = "⚠️ Lưu ý: Zalo chỉ cho phép 1 phiên Zalo Web hoạt động. Sau khi ném vào tool, Zalo Web trên máy tính sẽ tự đăng xuất.",
+                        text = "⚠️ Lưu ý: Zalo chỉ cho phép 1 phiên Zalo Web hoạt động tại 1 thời điểm.",
                         fontSize = 10.sp,
                         color = Color(0xFFD32F2F)
                     )
@@ -587,6 +586,25 @@ private fun injectCookiesOrToken(context: Context, webView: WebView, secureStore
         var extractedSek: String? = null
 
         when {
+            // Định dạng JSON Object xuất từ localStorage: {"key":"val", ...}
+            trimmed.startsWith("{") && trimmed.endsWith("}") -> {
+                val jsonObj = org.json.JSONObject(trimmed)
+                val keys = jsonObj.keys()
+                val jsBuilder = StringBuilder("(function() { try {\n")
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val value = jsonObj.optString(key)
+                    val keyEscaped = key.replace("\\", "\\\\").replace("'", "\\'")
+                    val valueEscaped = value.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "")
+                    jsBuilder.append("localStorage.setItem('$keyEscaped', '$valueEscaped');\n")
+                    if (key == "zpw_sek") {
+                        extractedSek = value
+                        cookieManager.setCookie(domain, "zpw_sek=$value; Domain=$cookieDomain; Path=/; Secure")
+                    }
+                }
+                jsBuilder.append("} catch(e) {} })();")
+                webView.evaluateJavascript(jsBuilder.toString(), null)
+            }
             // Định dạng JSON array (xuất từ Cookie-Editor extension)
             trimmed.startsWith("[") && trimmed.endsWith("]") -> {
                 val jsonArray = org.json.JSONArray(trimmed)
@@ -627,18 +645,26 @@ private fun injectCookiesOrToken(context: Context, webView: WebView, secureStore
         if (!extractedSek.isNullOrEmpty()) {
             secureStore.setZaloCustomSek(extractedSek)
             val sekSafe = extractedSek.replace("'", "\\'")
+            val parts = extractedSek.split(".")
+            val uidJs = if (parts.size >= 2 && parts[1].all { it.isDigit() }) {
+                val uid = parts[1]
+                "localStorage.setItem('user_id', '$uid'); localStorage.setItem('my_id', '$uid');"
+            } else ""
             webView.evaluateJavascript("""
                 (function() {
                     try {
                         localStorage.setItem('zpw_sek', '$sekSafe');
+                        $uidJs
                     } catch(e) {}
                 })();
             """.trimIndent(), null)
         }
 
-        // Tải lại trang chat.zalo.me
-        webView.loadUrl(domain)
-        Toast.makeText(context, "🎉 Đã nạp Cookie Zalo! Đang tải lại phiên đăng nhập...", Toast.LENGTH_LONG).show()
+        // Tải lại trang chat.zalo.me với độ trễ nhỏ để bảo đảm dữ liệu localStorage đã được ghi vào WebView
+        webView.postDelayed({
+            webView.loadUrl(domain)
+        }, 350)
+        Toast.makeText(context, "🎉 Đã nạp Session Zalo! Đang tải lại phiên đăng nhập...", Toast.LENGTH_LONG).show()
     } catch (e: Exception) {
         Toast.makeText(context, "Lỗi nạp Cookie: ${e.message}", Toast.LENGTH_SHORT).show()
     }
