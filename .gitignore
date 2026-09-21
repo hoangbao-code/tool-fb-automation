@@ -20,3 +20,8 @@ release.jks
 secrets.properties
 *.token
 *.cookie
+
+# Web Desktop app ignores
+web/node_modules/
+web/data/
+web/.env
