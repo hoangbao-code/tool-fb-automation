@@ -143,6 +143,9 @@ function startFbPostWorker() {
             const pendingPost = await dbAsync.get(`SELECT * FROM posts WHERE status = 'approved' ORDER BY id ASC LIMIT 1`);
             if (!pendingPost) return;
 
+            // Đánh dấu ngay sang 'publishing' để vòng lặp 30s sau không chọn trùng
+            await dbAsync.run(`UPDATE posts SET status = 'publishing' WHERE id = ?`, [pendingPost.id]);
+
             // Tính thời gian giãn cách ngẫu nhiên (chống spam / checkpoint Facebook)
             const minRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'delay_min_seconds'`);
             const maxRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'delay_max_seconds'`);
@@ -157,6 +160,7 @@ function startFbPostWorker() {
                     await publishPost(pendingPost.id);
                 } catch (e) {
                     console.error('Lỗi worker publish:', e);
+                    await dbAsync.run(`UPDATE posts SET status = 'failed', error_message = ? WHERE id = ?`, [e.message, pendingPost.id]);
                 }
             }, delaySec * 1000);
 

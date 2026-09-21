@@ -2009,3 +2009,287 @@ function showToast(msg, type = 'info') {
         setTimeout(() => toast.remove(), 3500);
     }, 3500);
 }
+
+// ==========================================
+// QUÉT LỊCH SỬ TIN NHẮN ZALO & ĐĂNG DẦN
+// ==========================================
+function openZaloHistoryModal() {
+    const modal = document.getElementById('zalo-history-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+
+    const progressArea = document.getElementById('history-scan-progress-area');
+    if (progressArea) progressArea.classList.add('hidden');
+
+    const btn = document.getElementById('btn-start-history-scan');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> Bắt Đầu Quét & Nạp`;
+    }
+
+    if (window.lucide) lucide.createIcons();
+}
+
+function closeZaloHistoryModal() {
+    const modal = document.getElementById('zalo-history-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function startZaloHistoryScanAction() {
+    const wv = document.getElementById('zalo-wv');
+    if (!wv) {
+        showToast('Không tìm thấy trình duyệt Zalo Web!', 'error');
+        return;
+    }
+
+    const days = parseInt(document.getElementById('history-scan-days')?.value || '7', 10);
+    const scope = document.getElementById('history-scan-scope')?.value || 'monitored';
+    const limit = parseInt(document.getElementById('history-scan-limit')?.value || '50', 10);
+
+    const btn = document.getElementById('btn-start-history-scan');
+    const progressArea = document.getElementById('history-scan-progress-area');
+    const statusText = document.getElementById('history-scan-status-text');
+    const counterText = document.getElementById('history-scan-counter');
+    const progressBar = document.getElementById('history-scan-progress-bar');
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Đang Xử Lý...`;
+        if (window.lucide) lucide.createIcons();
+    }
+
+    if (progressArea) progressArea.classList.remove('hidden');
+    if (statusText) statusText.innerText = `Đang kết nối Zalo Web để quét tin trong ${days} ngày qua...`;
+    if (counterText) counterText.innerText = 'Đang đọc...';
+    if (progressBar) progressBar.style.width = '20%';
+
+    try {
+        const currentUrl = wv.getURL ? wv.getURL() : '';
+        if (!currentUrl || !currentUrl.includes('zalo.me')) {
+            showToast('Vui lòng mở Zalo Web và đăng nhập trước khi quét lịch sử!', 'error');
+            if (statusText) statusText.innerText = '⚠️ Bạn chưa đăng nhập Zalo Web';
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> Thử Lại`;
+                if (window.lucide) lucide.createIcons();
+            }
+            return;
+        }
+
+        if (statusText) statusText.innerText = 'Đang trích xuất tin nhắn từ IndexedDB và lịch sử hội thoại...';
+        if (progressBar) progressBar.style.width = '45%';
+
+        // Chạy script trích xuất tin nhắn trực tiếp từ Webview Zalo
+        const extractedMessages = await wv.executeJavaScript(`
+            (async function(daysToScan) {
+                const minTimestamp = Date.now() - (daysToScan * 24 * 60 * 60 * 1000);
+                const results = [];
+                const seenKeys = new Set();
+
+                function record(groupName, sender, text, images, ts) {
+                    if (!text || typeof text !== 'string') return;
+                    const clean = text.trim();
+                    if (clean.length < 20) return;
+                    const key = (groupName || '') + '::' + clean.substring(0, 60);
+                    if (seenKeys.has(key)) return;
+                    seenKeys.add(key);
+                    results.push({
+                        groupName: (groupName || '').trim(),
+                        sender: (sender || 'Thành viên').trim(),
+                        text: clean,
+                        images: images || [],
+                        timestamp: ts || Date.now()
+                    });
+                }
+
+                // 1. Quét từ IndexedDB của Zalo (Lưu cache offline toàn bộ tin nhắn)
+                try {
+                    if (window.indexedDB && window.indexedDB.databases) {
+                        const dbs = await window.indexedDB.databases();
+                        for (const dbInfo of dbs) {
+                            if (!dbInfo.name) continue;
+                            await new Promise((resolve) => {
+                                const req = window.indexedDB.open(dbInfo.name);
+                                req.onerror = () => resolve();
+                                req.onsuccess = async (e) => {
+                                    try {
+                                        const db = e.target.result;
+                                        const storeNames = Array.from(db.objectStoreNames || []);
+                                        for (const sName of storeNames) {
+                                            const lower = sName.toLowerCase();
+                                            if (lower.includes('msg') || lower.includes('message') || lower.includes('chat')) {
+                                                await new Promise((resStore) => {
+                                                    try {
+                                                        const tx = db.transaction(sName, 'readonly');
+                                                        const store = tx.objectStore(sName);
+                                                        const getReq = store.getAll ? store.getAll() : null;
+                                                        if (getReq) {
+                                                            getReq.onsuccess = () => {
+                                                                const list = getReq.result || [];
+                                                                for (const item of list) {
+                                                                    const ts = item.ts || item.timestamp || item.createTime || item.cliMsgId || item.time || 0;
+                                                                    if (ts && ts > 0 && ts < minTimestamp) continue;
+
+                                                                    let content = '';
+                                                                    if (typeof item.message === 'string') content = item.message;
+                                                                    else if (typeof item.content === 'string') content = item.content;
+                                                                    else if (typeof item.text === 'string') content = item.text;
+                                                                    else if (item.msg && typeof item.msg === 'string') content = item.msg;
+                                                                    else if (item.desc && typeof item.desc === 'string') content = item.desc;
+
+                                                                    const gName = item.threadName || item.groupName || item.displayName || item.title || '';
+                                                                    const sender = item.senderName || item.fromName || item.sender || 'Thành viên';
+
+                                                                    if (content) {
+                                                                        record(gName, sender, content, [], ts);
+                                                                    }
+                                                                }
+                                                                resStore();
+                                                            };
+                                                            getReq.onerror = () => resStore();
+                                                        } else {
+                                                            resStore();
+                                                        }
+                                                    } catch (err) {
+                                                        resStore();
+                                                    }
+                                                });
+                                            }
+                                        }
+                                        db.close();
+                                        resolve();
+                                    } catch (err) {
+                                        resolve();
+                                    }
+                                };
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[ZaloHistoryScanner] Lỗi đọc IDB:', e);
+                }
+
+                // 2. Quét từ DOM chat đang mở và tự động cuộn lên tải tin cũ
+                try {
+                    let activeGroupName = '';
+                    const titleSelectors = ['#header-title', '.header-title', '.chat-title', '[data-id="chat-title"]', '.conv-item.active .conv-item-title__more'];
+                    for (const sel of titleSelectors) {
+                        const el = document.querySelector(sel);
+                        if (el && el.innerText && el.innerText.trim()) {
+                            activeGroupName = el.innerText.trim();
+                            break;
+                        }
+                    }
+
+                    function harvestDom() {
+                        const msgEls = document.querySelectorAll('.chat-message, .msg-view, [id^="msg-"], div[class*="message-view"], div[data-id*="msg"]');
+                        msgEls.forEach((el) => {
+                            const senderEl = el.querySelector('.sender-name, [class*="sender"], [class*="author"]');
+                            const sender = senderEl ? senderEl.innerText.trim() : 'Thành viên';
+                            const textEl = el.querySelector('.content-text, .msg-text, [class*="content-text"], [class*="text-msg"]');
+                            const text = textEl ? textEl.innerText.trim() : '';
+
+                            if (!text || text.length < 20) return;
+
+                            const images = [];
+                            el.querySelectorAll('img').forEach((img) => {
+                                const src = img.getAttribute('src');
+                                if (src && !src.includes('avatar') && !src.includes('icon') && !src.includes('emoji')) {
+                                    images.push(src);
+                                }
+                            });
+
+                            record(activeGroupName || 'Nhóm Zalo Đang Mở', sender, text, images, Date.now());
+                        });
+                    }
+
+                    harvestDom();
+
+                    // Tìm khung cuộn tin nhắn để cuộn lên trên vài nhịp
+                    let scrollable = document.querySelector('.chat-date, .message-view__body, [class*="message-list"], #messageView');
+                    if (!scrollable) {
+                        const divs = document.querySelectorAll('div');
+                        for (let d of divs) {
+                            if (d.scrollHeight > d.clientHeight && d.clientHeight > 250) {
+                                const s = window.getComputedStyle(d);
+                                if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
+                                    scrollable = d;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (scrollable) {
+                        for (let step = 0; step < 4; step++) {
+                            scrollable.scrollTop = 0;
+                            await new Promise(r => setTimeout(r, 450));
+                            harvestDom();
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[ZaloHistoryScanner] Lỗi DOM chat:', e);
+                }
+
+                return results;
+            })(${days});
+        `);
+
+        const messagesCount = Array.isArray(extractedMessages) ? extractedMessages.length : 0;
+        if (statusText) statusText.innerText = `Thu thập được ${messagesCount} tin. Đang lọc & gửi AI biên tập...`;
+        if (counterText) counterText.innerText = `${messagesCount} tin`;
+        if (progressBar) progressBar.style.width = '70%';
+
+        if (messagesCount === 0) {
+            showToast('Không tìm thấy tin nhắn nào thỏa điều kiện trong khoảng thời gian đã chọn!', 'info');
+            if (statusText) statusText.innerText = 'Không tìm thấy tin nhắn mới để xử lý.';
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> Bắt Đầu Quét & Nạp`;
+                if (window.lucide) lucide.createIcons();
+            }
+            return;
+        }
+
+        // Gửi sang Main process để lọc chất lượng, khử trùng lặp, gọi Gemini AI và nạp vào hàng đợi
+        const result = await window.electronApi.processZaloHistory({
+            messages: extractedMessages,
+            options: {
+                limit: limit,
+                activeGroupName: state.activeZaloGroup,
+                ignoreGroupFilter: scope === 'all'
+            }
+        });
+
+        if (progressBar) progressBar.style.width = '100%';
+        if (statusText) statusText.innerText = `Hoàn tất! Đã nạp ${result.queued || 0} bài vào hàng đợi để đăng dần.`;
+        if (counterText) counterText.innerText = `${result.queued || 0} bài mới`;
+
+        showToast(`Quét lịch sử hoàn tất: Đã nạp thành công ${result.queued || 0} bài vào hàng đợi!`, 'success');
+
+        // Làm mới danh sách bài viết & thống kê
+        loadPosts();
+        loadStatus();
+
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> Đã Xong!`;
+            if (window.lucide) lucide.createIcons();
+        }
+
+        setTimeout(() => {
+            closeZaloHistoryModal();
+        }, 1500);
+
+    } catch (err) {
+        console.error('Lỗi quét lịch sử Zalo:', err);
+        showToast('Lỗi trong quá trình quét lịch sử: ' + err.message, 'error');
+        if (statusText) statusText.innerText = 'Lỗi: ' + err.message;
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> Thử Lại`;
+            if (window.lucide) lucide.createIcons();
+        }
+    }
+}
+

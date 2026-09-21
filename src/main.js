@@ -11,6 +11,7 @@ const {
     startFbPostWorker,
     setFbEventBroadcaster
 } = require('./services/fbEngine');
+const { processHistoricalZaloMessages } = require('./services/historyScanner');
 
 dotenv.config();
 
@@ -278,6 +279,16 @@ ipcMain.handle('add-zalo-groups-bulk', async (event, groups) => {
         }
         await dbAsync.log('info', `Đã quét và nạp ${groups.length} nhóm Zalo vào danh sách theo dõi (Thêm mới: ${added}).`);
         return { success: true, count: groups.length, added };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('process-zalo-history', async (event, payload) => {
+    try {
+        const messages = payload?.messages || [];
+        const options = payload?.options || {};
+        return await processHistoricalZaloMessages(messages, options);
     } catch (e) {
         return { success: false, error: e.message };
     }

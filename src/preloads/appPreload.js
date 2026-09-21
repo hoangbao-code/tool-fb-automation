@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('electronApi', {
     clearAllZaloGroups: () => ipcRenderer.invoke('clear-all-zalo-groups'),
     toggleZaloGroup: (id) => ipcRenderer.invoke('toggle-zalo-group', id),
     toggleAllZaloGroups: (isMonitored) => ipcRenderer.invoke('toggle-all-zalo-groups', isMonitored),
+    processZaloHistory: (payload) => ipcRenderer.invoke('process-zalo-history', payload),
 
     // 4. Nhóm Facebook
     getFbGroups: () => ipcRenderer.invoke('get-fb-groups'),
