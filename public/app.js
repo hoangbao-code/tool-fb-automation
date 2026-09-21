@@ -1706,8 +1706,9 @@ async function loadAiSettings() {
         const res = await window.electronApi.getSettings();
         if (res.success) {
             state.settings = res.settings;
-            document.getElementById('ai-key-input').value = res.settings.gemini_api_key || '';
-            document.getElementById('ai-model-select').value = res.settings.gemini_model || 'gemini-1.5-flash';
+            const savedModel = res.settings.gemini_model;
+            const validModels = ['gemini-3.6-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+            document.getElementById('ai-model-select').value = (validModels.includes(savedModel) ? savedModel : 'gemini-3.6-flash');
             document.getElementById('ai-prompt-input').value = res.settings.ai_prompt_template || '';
             const spinCheck = document.getElementById('ai-spin-enabled');
             if (spinCheck) spinCheck.checked = res.settings.ai_spin_enabled === '1';

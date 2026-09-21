@@ -1,6 +1,65 @@
 const { dbAsync } = require('../db');
 
 /**
+ * Gọi Google Gemini API với cơ chế tự động chuyển đổi mô hình dự phòng (Auto-Fallback)
+ * nếu mô hình cũ bị Google khai tử (như gemini-2.0-flash -> gemini-3.6-flash).
+ */
+async function callGeminiApi(apiKey, requestedModel, prompt) {
+    let cleanModel = requestedModel?.trim() || 'gemini-3.6-flash';
+    if (cleanModel === 'gemini-2.0-flash') {
+        cleanModel = 'gemini-3.6-flash';
+    }
+
+    const modelsToTry = [cleanModel];
+    if (!modelsToTry.includes('gemini-3.6-flash')) modelsToTry.push('gemini-3.6-flash');
+    if (!modelsToTry.includes('gemini-1.5-flash')) modelsToTry.push('gemini-1.5-flash');
+
+    let lastError = null;
+    for (const curModel of modelsToTry) {
+        try {
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(curModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        temperature: 0.7,
+                        maxOutputTokens: 2048
+                    }
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (resultText) {
+                    return { text: resultText.trim(), modelUsed: curModel };
+                }
+            }
+
+            const errText = await response.text();
+            lastError = new Error(`Lỗi từ Gemini API (${response.status}): ${errText}`);
+            
+            // Nếu model trả về 404 NOT_FOUND hoặc no longer available -> Tự động thử model tiếp theo
+            if (response.status === 404 || errText.includes('no longer available') || errText.includes('NOT_FOUND')) {
+                console.warn(`[Gemini API] Model ${curModel} không còn khả dụng, tự động chuyển sang ${modelsToTry[modelsToTry.indexOf(curModel) + 1] || 'dự phòng'}...`);
+                continue;
+            } else {
+                throw lastError;
+            }
+        } catch (err) {
+            lastError = err;
+            if (err.message && (err.message.includes('404') || err.message.includes('no longer available') || err.message.includes('NOT_FOUND'))) {
+                continue;
+            }
+            throw err;
+        }
+    }
+    throw lastError;
+}
+
+/**
  * Gọi Google Gemini API viết lại nội dung bài đăng
  */
 async function rewriteWithGemini(content, sender = '', groupName = '', overridePrompt = null) {
@@ -13,7 +72,7 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
         throw new Error('Chưa cấu hình Gemini API Key. Vui lòng vào tab AI Gemini để nhập API Key miễn phí.');
     }
 
-    const model = modelRow?.value?.trim() || 'gemini-1.5-flash';
+    const model = modelRow?.value?.trim() || 'gemini-3.6-flash';
     let template = overridePrompt || promptRow?.value || 'Hãy viết lại bài đăng sau để đăng lên Facebook:\n{CONTENT}';
 
     let finalPrompt = template;
@@ -25,32 +84,8 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
     finalPrompt = finalPrompt.replace(/{SENDER}/g, sender || 'Thành viên');
     finalPrompt = finalPrompt.replace(/{GROUP}/g, groupName || 'Nhóm Zalo');
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: finalPrompt }] }],
-            generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 2048
-            }
-        })
-    });
-
-    if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Lỗi từ Gemini API (${response.status}): ${errText}`);
-    }
-
-    const data = await response.json();
-    let resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!resultText) {
-        throw new Error('Gemini không trả về nội dung hợp lệ.');
-    }
-
-    resultText = resultText.trim();
+    const { text: resultTextRaw, modelUsed } = await callGeminiApi(apiKey, model, finalPrompt);
+    let resultText = resultTextRaw;
 
     // 1. Tự động chèn thông tin liên hệ (chữ ký) nếu có
     const sigRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'custom_signature'`);
@@ -64,7 +99,7 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
         resultText += `\n\n${tagRow.value.trim()}`;
     }
 
-    await dbAsync.log('info', `AI Gemini (${model}) đã viết lại bài cho nhóm [${groupName}] thành công (đã chèn chữ ký & hashtags).`);
+    await dbAsync.log('info', `AI Gemini (${modelUsed}) đã viết lại bài cho nhóm [${groupName}] thành công (đã chèn chữ ký & hashtags).`);
     return resultText.trim();
 }
 
@@ -103,28 +138,14 @@ function spinPostForGroup(baseContent, targetGroupName = '', index = 0) {
 /**
  * Kiểm tra kết nối API Key và Prompt mẫu
  */
-async function testGemini(apiKey, promptTemplate, model = 'gemini-1.5-flash') {
+async function testGemini(apiKey, promptTemplate, model = 'gemini-3.6-flash') {
     if (!apiKey) throw new Error('Vui lòng nhập API Key để kiểm tra.');
     const sampleContent = `Bán gấp căn hộ 2PN 70m2 chung cư Sunrise City, Q7.\nGiá 3.8 tỷ có thương lượng. Full nội thất cao cấp, view Landmark 81 cực đẹp.\nSổ hồng sẵn, công chứng trong ngày. LH: 0912.345.678 (Chính chủ)`;
     let prompt = promptTemplate.replace('{CONTENT}', sampleContent);
     prompt = prompt.replace(/{SENDER}/g, 'Nguyễn Hoàng').replace(/{GROUP}/g, 'Nhóm Căn Hộ Sài Gòn');
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }]
-        })
-    });
-
-    if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Lỗi kết nối Gemini (${response.status}): ${errText}`);
-    }
-
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Không có kết quả trả về.';
+    const { text, modelUsed } = await callGeminiApi(apiKey, model, prompt);
+    return `[Mô hình sử dụng: ${modelUsed}]\n\n${text}`;
 }
 
 module.exports = { rewriteWithGemini, testGemini, spinPostForGroup };
