@@ -292,6 +292,16 @@ ipcMain.handle('delete-zalo-group', async (event, id) => {
     }
 });
 
+ipcMain.handle('clear-all-zalo-groups', async () => {
+    try {
+        await dbAsync.run(`DELETE FROM zalo_groups`);
+        await dbAsync.log('info', 'Đã xóa toàn bộ danh sách nhóm Zalo.');
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
 ipcMain.handle('toggle-zalo-group', async (event, id) => {
     try {
         await dbAsync.run(`UPDATE zalo_groups SET is_monitored = CASE WHEN is_monitored = 1 THEN 0 ELSE 1 END WHERE id = ?`, [id]);

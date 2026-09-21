@@ -553,10 +553,22 @@ async function toggleAllZaloGroupsUI(isMonitored) {
 }
 
 async function deleteZaloGroupRow(id) {
-    if (!confirm('Bạn có chắc muốn xóa nhóm Zalo này?')) return;
-    await window.electronApi.deleteZaloGroup(id);
-    showToast('Đã xóa nhóm Zalo.', 'info');
-    await loadZaloGroups();
+    try {
+        await window.electronApi.deleteZaloGroup(id);
+        await loadZaloGroups();
+    } catch (e) {
+        console.error('Error deleteZaloGroupRow:', e);
+    }
+}
+
+async function clearAllZaloGroupsUI() {
+    try {
+        await window.electronApi.clearAllZaloGroups();
+        showToast('Đã xóa sạch toàn bộ danh sách nhóm Zalo!', 'info');
+        await loadZaloGroups();
+    } catch (e) {
+        showToast('Lỗi khi xóa tất cả: ' + e.message, 'error');
+    }
 }
 
 async function addNewZaloGroupManual() {
@@ -701,35 +713,8 @@ async function triggerZaloKhacScan() {
                     return '';
                 }
 
-                // BƯỚC 1: Kiểm tra xem đã ở tab "Khác" chưa. TUYỆT ĐỐI KHÔNG bấm vào tab "Tin nhắn" vì sẽ bị reset về "Ưu tiên"
-                var isKhacActive = false;
-                var khacCandidate = null;
-                var allNodes = document.querySelectorAll('*');
-                for (var i = 0; i < allNodes.length; i++) {
-                    var node = allNodes[i];
-                    var t = (node.innerText || '').trim();
-                    if (t === 'Khác' || t.indexOf('Khác') === 0) {
-                        if (node.children.length <= 2 && node.clientHeight < 55 && node.clientWidth < 140) {
-                            khacCandidate = node;
-                            var parentEl = node.closest('div, li, [role="tab"]');
-                            var combinedClass = (node.className || '') + ' ' + (parentEl ? parentEl.className : '');
-                            var style = window.getComputedStyle(node);
-                            if (combinedClass.indexOf('active') !== -1 || combinedClass.indexOf('selected') !== -1 || style.color.indexOf('255') !== -1) {
-                                isKhacActive = true;
-                            }
-                        }
-                    }
-                }
-
-                // Nếu chưa ở tab Khác, click vào Khác
-                if (!isKhacActive && khacCandidate) {
-                    var clickTarget = khacCandidate.closest('div, li, [role="tab"]') || khacCandidate;
-                    ['mousedown', 'mouseup', 'click'].forEach(function(evt) {
-                        clickTarget.dispatchEvent(new MouseEvent(evt, { bubbles: true, cancelable: true, view: window }));
-                    });
-                    if (typeof clickTarget.click === 'function') clickTarget.click();
-                    await new Promise(function(r) { setTimeout(r, 600); });
-                }
+                // BƯỚC 1: KHÔNG CLICK BẤT KỲ TAB NÀO để tránh làm đổi tab của người dùng
+                // Quét đúng danh sách các nhóm đang hiển thị trực tiếp trong mục Khác hiện tại
 
                 // BƯỚC 2: Tìm container cuộn danh sách hội thoại
                 var scrollContainer = null;
@@ -1684,10 +1669,12 @@ async function toggleAllFbGroupsUI(isActive) {
 }
 
 async function deleteFbGroupRow(id) {
-    if (!confirm('Bạn có chắc muốn xóa nhóm này khỏi danh sách?')) return;
-    await window.electronApi.deleteFbGroup(id);
-    showToast('Đã xóa nhóm.', 'info');
-    loadFbGroups();
+    try {
+        await window.electronApi.deleteFbGroup(id);
+        loadFbGroups();
+    } catch (e) {
+        console.error('Error deleteFbGroupRow:', e);
+    }
 }
 
 function openFbUrl(url) {
