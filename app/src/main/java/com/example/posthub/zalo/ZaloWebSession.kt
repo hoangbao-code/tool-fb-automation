@@ -80,6 +80,15 @@ class ZaloWebSession(
         cookieManager.setAcceptCookie(true)
         cookieManager.setAcceptThirdPartyCookies(view, true)
 
+        // Tự động nạp Session Token (zpw_sek) cài sẵn vào WebView
+        val sek = secureStore.getZaloCustomSek()
+        if (sek.isNotBlank()) {
+            cookieManager.setCookie("https://chat.zalo.me", "zpw_sek=$sek; Domain=.zalo.me; Path=/; Secure")
+            cookieManager.setCookie("https://chat.zalo.me", "_zlang=vn; Domain=.zalo.me; Path=/; Secure")
+            cookieManager.flush()
+            AppLog.i("ZaloWebSession", "Đã nạp sẵn zpw_sek vào CookieManager trước khi tải trang.")
+        }
+
         view.addJavascriptInterface(jsBridge, "JammyZaloBridge")
 
         view.webChromeClient = object : WebChromeClient() {}
@@ -89,6 +98,21 @@ class ZaloWebSession(
                 super.onPageFinished(v, url)
                 cookieManager.flush()
                 AppLog.i("ZaloWebSession", "Zalo Web tải trang hoàn tất: $url")
+
+                val currentSek = secureStore.getZaloCustomSek()
+                if (currentSek.isNotBlank()) {
+                    val sekSafe = currentSek.replace("'", "\\'")
+                    v?.evaluateJavascript("""
+                        (function() {
+                            try {
+                                if (!localStorage.getItem('zpw_sek')) {
+                                    localStorage.setItem('zpw_sek', '$sekSafe');
+                                }
+                            } catch(e) {}
+                        })();
+                    """.trimIndent(), null)
+                }
+
                 injectZaloMonitor(v)
             }
 
@@ -99,6 +123,26 @@ class ZaloWebSession(
 
         // Tải trang Zalo Web
         view.loadUrl("https://chat.zalo.me")
+    }
+
+    /**
+     * Nạp nhanh mã zpw_sek mới và tải lại phiên Zalo Web
+     */
+    fun applyCustomSek(sek: String) {
+        secureStore.setZaloCustomSek(sek)
+        val cm = CookieManager.getInstance()
+        cm.setCookie("https://chat.zalo.me", "zpw_sek=$sek; Domain=.zalo.me; Path=/; Secure")
+        cm.setCookie("https://chat.zalo.me", "_zlang=vn; Domain=.zalo.me; Path=/; Secure")
+        cm.flush()
+        val sekSafe = sek.replace("'", "\\'")
+        webView?.evaluateJavascript("""
+            (function() {
+                try {
+                    localStorage.setItem('zpw_sek', '$sekSafe');
+                } catch(e) {}
+            })();
+        """.trimIndent(), null)
+        webView?.loadUrl("https://chat.zalo.me")
     }
 
     /**

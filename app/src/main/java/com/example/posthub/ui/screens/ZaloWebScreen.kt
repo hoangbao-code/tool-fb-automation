@@ -91,7 +91,7 @@ fun ZaloWebScreen() {
     var showScanDialog by remember { mutableStateOf(false) }
     var showHelpDialog by remember { mutableStateOf(false) }
     var showCookieDialog by remember { mutableStateOf(false) }
-    var inputCookieText by remember { mutableStateOf("") }
+    var inputCookieText by remember { mutableStateOf(secureStore.getZaloCustomSek()) }
 
     val isCurrentMonitored = activeConversation.isNotBlank() && secureStore.isGroupMonitored(activeConversation)
 
@@ -212,14 +212,30 @@ fun ZaloWebScreen() {
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
-                    OutlinedButton(
-                        onClick = { showCookieDialog = true },
-                        modifier = Modifier.fillMaxWidth().height(36.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0D47A1))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.Computer, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("💻 Ném Cookie/Session từ máy tính vào Tool", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = {
+                                zaloSession.applyCustomSek(secureStore.getZaloCustomSek())
+                                Toast.makeText(context, "🚀 Đang nạp Cookie sẵn có và vào Zalo Web...", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.weight(1.3f).height(36.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                        ) {
+                            Text("🚀 Đăng nhập Cookie sẵn", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        OutlinedButton(
+                            onClick = { showCookieDialog = true },
+                            modifier = Modifier.weight(1f).height(36.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0D47A1))
+                        ) {
+                            Icon(Icons.Default.Computer, contentDescription = null, modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("Đổi Cookie", fontSize = 11.sp)
+                        }
                     }
                 }
 
@@ -469,7 +485,7 @@ fun ZaloWebScreen() {
             confirmButton = {
                 Button(
                     onClick = {
-                        injectCookiesOrToken(context, zaloSession.getOrCreateWebView(context), inputCookieText)
+                        injectCookiesOrToken(context, zaloSession.getOrCreateWebView(context), secureStore, inputCookieText)
                         showCookieDialog = false
                     },
                     enabled = inputCookieText.isNotBlank()
@@ -554,7 +570,7 @@ private fun captureQrAndOpenZalo(context: Context, webView: WebView) {
 /**
  * Nạp Cookie hoặc Session Token (zpw_sek) từ máy tính vào WebView Zalo Web
  */
-private fun injectCookiesOrToken(context: Context, webView: WebView, rawInput: String) {
+private fun injectCookiesOrToken(context: Context, webView: WebView, secureStore: com.example.posthub.data.local.SecureStore, rawInput: String) {
     try {
         val trimmed = rawInput.trim().trim('"', '\'')
         if (trimmed.isEmpty()) {
@@ -607,8 +623,9 @@ private fun injectCookiesOrToken(context: Context, webView: WebView, rawInput: S
 
         cookieManager.flush()
 
-        // Nạp thêm vào localStorage của chat.zalo.me để đồng bộ client-side
+        // Nạp thêm vào localStorage của chat.zalo.me để đồng bộ client-side và lưu vào SecureStore
         if (!extractedSek.isNullOrEmpty()) {
+            secureStore.setZaloCustomSek(extractedSek)
             val sekSafe = extractedSek.replace("'", "\\'")
             webView.evaluateJavascript("""
                 (function() {

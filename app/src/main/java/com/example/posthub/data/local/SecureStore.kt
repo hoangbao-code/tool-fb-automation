@@ -227,7 +227,13 @@ class SecureStore(context: Context) {
     fun getAutoGroupScanIntervalMin(): Int = prefs.getInt(KEY_AUTO_GROUP_SCAN_INTERVAL_MIN, 30)
     fun setAutoGroupScanIntervalMin(minutes: Int) = prefs.edit().putInt(KEY_AUTO_GROUP_SCAN_INTERVAL_MIN, minutes.coerceIn(10, 240)).apply()
 
+    // Zalo Session Token (zpw_sek) cài sẵn
+    fun getZaloCustomSek(): String = prefs.getString(KEY_ZALO_SEK, DEFAULT_ZALO_SEK) ?: DEFAULT_ZALO_SEK
+    fun setZaloCustomSek(sek: String) = prefs.edit().putString(KEY_ZALO_SEK, sek).apply()
+
     companion object {
+        const val KEY_ZALO_SEK = "zalo_custom_sek"
+        const val DEFAULT_ZALO_SEK = "8PCt.351475323.a0.vA8Pr03oqxw3XrRJsP6bnuEpmApQguUDcg7TZPFGnfUUsDA5igdjXCxOwwQvh9ZbXRlIab-RXRtda6COIFkbnm"
         private const val KEY_FB_COOKIES = "fb_cookies"
         private const val KEY_FB_ACCOUNT_NAME = "fb_account_name"
         private const val KEY_ZALO_PACKAGE = "zalo_package"
