@@ -23,5 +23,8 @@
     "ai"
   ],
   "author": "PostHub Team",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^44.4.3"
+  }
 }

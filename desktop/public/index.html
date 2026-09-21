@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PostHub Desktop - Tự Động Hóa Zalo sang Facebook</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-900 text-slate-100 font-['Inter'] antialiased h-screen flex flex-row overflow-hidden select-none">
+
+    <!-- SIDEBAR NAVIGATION (7 TABS CHÍNH) -->
+    <aside class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col justify-between shrink-0 shadow-2xl z-30">
+        <div>
+            <!-- Brand / Logo -->
+            <div class="p-5 border-b border-slate-800/80 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                    <i data-lucide="zap" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h1 class="font-extrabold text-base leading-none text-white tracking-wide">POSTHUB</h1>
+                    <span class="text-[10px] text-blue-400 font-semibold tracking-wider uppercase">Desktop v2.0</span>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <nav class="p-3 space-y-1.5" id="nav-tabs">
+                <!-- Tab 1: Feed & Review -->
+                <button onclick="switchTab('feed')" id="tab-btn-feed" class="nav-btn active">
+                    <i data-lucide="layout-grid" class="w-4 h-4"></i>
+                    <span>Bảng Tin & Duyệt</span>
+                    <span id="badge-pending-count" class="ml-auto bg-amber-500/20 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full hidden">0</span>
+                </button>
+
+                <!-- Tab 2: Zalo Web -->
+                <button onclick="switchTab('zalo')" id="tab-btn-zalo" class="nav-btn">
+                    <i data-lucide="message-square-share" class="w-4 h-4 text-blue-400"></i>
+                    <span>Zalo Web (Nhúng)</span>
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 ml-auto animate-pulse"></span>
+                </button>
+
+                <!-- Tab 3: Facebook -->
+                <button onclick="switchTab('fb')" id="tab-btn-fb" class="nav-btn">
+                    <i data-lucide="facebook" class="w-4 h-4 text-indigo-400"></i>
+                    <span>Facebook (Nhúng)</span>
+                </button>
+
+                <!-- Tab 4: Groups -->
+                <button onclick="switchTab('groups')" id="tab-btn-groups" class="nav-btn">
+                    <i data-lucide="users" class="w-4 h-4"></i>
+                    <span>Quản Lý Nhóm FB</span>
+                </button>
+
+                <!-- Tab 5: AI Gemini -->
+                <button onclick="switchTab('ai')" id="tab-btn-ai" class="nav-btn">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-amber-400"></i>
+                    <span>AI Gemini</span>
+                </button>
+
+                <!-- Tab 6: Settings -->
+                <button onclick="switchTab('settings')" id="tab-btn-settings" class="nav-btn">
+                    <i data-lucide="settings" class="w-4 h-4"></i>
+                    <span>Cài Đặt</span>
+                </button>
+
+                <!-- Tab 7: Logs -->
+                <button onclick="switchTab('logs')" id="tab-btn-logs" class="nav-btn">
+                    <i data-lucide="terminal" class="w-4 h-4"></i>
+                    <span>Nhật Ký</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Quick Status & Emergency Controls -->
+        <div class="p-4 border-t border-slate-800/80 bg-slate-950/60 space-y-3">
+            <div class="bg-slate-900/90 rounded-xl p-3 border border-slate-800 space-y-2">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-400 font-medium">Tự động đăng:</span>
+                    <button id="quick-auto-btn" onclick="toggleAutoPost()" class="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400 hover:text-white transition-all">
+                        Đang tắt
+                    </button>
+                </div>
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-400 font-medium">Dừng khẩn cấp:</span>
+                    <button id="quick-stop-btn" onclick="toggleEmergencyStop()" class="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400 hover:text-rose-400 transition-all">
+                        Bình thường
+                    </button>
+                </div>
+            </div>
+            <div class="text-[11px] text-slate-500 text-center flex items-center justify-center gap-1.5 font-medium">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Hệ thống đang hoạt động
+            </div>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-900 overflow-hidden relative">
+
+        <!-- Header -->
+        <header class="h-14 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/80 px-6 flex items-center justify-between shrink-0 z-20">
+            <div class="flex items-center gap-3">
+                <h2 id="page-title" class="text-sm font-bold text-white uppercase tracking-wider">Bảng Tin & Hàng Đợi Duyệt</h2>
+                <span id="page-subtitle" class="text-xs text-slate-400 hidden sm:inline">| Xem xét và xuất bản bài viết tự động</span>
+            </div>
+
+            <!-- Header Quick Stats -->
+            <div class="flex items-center gap-4 text-xs">
+                <div class="flex items-center gap-1.5 bg-slate-900 px-3 py-1 rounded-lg border border-slate-800">
+                    <span class="text-slate-400">Tin Zalo:</span>
+                    <b id="head-stat-zalo" class="text-blue-400 font-bold">0</b>
+                </div>
+                <div class="flex items-center gap-1.5 bg-slate-900 px-3 py-1 rounded-lg border border-slate-800">
+                    <span class="text-slate-400">Chờ duyệt:</span>
+                    <b id="head-stat-pending" class="text-amber-400 font-bold">0</b>
+                </div>
+                <div class="flex items-center gap-1.5 bg-slate-900 px-3 py-1 rounded-lg border border-slate-800">
+                    <span class="text-slate-400">Đã đăng FB:</span>
+                    <b id="head-stat-posted" class="text-emerald-400 font-bold">0</b>
+                </div>
+                <button onclick="refreshData()" class="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all" title="Làm mới">
+                    <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- CONTAINER CÁC MÀN HÌNH CHỨC NĂNG -->
+        <div class="flex-1 overflow-hidden relative">
+
+            <!-- TAB 1: BẢNG TIN & HÀNG ĐỢI (FEED & REVIEW) -->
+            <section id="tab-feed" class="tab-pane active h-full overflow-y-auto p-6 space-y-5">
+                <!-- Bộ lọc & Thao tác -->
+                <div class="flex items-center justify-between bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="text-slate-400 font-medium">Bộ lọc bài viết:</span>
+                        <div class="flex gap-1.5 bg-slate-900 p-1 rounded-lg border border-slate-800" id="filter-buttons">
+                            <button onclick="setFilter('all')" class="filter-btn active" id="filter-btn-all">Tất cả</button>
+                            <button onclick="setFilter('pending')" class="filter-btn" id="filter-btn-pending">Chờ bạn duyệt</button>
+                            <button onclick="setFilter('approved')" class="filter-btn" id="filter-btn-approved">Đã duyệt (Chờ đăng)</button>
+                            <button onclick="setFilter('posted')" class="filter-btn" id="filter-btn-posted">Đã đăng thành công</button>
+                        </div>
+                    </div>
+                    <button onclick="refreshPosts()" class="text-xs text-blue-400 hover:underline flex items-center gap-1 font-semibold">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Cập nhật hàng đợi
+                    </button>
+                </div>
+
+                <!-- Danh sách bài đăng -->
+                <div id="feed-posts-container" class="space-y-4">
+                    <!-- Dynamic Posts Rendered Here -->
+                </div>
+            </section>
+
+            <!-- TAB 2: ZALO WEB (NHÚNG TRỰC TIẾP TRONG APP) -->
+            <section id="tab-zalo" class="tab-pane h-full flex flex-col">
+                <!-- Thanh công cụ điều khiển Zalo Web -->
+                <div class="h-12 bg-slate-950 border-b border-slate-800 px-4 flex items-center justify-between shrink-0">
+                    <div class="flex items-center gap-3 text-xs">
+                        <span class="text-slate-400">Đang mở hội thoại:</span>
+                        <span id="zalo-active-group-name" class="font-bold text-blue-400 bg-blue-950/60 px-2.5 py-1 rounded-md border border-blue-800/50">
+                            Chưa phát hiện
+                        </span>
+                        <button onclick="monitorCurrentZaloGroup()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 shadow-sm transition-all">
+                            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Theo dõi nhóm này
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="reloadZaloWebview()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all">
+                            <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Tải lại Zalo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Webview nhúng Zalo Web -->
+                <div class="flex-1 w-full bg-slate-900 relative">
+                    <webview id="zalo-wv" 
+                             src="https://chat.zalo.me" 
+                             partition="persist:zalo"
+                             class="w-full h-full border-0"
+                             allowpopups>
+                    </webview>
+                </div>
+            </section>
+
+            <!-- TAB 3: FACEBOOK (NHÚNG TRỰC TIẾP TRONG APP) -->
+            <section id="tab-fb" class="tab-pane h-full flex flex-col">
+                <!-- Thanh công cụ điều khiển Facebook -->
+                <div class="h-12 bg-slate-950 border-b border-slate-800 px-4 flex items-center justify-between shrink-0">
+                    <div class="flex items-center gap-3 text-xs">
+                        <button onclick="triggerFbGroupScan()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-md font-semibold flex items-center gap-1.5 shadow-sm transition-all">
+                            <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét Nhóm Đã Tham Gia
+                        </button>
+                        <span class="text-slate-400 text-[11px]">(Tự động nhận diện danh sách nhóm bạn đã tham gia để đẩy sang tab Quản Lý Nhóm)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="navFbHome()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all">
+                            <i data-lucide="home" class="w-3.5 h-3.5"></i> Trang Chủ FB
+                        </button>
+                        <button onclick="reloadFbWebview()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all">
+                            <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Tải lại
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Webview nhúng Facebook -->
+                <div class="flex-1 w-full bg-slate-900 relative">
+                    <webview id="fb-wv" 
+                             src="https://www.facebook.com" 
+                             partition="persist:fb"
+                             class="w-full h-full border-0"
+                             allowpopups>
+                    </webview>
+                </div>
+            </section>
+
+            <!-- TAB 4: QUẢN LÝ NHÓM FACEBOOK (GROUPS) -->
+            <section id="tab-groups" class="tab-pane h-full overflow-y-auto p-6 space-y-5">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
+                    <div>
+                        <h3 class="font-bold text-white text-base">Danh Sách Nhóm Facebook Mục Tiêu</h3>
+                        <p class="text-xs text-slate-400">Tích chọn các nhóm bạn muốn hệ thống tự động đăng bài viết sau khi AI biên tập.</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="text" id="fb-group-search" oninput="filterFbGroupsTable()" placeholder="Tìm kiếm tên nhóm..." class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-56">
+                        <button onclick="openAddFbGroupModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Thêm Thủ Công
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Bảng danh sách nhóm Facebook -->
+                <div class="bg-slate-950/60 rounded-xl border border-slate-800 overflow-hidden shadow-sm">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-900/90 text-slate-400 font-semibold uppercase tracking-wider border-b border-slate-800">
+                            <tr>
+                                <th class="p-3.5 w-12 text-center">Bật</th>
+                                <th class="p-3.5">Tên Nhóm</th>
+                                <th class="p-3.5">Đường Dẫn (URL)</th>
+                                <th class="p-3.5 text-right w-24">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fb-groups-table-body" class="divide-y divide-slate-800/60">
+                            <!-- Dynamic rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- TAB 5: AI GEMINI -->
+            <section id="tab-ai" class="tab-pane h-full overflow-y-auto p-6 space-y-6">
+                <div class="max-w-4xl bg-slate-950/60 rounded-xl border border-slate-800 p-6 space-y-5 shadow-sm">
+                    <div>
+                        <h3 class="font-bold text-white text-base">Cấu Hình Google Gemini AI</h3>
+                        <p class="text-xs text-slate-400">Cung cấp API Key từ Google AI Studio (miễn phí) để AI tự động chuyển hóa tin Zalo thành bài đăng Facebook hấp dẫn.</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold text-slate-300">Gemini API Key</label>
+                            <input type="password" id="ai-key-input" placeholder="AIzaSy..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3.5 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono">
+                            <span class="text-[11px] text-slate-500">Nhận key miễn phí tại: <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-400 hover:underline">Google AI Studio</a></span>
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold text-slate-300">Mô Hình AI (Model)</label>
+                            <select id="ai-model-select" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3.5 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="gemini-1.5-flash">gemini-1.5-flash (Nhanh & Tối ưu - Khuyên dùng)</option>
+                                <option value="gemini-1.5-pro">gemini-1.5-pro (Phân tích sâu & Viết sáng tạo)</option>
+                                <option value="gemini-2.0-flash">gemini-2.0-flash (Thế hệ mới nhất)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-semibold text-slate-300">Mẫu Prompt Biên Tập Bài Đăng</label>
+                        <textarea id="ai-prompt-input" rows="6" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono leading-relaxed"></textarea>
+                        <div class="flex items-center gap-2 text-[11px] text-slate-400">
+                            <span>Các biến chèn tự động:</span>
+                            <code class="bg-slate-800 px-1.5 py-0.5 rounded text-blue-400 font-mono">{CONTENT}</code>
+                            <code class="bg-slate-800 px-1.5 py-0.5 rounded text-indigo-400 font-mono">{SENDER}</code>
+                            <code class="bg-slate-800 px-1.5 py-0.5 rounded text-emerald-400 font-mono">{GROUP}</code>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-4 border-t border-slate-800">
+                        <button onclick="testAiPrompt()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all">
+                            <i data-lucide="play" class="w-3.5 h-3.5 text-blue-400"></i> Thử Nghiệm Ngay
+                        </button>
+                        <button onclick="saveAiConfig()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-xs font-semibold shadow-sm transition-all">
+                            Lưu Cấu Hình AI
+                        </button>
+                    </div>
+
+                    <!-- Hộp kết quả thử nghiệm -->
+                    <div id="ai-test-preview-box" class="hidden p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                        <div class="flex items-center justify-between text-xs font-semibold">
+                            <span class="text-slate-300">Kết Quả AI Viết Thử:</span>
+                            <span id="ai-test-status-text" class="text-emerald-400">✓ Thành công</span>
+                        </div>
+                        <div id="ai-test-output-text" class="text-xs text-slate-200 whitespace-pre-wrap bg-slate-950 p-3.5 rounded-lg border border-slate-800 leading-relaxed font-sans"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 6: CÀI ĐẶT (SETTINGS) -->
+            <section id="tab-settings" class="tab-pane h-full overflow-y-auto p-6 space-y-6">
+                <div class="max-w-4xl bg-slate-950/60 rounded-xl border border-slate-800 p-6 space-y-6 shadow-sm">
+                    <h3 class="font-bold text-white text-base">Cấu Hình Hoạt Động & Chống Spam</h3>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="space-y-2 p-4 bg-slate-900 rounded-xl border border-slate-800">
+                            <label class="block text-xs font-semibold text-slate-200">Chế độ Tự Động Đăng (Auto-Pilot)</label>
+                            <p class="text-[11px] text-slate-400">Khi bật, cứ có tin Zalo mới là AI viết lại và tự động xếp lịch đăng lên các nhóm Facebook đã chọn.</p>
+                            <select id="cfg-auto-post" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2">
+                                <option value="0">Tắt - Giữ ở Hàng đợi để tôi xem và bấm Duyệt tay</option>
+                                <option value="1">Bật - Tự động duyệt và tự động đăng lên Facebook</option>
+                            </select>
+                        </div>
+
+                        <div class="space-y-2 p-4 bg-slate-900 rounded-xl border border-slate-800">
+                            <label class="block text-xs font-semibold text-slate-200">Dừng Khẩn Cấp (Emergency Stop)</label>
+                            <p class="text-[11px] text-slate-400">Tạm dừng ngay lập tức mọi hoạt động đăng bài để bảo vệ tài khoản khi cần thiết.</p>
+                            <select id="cfg-emergency-stop" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2">
+                                <option value="0">Bình thường (Hệ thống chạy theo lịch)</option>
+                                <option value="1">DỪNG KHẨN CẤP (Ngắt toàn bộ hàng đợi)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold text-slate-300">Giãn cách tối thiểu giữa các bài (Giây)</label>
+                            <input type="number" id="cfg-delay-min" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500" value="180">
+                            <span class="text-[11px] text-slate-500">Khuyên dùng: 180 giây (3 phút)</span>
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold text-slate-300">Giãn cách tối đa giữa các bài (Giây)</label>
+                            <input type="number" id="cfg-delay-max" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500" value="480">
+                            <span class="text-[11px] text-slate-500">Khuyên dùng: 480 giây (8 phút) để chống spam Facebook</span>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-4 border-t border-slate-800">
+                        <button onclick="saveAllSettings()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-xs font-semibold shadow-sm transition-all">
+                            Lưu Cài Đặt Hệ Thống
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 7: NHẬT KÝ (LOGS) -->
+            <section id="tab-logs" class="tab-pane h-full flex flex-col p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="font-bold text-white text-base">Nhật Ký Hoạt Động Thời Gian Thực</h3>
+                        <p class="text-xs text-slate-400">Theo dõi toàn bộ diễn biến: bắt tin Zalo, gọi AI biên tập, đăng bài Facebook.</p>
+                    </div>
+                    <button onclick="refreshLogs()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                        <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Làm mới log
+                    </button>
+                </div>
+
+                <div id="logs-container" class="flex-1 bg-slate-950 rounded-xl border border-slate-800 p-4 font-mono text-xs overflow-y-auto space-y-1.5 shadow-inner">
+                    <!-- Logs stream -->
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- MODAL CHỈNH SỬA & XEM TRƯỚC BÀI VIẾT -->
+    <div id="post-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-white text-base flex items-center gap-2">
+                    <i data-lucide="edit-3" class="w-4 h-4 text-blue-400"></i>
+                    Biên Tập Bài Đăng
+                </h3>
+                <button onclick="closePostModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <input type="hidden" id="modal-post-id">
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 mb-1">Nội dung gốc từ Zalo:</label>
+                <div id="modal-orig-text" class="p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 max-h-32 overflow-y-auto whitespace-pre-wrap"></div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 mb-1">Nội dung AI đã biên tập (Chỉnh sửa tự do):</label>
+                <textarea id="modal-rewritten-input" rows="8" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans leading-relaxed"></textarea>
+            </div>
+
+            <div class="flex items-center justify-between pt-3 border-t border-slate-800">
+                <button onclick="deletePostFromModal()" class="text-rose-400 hover:text-rose-300 text-xs font-semibold flex items-center gap-1">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Xóa bài
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="saveModalEdit()" class="px-4 py-2 border border-slate-700 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-800">
+                        Lưu bản nháp
+                    </button>
+                    <button onclick="publishDirectFromModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                        <i data-lucide="send" class="w-3.5 h-3.5"></i> Duyệt & Đăng Luôn
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="app.js"></script>
+</body>
+</html>
