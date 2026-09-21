@@ -5,17 +5,22 @@ const { dbAsync } = require('../db');
  * nếu mô hình cũ bị Google khai tử (như gemini-2.0-flash -> gemini-3.6-flash).
  */
 async function callGeminiApi(apiKey, requestedModel, prompt) {
-    let cleanModel = requestedModel?.trim() || 'gemini-3.6-flash';
+    let cleanModel = requestedModel?.trim() || 'gemini-1.5-flash';
     if (cleanModel === 'gemini-2.0-flash') {
-        cleanModel = 'gemini-3.6-flash';
+        cleanModel = 'gemini-1.5-flash';
     }
 
+    // Danh sách các mô hình theo thứ tự ưu tiên (ưu tiên mô hình ổn định, dung lượng lớn nhất)
     const modelsToTry = [cleanModel];
-    if (!modelsToTry.includes('gemini-3.6-flash')) modelsToTry.push('gemini-3.6-flash');
-    if (!modelsToTry.includes('gemini-1.5-flash')) modelsToTry.push('gemini-1.5-flash');
+    const candidateList = ['gemini-1.5-flash', 'gemini-3.6-flash', 'gemini-1.5-pro', 'gemini-2.5-flash'];
+    for (const cand of candidateList) {
+        if (!modelsToTry.includes(cand)) modelsToTry.push(cand);
+    }
 
     let lastError = null;
-    for (const curModel of modelsToTry) {
+    for (let i = 0; i < modelsToTry.length; i++) {
+        const curModel = modelsToTry[i];
+        const isLast = (i === modelsToTry.length - 1);
         try {
             const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(curModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
             const response = await fetch(endpoint, {
@@ -41,16 +46,37 @@ async function callGeminiApi(apiKey, requestedModel, prompt) {
             const errText = await response.text();
             lastError = new Error(`Lỗi từ Gemini API (${response.status}): ${errText}`);
             
-            // Nếu model trả về 404 NOT_FOUND hoặc no longer available -> Tự động thử model tiếp theo
-            if (response.status === 404 || errText.includes('no longer available') || errText.includes('NOT_FOUND')) {
-                console.warn(`[Gemini API] Model ${curModel} không còn khả dụng, tự động chuyển sang ${modelsToTry[modelsToTry.indexOf(curModel) + 1] || 'dự phòng'}...`);
+            // Nếu model trả về 503 (quá tải/high demand), 429 (rate limit), 404 (khai tử), hoặc lỗi server (5xx)
+            // -> Tự động chuyển sang model dự phòng kế tiếp ngay lập tức
+            const shouldFallback = response.status === 503 
+                || response.status === 429 
+                || response.status === 404 
+                || response.status >= 500
+                || errText.includes('high demand') 
+                || errText.includes('UNAVAILABLE') 
+                || errText.includes('no longer available') 
+                || errText.includes('NOT_FOUND');
+
+            if (shouldFallback && !isLast) {
+                const nextModel = modelsToTry[i + 1];
+                console.warn(`[Gemini API] Model ${curModel} gặp sự cố (${response.status} - Quá tải/Bận), đang tự động chuyển sang ${nextModel}...`);
+                await new Promise(r => setTimeout(r, 500));
                 continue;
             } else {
                 throw lastError;
             }
         } catch (err) {
             lastError = err;
-            if (err.message && (err.message.includes('404') || err.message.includes('no longer available') || err.message.includes('NOT_FOUND'))) {
+            const msg = err.message || '';
+            const isRecoverable = msg.includes('503') 
+                || msg.includes('429') 
+                || msg.includes('404') 
+                || msg.includes('high demand') 
+                || msg.includes('UNAVAILABLE') 
+                || msg.includes('no longer available');
+
+            if (isRecoverable && !isLast) {
+                await new Promise(r => setTimeout(r, 500));
                 continue;
             }
             throw err;
