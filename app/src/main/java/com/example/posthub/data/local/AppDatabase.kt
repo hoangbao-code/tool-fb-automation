@@ -8,12 +8,14 @@ import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.posthub.data.local.dao.FbGroupDao
 import com.example.posthub.data.local.dao.FieldDefDao
+import com.example.posthub.data.local.dao.GroupDao
 import com.example.posthub.data.local.dao.PostDao
 import com.example.posthub.data.local.dao.PostLogDao
 import com.example.posthub.data.local.dao.TemplateDao
 import com.example.posthub.data.local.dao.WorkspaceDao
 import com.example.posthub.data.local.entity.FbGroupEntity
 import com.example.posthub.data.local.entity.FieldDefEntity
+import com.example.posthub.data.local.entity.GroupEntity
 import com.example.posthub.data.local.entity.PostEntity
 import com.example.posthub.data.local.entity.PostLogEntity
 import com.example.posthub.data.local.entity.TemplateEntity
@@ -32,7 +34,7 @@ import kotlinx.coroutines.launch
         FieldDefEntity::class,
         FbGroupEntity::class,
         PostLogEntity::class,
-        com.example.posthub.data.local.entity.GroupEntity::class
+        GroupEntity::class
     ],
     version = 2,
     exportSchema = false
@@ -46,7 +48,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun fieldDefDao(): FieldDefDao
     abstract fun fbGroupDao(): FbGroupDao
     abstract fun postLogDao(): PostLogDao
-    abstract fun groupDao(): com.example.posthub.data.local.dao.GroupDao
+    abstract fun groupDao(): GroupDao
 
     companion object {
         @Volatile

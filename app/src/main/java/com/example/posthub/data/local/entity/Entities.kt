@@ -88,3 +88,26 @@ data class PostLogEntity(
     val mode: String, // "ASSISTED", "AUTO"
     val errorMessage: String? = null
 )
+
+@Entity(
+    tableName = "unified_groups",
+    indices = [androidx.room.Index(value = ["platform", "externalId"], unique = true)]
+)
+data class GroupEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val platform: String,           // "fb" | "zalo"
+    val externalId: String,         // Group ID on FB or Zalo
+    val name: String,
+    val memberCount: String? = null,
+    val category: String? = null,
+    val area: String? = null,
+    val rules: String? = null,
+    val canPost: Boolean = true,
+    val needApproval: Boolean = false,
+    val enabled: Boolean = true,
+    val priority: Int = 0,          // 0: Normal, 1: High, 2: Very high
+    val lastSynced: Long = System.currentTimeMillis(),
+    val lastPosted: Long? = null,
+    val isLeft: Boolean = false     // Đánh dấu nhóm người dùng đã rời, không xóa
+)

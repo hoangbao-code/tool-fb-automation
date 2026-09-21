@@ -5,9 +5,11 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.example.posthub.data.local.entity.FbGroupEntity
 import com.example.posthub.data.local.entity.FieldDefEntity
+import com.example.posthub.data.local.entity.GroupEntity
 import com.example.posthub.data.local.entity.PostEntity
 import com.example.posthub.data.local.entity.PostLogEntity
 import com.example.posthub.data.local.entity.TemplateEntity
@@ -145,4 +147,85 @@ interface PostLogDao {
 
     @Query("DELETE FROM post_logs WHERE timestamp < :beforeTimestamp")
     suspend fun deleteOldLogs(beforeTimestamp: Long): Int
+}
+
+@Dao
+interface GroupDao {
+    @Query("""
+        SELECT * FROM unified_groups 
+        WHERE platform = :platform 
+          AND (:searchQuery IS NULL OR name LIKE '%' || :searchQuery || '%')
+          AND (:category IS NULL OR category = :category)
+          AND (:area IS NULL OR area = :area)
+        ORDER BY priority DESC, name ASC
+    """)
+    fun observeGroups(
+        platform: String,
+        searchQuery: String?,
+        category: String?,
+        area: String?
+    ): Flow<List<GroupEntity>>
+
+    @Query("SELECT * FROM unified_groups WHERE platform = :platform")
+    fun getAllGroupsByPlatformFlow(platform: String): Flow<List<GroupEntity>>
+
+    @Query("SELECT * FROM unified_groups WHERE platform = :platform AND isLeft = 0")
+    suspend fun getActiveGroupsByPlatform(platform: String): List<GroupEntity>
+
+    @Query("SELECT DISTINCT category FROM unified_groups WHERE platform = :platform AND category IS NOT NULL AND category != ''")
+    fun getCategoriesFlow(platform: String): Flow<List<String>>
+
+    @Query("SELECT DISTINCT area FROM unified_groups WHERE platform = :platform AND area IS NOT NULL AND area != ''")
+    fun getAreasFlow(platform: String): Flow<List<String>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertGroup(group: GroupEntity): Long
+
+    @Transaction
+    suspend fun syncGroupsUpsert(platform: String, incomingList: List<GroupEntity>) {
+        val existingGroups = getActiveGroupsByPlatform(platform).associateBy { it.externalId }
+        val incomingIds = incomingList.map { it.externalId }.toSet()
+
+        // 1. Upsert các nhóm mới hoặc cập nhật thông tin
+        for (item in incomingList) {
+            val existing = existingGroups[item.externalId]
+            if (existing != null) {
+                upsertGroup(
+                    item.copy(
+                        id = existing.id,
+                        category = existing.category ?: item.category,
+                        area = existing.area ?: item.area,
+                        enabled = existing.enabled,
+                        priority = existing.priority,
+                        lastPosted = existing.lastPosted,
+                        rules = existing.rules ?: item.rules,
+                        canPost = if (item.canPost) item.canPost else existing.canPost,
+                        needApproval = if (item.needApproval) item.needApproval else existing.needApproval,
+                        isLeft = false
+                    )
+                )
+            } else {
+                upsertGroup(item.copy(isLeft = false))
+            }
+        }
+
+        // 2. Nhóm không còn xuất hiện trong lần quét này -> đánh dấu "đã rời", không xóa
+        for ((extId, group) in existingGroups) {
+            if (extId !in incomingIds) {
+                upsertGroup(group.copy(isLeft = true, lastSynced = System.currentTimeMillis()))
+            }
+        }
+    }
+
+    @Query("UPDATE unified_groups SET enabled = :enabled WHERE id = :id")
+    suspend fun updateEnabled(id: Long, enabled: Boolean)
+
+    @Query("UPDATE unified_groups SET enabled = :enabled WHERE platform = :platform")
+    suspend fun updateAllEnabled(platform: String, enabled: Boolean)
+
+    @Query("UPDATE unified_groups SET category = :category, area = :area, priority = :priority WHERE id = :id")
+    suspend fun updateMetadata(id: Long, category: String?, area: String?, priority: Int)
+
+    @Query("DELETE FROM unified_groups WHERE id = :id")
+    suspend fun deleteGroupById(id: Long)
 }
