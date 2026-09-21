@@ -162,7 +162,7 @@
             </section>
 
             <!-- TAB 2: ZALO WEB (NHÚNG TRỰC TIẾP TRONG APP) -->
-            <section id="tab-zalo" class="tab-pane h-full flex-col">
+            <section id="tab-zalo" class="tab-pane webview-pane h-full flex-col">
                 <!-- Thanh công cụ điều khiển Zalo Web -->
                 <div class="h-12 bg-slate-950 border-b border-slate-800 px-4 flex items-center justify-between shrink-0">
                     <div class="flex items-center gap-3 text-xs">
@@ -199,7 +199,7 @@
             </section>
 
             <!-- TAB 3: FACEBOOK (NHÚNG TRỰC TIẾP TRONG APP) -->
-            <section id="tab-fb" class="tab-pane h-full flex-col">
+            <section id="tab-fb" class="tab-pane webview-pane h-full flex-col">
                 <!-- Thanh công cụ điều khiển Facebook -->
                 <div class="h-12 bg-slate-950 border-b border-slate-800 px-4 flex items-center justify-between shrink-0">
                     <div class="flex items-center gap-3 text-xs">
@@ -576,6 +576,43 @@
             <div class="flex justify-end pt-2">
                 <button onclick="closeZaloGroupsModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold">
                     Đóng
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL TIẾN TRÌNH QUÉT NHÓM TRỰC QUAN -->
+    <div id="scan-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-white text-base flex items-center gap-2">
+                    <i data-lucide="scan" id="scan-modal-icon" class="w-5 h-5 text-indigo-400"></i>
+                    <span id="scan-modal-title">Đang Quét Danh Sách Nhóm...</span>
+                </h3>
+                <span id="scan-modal-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-800">
+                    Facebook
+                </span>
+            </div>
+
+            <div class="space-y-3">
+                <div class="flex items-center justify-between text-xs text-slate-300">
+                    <span id="scan-modal-status">Đang khởi tạo trình quét...</span>
+                    <span class="font-mono text-emerald-400 font-bold" id="scan-modal-counter">0 nhóm</span>
+                </div>
+                <!-- Thanh tiến trình animated -->
+                <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                    <div id="scan-modal-progress-bar" class="bg-gradient-to-r from-blue-500 to-indigo-500 h-2.5 rounded-full w-1/4 transition-all duration-300"></div>
+                </div>
+                <!-- Khung log trực tiếp tiến trình quét -->
+                <div id="scan-modal-log" class="bg-slate-950 border border-slate-800/80 rounded-lg p-3 font-mono text-[11px] text-slate-400 max-h-36 overflow-y-auto space-y-1">
+                    <div>[Hệ thống] Sẵn sàng quét nhóm...</div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+                <span class="text-[11px] text-slate-500">Hệ thống đang tự động cuộn trang và thu thập</span>
+                <button onclick="stopScanning()" class="px-4 py-1.5 bg-rose-600/90 hover:bg-rose-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all">
+                    <i data-lucide="square" class="w-3.5 h-3.5"></i> Dừng & Lưu kết quả
                 </button>
             </div>
         </div>

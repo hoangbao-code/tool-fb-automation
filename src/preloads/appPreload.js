@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld('electronApi', {
 
     // 7. Nhật ký
     getLogs: () => ipcRenderer.invoke('get-logs'),
+    addLog: (level, message) => ipcRenderer.invoke('add-log', { level, message }),
 
     // 8. Sao lưu & Phục hồi dữ liệu
     exportBackup: () => ipcRenderer.invoke('export-backup'),

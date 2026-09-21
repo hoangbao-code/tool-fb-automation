@@ -420,6 +420,15 @@ ipcMain.handle('get-logs', async () => {
     }
 });
 
+ipcMain.handle('add-log', async (event, { level, message }) => {
+    try {
+        await dbAsync.log(level || 'info', message || '');
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
 // 8. Sao lưu & Phục hồi dữ liệu
 ipcMain.handle('export-backup', async () => {
     try {
