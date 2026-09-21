@@ -17,13 +17,24 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.content.ContentValues
+import android.media.MediaScannerConnection
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PlaylistAddCheck
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
@@ -146,6 +157,54 @@ fun ZaloWebScreen() {
 
                     IconButton(onClick = { showHelpDialog = true }) {
                         Icon(Icons.Default.Info, contentDescription = "Hướng dẫn", modifier = Modifier.size(18.dp))
+                    }
+                }
+
+                // Hỗ trợ đăng nhập siêu tốc khi chưa đăng nhập hoặc chưa chọn hội thoại
+                if (activeConversation.isBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val wv = zaloSession.getOrCreateWebView(context)
+                                wv.evaluateJavascript("""
+                                    (function() {
+                                        var tabs = document.querySelectorAll('.tab, [role="tab"], a, div, span');
+                                        for (var i = 0; i < tabs.length; i++) {
+                                            var t = tabs[i];
+                                            if (t.innerText && (t.innerText.indexOf('VỚI SỐ ĐIỆN THOẠI') !== -1 || t.innerText.indexOf('Số điện thoại') !== -1)) {
+                                                t.click();
+                                                return 'clicked';
+                                            }
+                                        }
+                                        return 'not_found';
+                                    })();
+                                """.trimIndent()) {
+                                    Toast.makeText(context, "Đã chuyển sang tab Đăng nhập bằng SĐT & Mật khẩu (Không lo hết hạn QR)!", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f).height(36.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Đăng nhập SĐT", fontSize = 11.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                captureQrAndOpenZalo(context, zaloSession.getOrCreateWebView(context))
+                            },
+                            modifier = Modifier.weight(1.2f).height(36.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0088FF))
+                        ) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Chụp QR & Mở Zalo", fontSize = 11.sp)
+                        }
                     }
                 }
 
@@ -306,20 +365,32 @@ fun ZaloWebScreen() {
     if (showHelpDialog) {
         AlertDialog(
             onDismissRequest = { showHelpDialog = false },
-            title = { Text("Hướng dẫn Zalo Web") },
+            title = { Text("Hướng dẫn Zalo Web & Đăng nhập nhanh") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "1. Đăng nhập 1 lần:\nQuét mã QR bằng ứng dụng Zalo trên điện thoại. Phiên làm việc sẽ được lưu vĩnh viễn.",
+                        text = "🚀 ĐĂNG NHẬP NHANH (TRÁNH HẾT HẠN QR 1P30S):",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "2. Chọn nhóm cần lấy tin (0 Cần Nhập):\n- Cách 1: Bấm vào nhóm bạn muốn trong danh sách chat -> Nút 'Theo dõi nhóm này' sẽ hiện ra ở thanh đầu -> Bấm để theo dõi.\n- Cách 2: Bấm nút 'Quét nhóm' ở góc trên để tích chọn hàng loạt.",
+                        text = "👉 Cách 1 (Khuyên dùng): Bấm nút [Đăng nhập SĐT]\nChuyển sang đăng nhập bằng SĐT & Mật khẩu. Không sợ mã QR bị đổi hoặc hết hạn 1p30s!",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = "👉 Cách 2: Bấm nút [Chụp QR & Mở Zalo]\nApp tự chụp mã QR lưu vào Thư viện và tự mở Zalo lên. Bạn chỉ cần vào Quét QR trong Zalo -> Chọn ảnh mới nhất -> Bấm Xác nhận (chỉ mất 5 giây)!",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "📌 CHỌN NHÓM CẦN LẤY TIN:",
+                        fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "3. Cơ chế hoạt động:\nKhi có tin nhắn mới từ các nhóm bạn đã chọn, app tự động bóc tách nội dung, gửi qua AI (nếu bật) và tạo bài sẵn sàng đăng lên Facebook!",
-                        style = MaterialTheme.typography.bodyMedium
+                        text = "- Bấm vào nhóm bạn muốn trong danh sách chat -> Nút 'Theo dõi nhóm này' sẽ hiện ra ở thanh trên.\n- Hoặc bấm nút 'Quét nhóm' ở góc trên để tích chọn hàng loạt.",
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             },
@@ -329,5 +400,70 @@ fun ZaloWebScreen() {
                 }
             }
         )
+    }
+}
+
+/**
+ * Chụp nhanh màn hình QR từ WebView và mở ngay ứng dụng Zalo để quét trong 5 giây
+ */
+private fun captureQrAndOpenZalo(context: Context, webView: WebView) {
+    try {
+        if (webView.width <= 0 || webView.height <= 0) {
+            Toast.makeText(context, "Trang Zalo Web chưa tải xong. Vui lòng đợi 2-3 giây!", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // 1. Tạo Bitmap từ WebView
+        val bitmap = Bitmap.createBitmap(webView.width, webView.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        webView.draw(canvas)
+
+        // 2. Lưu vào Thư viện ảnh (MediaStore) để ảnh xuất hiện ngay đầu tiên
+        val filename = "Zalo_QR_${System.currentTimeMillis()}.jpg"
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, filename)
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Jammy")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+        }
+
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+
+        if (uri != null) {
+            resolver.openOutputStream(uri)?.use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 92, out)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                values.clear()
+                values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                resolver.update(uri, values, null, null)
+            }
+
+            // Thông báo MediaScanner cập nhật
+            MediaScannerConnection.scanFile(
+                context,
+                arrayOf(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).toString()),
+                arrayOf("image/jpeg"),
+                null
+            )
+
+            Toast.makeText(context, "📸 Đã chụp mã QR! Đang mở Zalo để bạn quét...", Toast.LENGTH_SHORT).show()
+
+            // 3. Mở Zalo để người dùng quét ảnh
+            val zaloIntent = context.packageManager.getLaunchIntentForPackage("com.zing.zalo")
+            if (zaloIntent != null) {
+                zaloIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(zaloIntent)
+            } else {
+                Toast.makeText(context, "Mã QR đã lưu trong Thư viện ảnh!", Toast.LENGTH_LONG).show()
+            }
+        } else {
+            Toast.makeText(context, "Không thể lưu ảnh QR vào bộ nhớ thiết bị", Toast.LENGTH_SHORT).show()
+        }
+    } catch (e: Exception) {
+        Toast.makeText(context, "Lỗi chụp QR: ${e.message}", Toast.LENGTH_SHORT).show()
     }
 }
