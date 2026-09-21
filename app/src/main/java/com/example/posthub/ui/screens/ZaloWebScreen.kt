@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Info
@@ -52,6 +53,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -88,6 +90,8 @@ fun ZaloWebScreen() {
     var monitoredGroups by remember { mutableStateOf(secureStore.getMonitoredZaloGroups()) }
     var showScanDialog by remember { mutableStateOf(false) }
     var showHelpDialog by remember { mutableStateOf(false) }
+    var showCookieDialog by remember { mutableStateOf(false) }
+    var inputCookieText by remember { mutableStateOf("") }
 
     val isCurrentMonitored = activeConversation.isNotBlank() && secureStore.isGroupMonitored(activeConversation)
 
@@ -205,6 +209,17 @@ fun ZaloWebScreen() {
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Chụp QR & Mở Zalo", fontSize = 11.sp)
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedButton(
+                        onClick = { showCookieDialog = true },
+                        modifier = Modifier.fillMaxWidth().height(36.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0D47A1))
+                    ) {
+                        Icon(Icons.Default.Computer, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("💻 Ném Cookie/Session từ máy tính vào Tool", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -382,6 +397,10 @@ fun ZaloWebScreen() {
                         text = "👉 Cách 2: Bấm nút [Chụp QR & Mở Zalo]\nApp tự chụp mã QR lưu vào Thư viện và tự mở Zalo lên. Bạn chỉ cần vào Quét QR trong Zalo -> Chọn ảnh mới nhất -> Bấm Xác nhận (chỉ mất 5 giây)!",
                         style = MaterialTheme.typography.bodySmall
                     )
+                    Text(
+                        text = "👉 Cách 3: Ném Cookie/Session từ máy tính\nBấm nút [💻 Ném Cookie từ máy tính], copy kết quả từ máy tính dán vào là vào thẳng nick mà không cần quét QR hay gõ mật khẩu!",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "📌 CHỌN NHÓM CẦN LẤY TIN:",
@@ -397,6 +416,70 @@ fun ZaloWebScreen() {
             confirmButton = {
                 Button(onClick = { showHelpDialog = false }) {
                     Text("Đã hiểu")
+                }
+            }
+        )
+    }
+
+    // Dialog nạp Cookie / Session từ máy tính vào Tool
+    if (showCookieDialog) {
+        AlertDialog(
+            onDismissRequest = { showCookieDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Computer, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Ném Cookie Zalo từ Máy tính", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Cách lấy Cookie trên máy tính (3 bước):",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = "1. Mở trang chat.zalo.me trên máy tính (nơi bạn đã đăng nhập).\n" +
+                               "2. Bấm F12 trên bàn phím -> Chọn tab 'Console' -> Gõ dòng này rồi ấn Enter:\n" +
+                               "   document.cookie\n" +
+                               "   (Hoặc gõ: localStorage.getItem('zpw_sek'))\n" +
+                               "3. Copy toàn bộ kết quả hiện ra, gửi qua điện thoại rồi dán vào ô bên dưới:",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = inputCookieText,
+                        onValueChange = { inputCookieText = it },
+                        modifier = Modifier.fillMaxWidth().height(120.dp),
+                        placeholder = { Text("Dán Cookie hoặc mã zpw_sek vào đây...", fontSize = 11.sp) },
+                        maxLines = 5,
+                        textStyle = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = "⚠️ Lưu ý: Zalo chỉ cho phép 1 phiên Zalo Web hoạt động. Sau khi ném vào tool, Zalo Web trên máy tính sẽ tự đăng xuất.",
+                        fontSize = 10.sp,
+                        color = Color(0xFFD32F2F)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        injectCookiesOrToken(context, zaloSession.getOrCreateWebView(context), inputCookieText)
+                        showCookieDialog = false
+                    },
+                    enabled = inputCookieText.isNotBlank()
+                ) {
+                    Text("Áp dụng & Đăng nhập")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCookieDialog = false }) {
+                    Text("Đóng")
                 }
             }
         )
@@ -465,5 +548,81 @@ private fun captureQrAndOpenZalo(context: Context, webView: WebView) {
         }
     } catch (e: Exception) {
         Toast.makeText(context, "Lỗi chụp QR: ${e.message}", Toast.LENGTH_SHORT).show()
+    }
+}
+
+/**
+ * Nạp Cookie hoặc Session Token (zpw_sek) từ máy tính vào WebView Zalo Web
+ */
+private fun injectCookiesOrToken(context: Context, webView: WebView, rawInput: String) {
+    try {
+        val trimmed = rawInput.trim().trim('"', '\'')
+        if (trimmed.isEmpty()) {
+            Toast.makeText(context, "Vui lòng nhập Cookie hoặc mã zpw_sek!", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val cookieManager = android.webkit.CookieManager.getInstance()
+        cookieManager.setAcceptCookie(true)
+        cookieManager.setAcceptThirdPartyCookies(webView, true)
+
+        val domain = "https://chat.zalo.me"
+        val cookieDomain = ".zalo.me"
+        var extractedSek: String? = null
+
+        when {
+            // Định dạng JSON array (xuất từ Cookie-Editor extension)
+            trimmed.startsWith("[") && trimmed.endsWith("]") -> {
+                val jsonArray = org.json.JSONArray(trimmed)
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    val name = obj.optString("name")
+                    val value = obj.optString("value")
+                    val path = obj.optString("path", "/")
+                    if (name.isNotEmpty()) {
+                        cookieManager.setCookie(domain, "$name=$value; Domain=$cookieDomain; Path=$path; Secure")
+                        if (name == "zpw_sek") extractedSek = value
+                    }
+                }
+            }
+            // Chuỗi Cookie tiêu chuẩn: "key1=val1; key2=val2"
+            trimmed.contains("=") -> {
+                val parts = trimmed.split(";")
+                for (part in parts) {
+                    val cookie = part.trim()
+                    if (cookie.isNotEmpty()) {
+                        cookieManager.setCookie(domain, "$cookie; Domain=$cookieDomain; Path=/; Secure")
+                        if (cookie.startsWith("zpw_sek=")) {
+                            extractedSek = cookie.substringAfter("zpw_sek=").trim()
+                        }
+                    }
+                }
+            }
+            // Người dùng chỉ dán trực tiếp chuỗi token zpw_sek
+            else -> {
+                extractedSek = trimmed
+                cookieManager.setCookie(domain, "zpw_sek=$trimmed; Domain=$cookieDomain; Path=/; Secure")
+            }
+        }
+
+        cookieManager.flush()
+
+        // Nạp thêm vào localStorage của chat.zalo.me để đồng bộ client-side
+        if (!extractedSek.isNullOrEmpty()) {
+            val sekSafe = extractedSek.replace("'", "\\'")
+            webView.evaluateJavascript("""
+                (function() {
+                    try {
+                        localStorage.setItem('zpw_sek', '$sekSafe');
+                    } catch(e) {}
+                })();
+            """.trimIndent(), null)
+        }
+
+        // Tải lại trang chat.zalo.me
+        webView.loadUrl(domain)
+        Toast.makeText(context, "🎉 Đã nạp Cookie Zalo! Đang tải lại phiên đăng nhập...", Toast.LENGTH_LONG).show()
+    } catch (e: Exception) {
+        Toast.makeText(context, "Lỗi nạp Cookie: ${e.message}", Toast.LENGTH_SHORT).show()
     }
 }
