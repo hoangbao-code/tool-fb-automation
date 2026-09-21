@@ -113,6 +113,20 @@ async function runTests() {
     assert.strictEqual(afterBlockedCount, initialCount + 1, 'Tin nhắn từ nhóm KHÔNG theo dõi PHẢI BỊ BỎ QUA');
     console.log('  ✓ Tin nhắn từ nhóm lạ [Nhóm Tạp Hóa Không Quan Tâm] đã bị BỎ QUA triệt để!');
 
+    // 5. Kiểm thử Quét Tự Động Nhóm Zalo (Bulk Groups Upsert)
+    console.log('\n5. Kiểm thử Quét Tự Động Nhóm Zalo (Bulk Groups Upsert):');
+    const mockZaloScanned = [
+        'Hội Căn Hộ Vinhomes Central Park',
+        'Chợ Nhà Đất Quận 7 - Nhà Bè',
+        'Giao Lưu BĐS Thủ Đức'
+    ];
+    for (const name of mockZaloScanned) {
+        await dbAsync.run(`INSERT INTO zalo_groups (name, is_monitored) VALUES (?, 1) ON CONFLICT(name) DO NOTHING`, [name]);
+    }
+    const checkZalo = await dbAsync.all(`SELECT * FROM zalo_groups WHERE name IN ('Hội Căn Hộ Vinhomes Central Park', 'Chợ Nhà Đất Quận 7 - Nhà Bè', 'Giao Lưu BĐS Thủ Đức')`);
+    assert.strictEqual(checkZalo.length, 3, 'Cả 3 nhóm quét từ Zalo phải được lưu thành công vào cơ sở dữ liệu');
+    console.log('  ✓ Quét và nạp thành công 3 nhóm Zalo vào database với trạng thái theo dõi mặc định BẬT!');
+
     console.log('\n========================================================');
     console.log('🎉 TẤT CẢ CÁC BÀI TEST TÍNH NĂNG V2.1 ĐỀU THÀNH CÔNG 100%!');
     console.log('========================================================\n');

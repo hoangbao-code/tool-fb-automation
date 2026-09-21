@@ -49,10 +49,17 @@
                     <span>Facebook (Nhúng)</span>
                 </button>
 
-                <!-- Tab 4: Groups -->
+                <!-- Tab 4: Groups FB -->
                 <button onclick="switchTab('groups')" id="tab-btn-groups" class="nav-btn">
-                    <i data-lucide="users" class="w-4 h-4"></i>
-                    <span>Quản Lý Nhóm FB</span>
+                    <i data-lucide="users" class="w-4 h-4 text-indigo-400"></i>
+                    <span>Nhóm Facebook</span>
+                </button>
+
+                <!-- Tab: Groups Zalo -->
+                <button onclick="switchTab('zalo-groups')" id="tab-btn-zalo-groups" class="nav-btn">
+                    <i data-lucide="list-checks" class="w-4 h-4 text-blue-400"></i>
+                    <span>Nhóm Zalo (Nguồn Tin)</span>
+                    <span id="badge-zalo-groups-count" class="ml-auto bg-blue-500/20 text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded-full hidden">0</span>
                 </button>
 
                 <!-- Tab 5: AI Gemini -->
@@ -159,15 +166,18 @@
                 <!-- Thanh công cụ điều khiển Zalo Web -->
                 <div class="h-12 bg-slate-950 border-b border-slate-800 px-4 flex items-center justify-between shrink-0">
                     <div class="flex items-center gap-3 text-xs">
-                        <span class="text-slate-400">Đang mở hội thoại:</span>
+                        <span class="text-slate-400">Đang mở:</span>
                         <span id="zalo-active-group-name" class="font-bold text-blue-400 bg-blue-950/60 px-2.5 py-1 rounded-md border border-blue-800/50">
                             Chưa phát hiện
                         </span>
-                        <button onclick="monitorCurrentZaloGroup()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 shadow-sm transition-all">
-                            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Theo dõi nhóm này
+                        <button onclick="triggerZaloGroupScan()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Tự động quét toàn bộ danh sách nhóm từ Zalo Web">
+                            <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét Nhóm Zalo
                         </button>
-                        <button onclick="openZaloGroupsModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 transition-all">
-                            <i data-lucide="list-checks" class="w-3.5 h-3.5 text-blue-400"></i> Nhóm Theo Dõi (<span id="zalo-groups-count">0</span>)
+                        <button onclick="monitorCurrentZaloGroup()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 transition-all">
+                            <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-blue-400"></i> Theo dõi nhóm này
+                        </button>
+                        <button onclick="switchTab('zalo-groups')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 transition-all">
+                            <i data-lucide="list-checks" class="w-3.5 h-3.5 text-emerald-400"></i> DS Nhóm (<span id="zalo-groups-count">0</span>)
                         </button>
                     </div>
                     <div class="flex items-center gap-2">
@@ -223,12 +233,18 @@
             <section id="tab-groups" class="tab-pane tab-block h-full overflow-y-auto p-6 space-y-5">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
                     <div>
-                        <h3 class="font-bold text-white text-base">Danh Sách Nhóm Facebook Mục Tiêu</h3>
+                        <h3 class="font-bold text-white text-base flex items-center gap-2">
+                            <i data-lucide="users" class="w-5 h-5 text-indigo-400"></i>
+                            Danh Sách Nhóm Facebook Mục Tiêu
+                        </h3>
                         <p class="text-xs text-slate-400">Tích chọn các nhóm bạn muốn hệ thống tự động đăng bài viết sau khi AI biên tập.</p>
                     </div>
                     <div class="flex gap-2">
                         <input type="text" id="fb-group-search" oninput="filterFbGroupsTable()" placeholder="Tìm kiếm tên nhóm..." class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-56">
-                        <button onclick="openAddFbGroupModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                        <button onclick="triggerFbGroupScan()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Tự động quét danh sách nhóm từ Facebook">
+                            <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét Nhóm Facebook
+                        </button>
+                        <button onclick="openAddFbGroupModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
                             <i data-lucide="plus" class="w-3.5 h-3.5"></i> Thêm Thủ Công
                         </button>
                     </div>
@@ -246,6 +262,45 @@
                             </tr>
                         </thead>
                         <tbody id="fb-groups-table-body" class="divide-y divide-slate-800/60">
+                            <!-- Dynamic rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- TAB 5: QUẢN LÝ NHÓM ZALO (NGUỒN GOM TIN) -->
+            <section id="tab-zalo-groups" class="tab-pane tab-block h-full overflow-y-auto p-6 space-y-5">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
+                    <div>
+                        <h3 class="font-bold text-white text-base flex items-center gap-2">
+                            <i data-lucide="list-checks" class="w-5 h-5 text-blue-400"></i>
+                            Danh Sách Nhóm Zalo Theo Dõi (Nguồn Gom Tin)
+                        </h3>
+                        <p class="text-xs text-slate-400">Chỉ tự động gom tin từ các nhóm Zalo được BẬT dưới đây để gửi sang AI Gemini biên tập.</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="text" id="zalo-group-search" oninput="filterZaloGroupsTable()" placeholder="Tìm kiếm tên nhóm Zalo..." class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-56">
+                        <button onclick="triggerZaloGroupScan()" class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Tự động quét toàn bộ nhóm từ Zalo Web">
+                            <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét Nhóm Zalo
+                        </button>
+                        <button onclick="openAddZaloGroupManual()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Thêm Thủ Công
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Bảng danh sách nhóm Zalo -->
+                <div class="bg-slate-950/60 rounded-xl border border-slate-800 overflow-hidden shadow-sm">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-900/90 text-slate-400 font-semibold uppercase tracking-wider border-b border-slate-800">
+                            <tr>
+                                <th class="p-3.5 w-12 text-center">Bật</th>
+                                <th class="p-3.5">Tên Nhóm Zalo</th>
+                                <th class="p-3.5 text-center w-40">Trạng Thái Theo Dõi</th>
+                                <th class="p-3.5 text-right w-24">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="zalo-groups-main-table-body" class="divide-y divide-slate-800/60">
                             <!-- Dynamic rows -->
                         </tbody>
                     </table>
@@ -483,8 +538,11 @@
 
             <div class="flex gap-2">
                 <input type="text" id="add-zalo-group-name" placeholder="Nhập chính xác tên nhóm Zalo..." class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <button onclick="addNewZaloGroupManual()" class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1">
-                    <i data-lucide="plus" class="w-3.5 h-3.5"></i> Thêm Nhóm
+                <button onclick="addNewZaloGroupManual()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i> Thêm
+                </button>
+                <button onclick="triggerZaloGroupScan()" class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Tự động quét toàn bộ nhóm từ Zalo Web">
+                    <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét Tự Động
                 </button>
             </div>
 

@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electronApi', {
     // 3. Nhóm Zalo
     getZaloGroups: () => ipcRenderer.invoke('get-zalo-groups'),
     addZaloGroup: (name) => ipcRenderer.invoke('add-zalo-group', name),
+    addZaloGroupsBulk: (groups) => ipcRenderer.invoke('add-zalo-groups-bulk', groups),
     deleteZaloGroup: (id) => ipcRenderer.invoke('delete-zalo-group', id),
     toggleZaloGroup: (id) => ipcRenderer.invoke('toggle-zalo-group', id),
 

@@ -185,6 +185,7 @@ function switchTab(tabId) {
         zalo: { title: 'ZALO WEB TRỰC TIẾP', sub: 'Đăng nhập 1 lần lưu vĩnh viễn - Tự động bắt tin ngầm' },
         fb: { title: 'FACEBOOK TRỰC TIẾP', sub: 'Tự động quét nhóm đã tham gia và xuất bản bài viết' },
         groups: { title: 'QUẢN LÝ NHÓM FACEBOOK', sub: 'Tích chọn các nhóm mục tiêu để đăng bài' },
+        'zalo-groups': { title: 'QUẢN LÝ NHÓM ZALO', sub: 'Tích chọn các nhóm Zalo cần tự động gom tin' },
         ai: { title: 'CẤU HÌNH AI GEMINI', sub: 'Thiết lập Prompt biên tập nội dung bài đăng' },
         settings: { title: 'CÀI ĐẶT HỆ THỐNG', sub: 'Cấu hình thời gian giãn cách chống spam và tự động hóa' },
         logs: { title: 'NHẬT KÝ HOẠT ĐỘNG', sub: 'Theo dõi tiến trình hệ thống theo thời gian thực' }
@@ -198,6 +199,7 @@ function switchTab(tabId) {
 
     if (tabId === 'feed') loadPosts();
     else if (tabId === 'groups') loadFbGroups();
+    else if (tabId === 'zalo-groups') loadZaloGroups();
     else if (tabId === 'ai') loadAiSettings();
     else if (tabId === 'settings') loadGeneralSettings();
     else if (tabId === 'logs') loadLogs();
@@ -418,8 +420,6 @@ async function loadZaloGroups() {
         const res = await window.electronApi.getZaloGroups();
         if (res.success) {
             state.zaloGroups = res.groups;
-            const countEl = document.getElementById('zalo-groups-count');
-            if (countEl) countEl.innerText = res.groups.filter(g => g.is_monitored).length;
             renderZaloGroupsTable();
         }
     } catch (e) {
@@ -427,37 +427,101 @@ async function loadZaloGroups() {
     }
 }
 
-function renderZaloGroupsTable() {
-    const tbody = document.getElementById('zalo-groups-table-body');
-    if (!tbody) return;
+function renderZaloGroupsTable(filterText = '') {
     const list = state.zaloGroups || [];
-    if (list.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="3" class="p-6 text-center text-slate-500 text-xs">
-                    Chưa có nhóm Zalo nào trong danh sách theo dõi. Bấm <b>"Thêm Nhóm"</b> hoặc bấm nút <b>"Theo Dõi Nhóm Này"</b> khi mở Zalo.
-                </td>
-            </tr>
-        `;
-        return;
+    let filtered = list;
+    if (filterText) {
+        filtered = list.filter(g => g.name.toLowerCase().includes(filterText.toLowerCase()));
     }
 
-    tbody.innerHTML = list.map(g => `
-        <tr class="hover:bg-slate-900/50 transition-colors">
-            <td class="p-3 text-center">
-                <input type="checkbox" ${g.is_monitored ? 'checked' : ''} onchange="toggleZaloGroupStatus(${g.id})" class="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700 cursor-pointer">
-            </td>
-            <td class="p-3 font-semibold text-white">
-                ${escapeHtml(g.name)}
-            </td>
-            <td class="p-3 text-right">
-                <button onclick="deleteZaloGroupRow(${g.id})" class="text-slate-500 hover:text-rose-400 p-1 rounded transition-colors" title="Xóa">
-                    <i data-lucide="trash-2" class="w-4 h-4"></i>
-                </button>
-            </td>
-        </tr>
-    `).join('');
+    // 1. Render trong Tab Quản Lý Nhóm Zalo chính
+    const mainTbody = document.getElementById('zalo-groups-main-table-body');
+    if (mainTbody) {
+        if (filtered.length === 0) {
+            mainTbody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="p-8 text-center text-slate-500 text-xs">
+                        <div class="mb-3">Chưa có nhóm Zalo nào trong danh sách theo dõi.</div>
+                        <button onclick="triggerZaloGroupScan()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-2 shadow-sm transition-all">
+                            <i data-lucide="scan" class="w-4 h-4"></i> Bấm Vào Đây Để Quét Tự Động Từ Zalo Web
+                        </button>
+                    </td>
+                </tr>
+            `;
+        } else {
+            mainTbody.innerHTML = filtered.map(g => `
+                <tr class="hover:bg-slate-900/50 transition-colors">
+                    <td class="p-3.5 text-center">
+                        <input type="checkbox" ${g.is_monitored ? 'checked' : ''} onchange="toggleZaloGroupStatus(${g.id})" class="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700 cursor-pointer">
+                    </td>
+                    <td class="p-3.5 font-bold text-white">
+                        ${escapeHtml(g.name)}
+                    </td>
+                    <td class="p-3.5 text-center">
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-semibold ${g.is_monitored ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/60' : 'bg-slate-800 text-slate-400'}">
+                            ${g.is_monitored ? '● Đang theo dõi bắt tin' : '○ Tạm tắt'}
+                        </span>
+                    </td>
+                    <td class="p-3.5 text-right">
+                        <button onclick="deleteZaloGroupRow(${g.id})" class="text-slate-500 hover:text-rose-400 p-1 rounded transition-colors" title="Xóa nhóm">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    }
+
+    // 2. Render trong Modal (nếu có)
+    const modalTbody = document.getElementById('zalo-groups-table-body');
+    if (modalTbody) {
+        if (filtered.length === 0) {
+            modalTbody.innerHTML = `
+                <tr>
+                    <td colspan="3" class="p-6 text-center text-slate-500 text-xs">
+                        Chưa có nhóm Zalo nào. Bấm <b>"Quét Tự Động"</b> để nạp toàn bộ nhóm từ Zalo Web.
+                    </td>
+                </tr>
+            `;
+        } else {
+            modalTbody.innerHTML = filtered.map(g => `
+                <tr class="hover:bg-slate-900/50 transition-colors">
+                    <td class="p-3 text-center">
+                        <input type="checkbox" ${g.is_monitored ? 'checked' : ''} onchange="toggleZaloGroupStatus(${g.id})" class="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700 cursor-pointer">
+                    </td>
+                    <td class="p-3 font-semibold text-white">
+                        ${escapeHtml(g.name)}
+                    </td>
+                    <td class="p-3 text-right">
+                        <button onclick="deleteZaloGroupRow(${g.id})" class="text-slate-500 hover:text-rose-400 p-1 rounded transition-colors" title="Xóa">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    }
+
+    // Cập nhật số đếm badge
+    const activeCount = list.filter(g => g.is_monitored).length;
+    const countEl = document.getElementById('zalo-groups-count');
+    if (countEl) countEl.innerText = activeCount;
+    const badge = document.getElementById('badge-zalo-groups-count');
+    if (badge) {
+        if (activeCount > 0) {
+            badge.innerText = activeCount;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+
     lucide.createIcons();
+}
+
+function filterZaloGroupsTable() {
+    const q = document.getElementById('zalo-group-search')?.value || '';
+    renderZaloGroupsTable(q);
 }
 
 function openZaloGroupsModal() {
@@ -499,6 +563,125 @@ async function addNewZaloGroupManual() {
         await loadZaloGroups();
     } else {
         showToast(res.error, 'error');
+    }
+}
+
+async function openAddZaloGroupManual() {
+    const name = prompt('Nhập tên nhóm Zalo bạn muốn theo dõi:');
+    if (!name?.trim()) return;
+    const res = await window.electronApi.addZaloGroup(name.trim());
+    if (res.success) {
+        showToast(`Đã thêm nhóm: ${name.trim()}`, 'success');
+        await loadZaloGroups();
+    } else {
+        showToast(res.error, 'error');
+    }
+}
+
+// TỰ ĐỘNG QUÉT DANH SÁCH NHÓM ZALO TỪ WEBVIEW
+async function triggerZaloGroupScan() {
+    const wv = document.getElementById('zalo-wv');
+    if (!wv) return;
+
+    try {
+        const currentUrl = wv.getURL();
+        if (!currentUrl || currentUrl === 'about:blank' || !currentUrl.includes('zalo.me')) {
+            showToast('Đang mở Zalo Web... Vui lòng đăng nhập tài khoản trước khi quét!', 'info');
+            switchTab('zalo');
+            wv.loadURL('https://chat.zalo.me');
+            return;
+        }
+
+        // Kiểm tra xem có đang ở trang login / QR không
+        const isLoginPage = await wv.executeJavaScript(`
+            Boolean(document.querySelector('#qr-container, .qrcode-img, [class*="qrcode"], input[type="text"][placeholder*="Số điện thoại"]'))
+        `);
+        if (isLoginPage) {
+            showToast('⚠️ Bạn chưa đăng nhập Zalo! Vui lòng quét mã QR trên màn hình Zalo trước khi quét nhóm.', 'error');
+            switchTab('zalo');
+            return;
+        }
+
+        showToast('🔍 Đang tự động quét danh sách nhóm từ Zalo Web...', 'info');
+
+        // Cuộn danh sách chat để Zalo render các nhóm
+        await wv.executeJavaScript(`
+            (async function() {
+                var listEl = document.querySelector('#conversationList, .conv-list, .virtualized-scroll, div[class*="conv-list"], div[class*="scroll"]');
+                if (listEl) {
+                    listEl.scrollTop = 0;
+                    await new Promise(r => setTimeout(r, 200));
+                    listEl.scrollTop = listEl.scrollHeight / 2;
+                    await new Promise(r => setTimeout(r, 300));
+                    listEl.scrollTop = listEl.scrollHeight;
+                    await new Promise(r => setTimeout(r, 300));
+                    listEl.scrollTop = 0;
+                }
+            })();
+        `);
+        await new Promise(r => setTimeout(r, 500));
+
+        // Trích xuất danh sách nhóm từ DOM Zalo Web
+        const scannedGroups = await wv.executeJavaScript(`
+            (function() {
+                var found = [];
+                var seen = {};
+
+                // 1. Quét các item trong danh sách hội thoại
+                var items = document.querySelectorAll(
+                    '.conv-item, [data-id*="conv_item"], div[id^="conv-item-"], .group-item, .contact-item, div[class*="chat-item"]'
+                );
+
+                for (var i = 0; i < items.length; i++) {
+                    var el = items[i];
+                    var titleEl = el.querySelector(
+                        '.conv-item-title__more, .conv-item-title, .group-item__name, .contact-item__name, [class*="title__more"], [class*="conv-item-title"], [class*="truncate"], [data-id="chat-title"]'
+                    );
+                    var name = titleEl ? titleEl.innerText.trim() : '';
+                    if (!name) continue;
+
+                    var dataId = el.getAttribute('data-id') || el.id || '';
+                    var hasGroupAvatar = el.querySelector('.avatar-group, .avatar--group, [class*="avatar-group"], [class*="group-avatar"]') !== null;
+                    var imgCount = el.querySelectorAll('.avatar img, [class*="avatar"] img, img').length;
+                    var hasGroupIcon = el.querySelector('i[class*="group"], [data-icon*="group"], [class*="group-icon"]') !== null;
+                    var isGroupDataId = dataId.indexOf('g') !== -1 || dataId.indexOf('group') !== -1;
+
+                    // Nếu có dấu hiệu là nhóm hoặc nếu danh sách đang hiển thị
+                    if (isGroupDataId || hasGroupAvatar || imgCount > 1 || hasGroupIcon || items.length <= 25) {
+                        if (!seen[name.toLowerCase()]) {
+                            seen[name.toLowerCase()] = true;
+                            found.push(name);
+                        }
+                    }
+                }
+
+                // 2. Nếu đang mở danh bạ nhóm
+                var groupItems = document.querySelectorAll('.group-item, [data-id*="group_item"], .contact-list-item');
+                for (var j = 0; j < groupItems.length; j++) {
+                    var gEl = groupItems[j];
+                    var tEl = gEl.querySelector('.group-item__name, .contact-item__name, [class*="name"], [class*="title"]');
+                    var gName = tEl ? tEl.innerText.trim() : gEl.innerText.trim();
+                    if (gName && !seen[gName.toLowerCase()]) {
+                        seen[gName.toLowerCase()] = true;
+                        found.push(gName);
+                    }
+                }
+
+                return found;
+            })();
+        `);
+
+        if (Array.isArray(scannedGroups) && scannedGroups.length > 0) {
+            await window.electronApi.addZaloGroupsBulk(scannedGroups);
+            showToast(`🎉 Đã quét thành công ${scannedGroups.length} nhóm Zalo!`, 'success');
+            await loadZaloGroups();
+            setTimeout(() => switchTab('zalo-groups'), 600);
+        } else {
+            showToast('Chưa phát hiện nhóm nào. Bạn có thể mở một nhóm Zalo bất kỳ trên màn hình Zalo rồi bấm "Theo dõi nhóm này", hoặc bấm vào Danh Bạ Nhóm trên Zalo rồi quét lại.', 'info');
+        }
+    } catch (e) {
+        console.error('Lỗi triggerZaloGroupScan:', e);
+        showToast('Lỗi khi quét nhóm Zalo: ' + e.message, 'error');
     }
 }
 
@@ -648,10 +831,14 @@ function renderFbGroupsTable(filterText = '') {
         tbody.innerHTML = `
             <tr>
                 <td colspan="4" class="p-8 text-center text-slate-500 text-xs">
-                    Chưa có nhóm nào. Hãy chuyển sang tab <b>Facebook</b> và bấm <b>"Quét Nhóm Đã Tham Gia"</b>.
+                    <div class="mb-3">Chưa có nhóm Facebook nào trong danh sách.</div>
+                    <button onclick="triggerFbGroupScan()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-2 shadow-sm transition-all">
+                        <i data-lucide="scan" class="w-4 h-4"></i> Bấm Vào Đây Để Quét Nhóm Facebook Ngay
+                    </button>
                 </td>
             </tr>
         `;
+        lucide.createIcons();
         return;
     }
 

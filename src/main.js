@@ -247,6 +247,27 @@ ipcMain.handle('add-zalo-group', async (event, name) => {
     }
 });
 
+ipcMain.handle('add-zalo-groups-bulk', async (event, groups) => {
+    try {
+        if (!Array.isArray(groups) || groups.length === 0) return { success: true, count: 0, added: 0 };
+        let added = 0;
+        for (const g of groups) {
+            const name = (typeof g === 'string' ? g : g.name)?.trim();
+            if (!name) continue;
+            const res = await dbAsync.run(
+                `INSERT INTO zalo_groups (name, is_monitored) VALUES (?, 1)
+                 ON CONFLICT(name) DO NOTHING`,
+                [name]
+            );
+            if (res.changes > 0) added++;
+        }
+        await dbAsync.log('info', `Đã quét và nạp ${groups.length} nhóm Zalo vào danh sách theo dõi (Thêm mới: ${added}).`);
+        return { success: true, count: groups.length, added };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
 ipcMain.handle('delete-zalo-group', async (event, id) => {
     try {
         await dbAsync.run(`DELETE FROM zalo_groups WHERE id = ?`, [id]);
