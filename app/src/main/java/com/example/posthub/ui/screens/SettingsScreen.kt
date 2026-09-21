@@ -150,6 +150,8 @@ fun SettingsScreen(
     var showAddFieldDialog by remember { mutableStateOf(false) }
     var showAddTemplateDialog by remember { mutableStateOf(false) }
     var showImportExportDialog by remember { mutableStateOf(false) }
+    var showAddZaloGroupDialog by remember { mutableStateOf(false) }
+    var newZaloGroupName by remember { mutableStateOf("") }
     var isViewingGeminiWebSettings by rememberSaveable { mutableStateOf(false) }
 
     if (isViewingGeminiWebSettings) {
@@ -286,15 +288,33 @@ fun SettingsScreen(
                         )
                     }
 
-                    if (monitoredZaloGroups.isNotEmpty()) {
-                        TextButton(
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedButton(
                             onClick = {
-                                secureStore.setMonitoredZaloGroups(emptySet())
-                                monitoredZaloGroups = emptyList()
-                                Toast.makeText(context, "Đã xóa toàn bộ nhóm theo dõi", Toast.LENGTH_SHORT).show()
-                            }
+                                newZaloGroupName = ""
+                                showAddZaloGroupDialog = true
+                            },
+                            contentPadding = ButtonDefaults.TextButtonContentPadding,
+                            modifier = Modifier.height(30.dp)
                         ) {
-                            Text("Xóa hết", fontSize = 11.sp, color = Color(0xFFD32F2F))
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("Thêm nhóm", fontSize = 11.sp)
+                        }
+
+                        if (monitoredZaloGroups.isNotEmpty()) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            TextButton(
+                                onClick = {
+                                    secureStore.setMonitoredZaloGroups(emptySet())
+                                    monitoredZaloGroups = emptyList()
+                                    Toast.makeText(context, "Đã xóa toàn bộ nhóm theo dõi", Toast.LENGTH_SHORT).show()
+                                },
+                                contentPadding = ButtonDefaults.TextButtonContentPadding,
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text("Xóa hết", fontSize = 11.sp, color = Color(0xFFD32F2F))
+                            }
                         }
                     }
                 }
@@ -315,7 +335,7 @@ fun SettingsScreen(
                             .padding(10.dp)
                     ) {
                         Text(
-                            text = "💡 Chưa có nhóm nào được chọn.\n👉 Hãy sang tab 'Zalo Web', mở nhóm bất kỳ và bấm 'Theo dõi nhóm này' để chọn nhanh bằng 1 chạm (không cần nhập tay)!",
+                            text = "💡 Chưa chọn nhóm nào (Mặc định app sẽ bắt tin từ TẤT CẢ nhóm Zalo gửi thông báo đến máy).\n\n👉 Bấm 'Thêm nhóm' ở góc trên để chỉ định lọc đúng nhóm bạn muốn, hoặc sang tab Zalo Web bấm 'Theo dõi nhóm này'.",
                             fontSize = 12.sp,
                             color = Color(0xFF1B5E20)
                         )
@@ -1335,6 +1355,51 @@ fun SettingsScreen(
             confirmButton = {
                 Button(onClick = { testAiResultDialog = null }) {
                     Text("Đóng")
+                }
+            }
+        )
+    }
+
+    // Dialog thêm nhóm Zalo thủ công
+    if (showAddZaloGroupDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddZaloGroupDialog = false },
+            title = { Text("Thêm nhóm Zalo cần theo dõi") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Nhập chính xác tên nhóm Zalo bạn muốn app tự động lấy tin nhắn (hoặc một phần tên nhóm):",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedTextField(
+                        value = newZaloGroupName,
+                        onValueChange = { newZaloGroupName = it },
+                        label = { Text("Tên nhóm Zalo") },
+                        placeholder = { Text("Ví dụ: Bất Động Sản Hà Nội...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val name = newZaloGroupName.trim()
+                        if (name.isNotBlank()) {
+                            secureStore.addMonitoredZaloGroup(name)
+                            monitoredZaloGroups = secureStore.getMonitoredZaloGroups().toList()
+                            Toast.makeText(context, "Đã thêm nhóm theo dõi: $name", Toast.LENGTH_SHORT).show()
+                        }
+                        showAddZaloGroupDialog = false
+                    },
+                    enabled = newZaloGroupName.isNotBlank()
+                ) {
+                    Text("Lưu nhóm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddZaloGroupDialog = false }) {
+                    Text("Hủy")
                 }
             }
         )
