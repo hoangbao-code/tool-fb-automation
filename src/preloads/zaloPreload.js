@@ -99,4 +99,40 @@ window.addEventListener('DOMContentLoaded', () => {
         const activeName = getActiveGroupName();
         ipcRenderer.sendToHost('current-group-response', { groupName: activeName });
     });
+
+    // 6. Tự động bóc tách nhóm khi người dùng sử dụng Zalo Web
+    const seenGroups = new Set();
+    function scanVisibleGroups() {
+        const found = [];
+        // Lấy từ header nếu là nhóm
+        const curName = getActiveGroupName();
+        if (curName && !seenGroups.has(curName.toLowerCase())) {
+            const hasGrpAvatar = document.querySelector('.header-avatar-group, [class*="avatar-group"], [class*="group-avatar"]');
+            const hasMemberText = document.querySelector('[class*="chat-info"], [class*="header"]') ? (document.body.innerText.indexOf('thành viên') !== -1) : false;
+            if (hasGrpAvatar || hasMemberText) {
+                seenGroups.add(curName.toLowerCase());
+                found.push(curName);
+            }
+        }
+
+        // Lấy từ các mục danh sách nhóm hoặc hội thoại nhóm
+        const rows = document.querySelectorAll('.group-item, [data-id*="group_item"], .contact-list-item, div[class*="group-row"]');
+        rows.forEach(r => {
+            const nameEl = r.querySelector('.group-item__name, .contact-item__name, [class*="name"], [class*="title"]');
+            const name = (nameEl ? nameEl.innerText : r.innerText || '').split('\n')[0].trim();
+            if (name && name.length >= 2 && name !== 'Zalo' && name !== 'Cloud của tôi' && name !== 'Truyền File') {
+                const k = name.toLowerCase();
+                if (!seenGroups.has(k)) {
+                    seenGroups.add(k);
+                    found.push(name);
+                }
+            }
+        });
+
+        if (found.length > 0) {
+            ipcRenderer.sendToHost('zalo-groups-scanned', found);
+        }
+    }
+
+    setInterval(scanVisibleGroups, 5000);
 });

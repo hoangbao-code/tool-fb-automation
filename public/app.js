@@ -40,6 +40,11 @@ function setupWebviews() {
             } else if (event.channel === 'current-group-response') {
                 state.activeZaloGroup = event.args[0]?.groupName || '';
                 updateZaloActiveGroupDisplay();
+            } else if (event.channel === 'zalo-groups-scanned') {
+                if (Array.isArray(event.args[0]) && event.args[0].length > 0) {
+                    window.electronApi.addZaloGroupsBulk(event.args[0]);
+                    loadZaloGroups();
+                }
             }
         });
 
@@ -693,101 +698,257 @@ async function triggerZaloGroupScan() {
             await window.electronApi.addLog('info', '[Zalo Scanner] Bắt đầu quét danh sách nhóm từ Zalo Web...');
         }
 
-        // GIAI ĐOẠN 1: Mở Tab Danh Bạ -> Danh Sách Nhóm (Chứa 100% nhóm đã tham gia)
-        updateScanModalStatus('Đang mở Danh bạ nhóm trên Zalo Web...', 30);
-        appendScanModalLog('Chuyển sang tab Danh Bạ -> Danh Sách Nhóm...');
+        // GIAI ĐOẠN 0: Quét siêu tốc từ IndexedDB của Zalo Web (Nếu Zalo đã lưu offline)
+        updateScanModalStatus('Đang trích xuất dữ liệu bộ nhớ Zalo Web...', 25);
+        appendScanModalLog('Kiểm tra cơ sở dữ liệu IndexedDB của Zalo...');
 
-        await wv.executeJavaScript(`
-            (async function() {
-                var contactBtn = document.querySelector('[data-id="btn_Main_Tab_Contact"], div[icon="outline-contact"], #nav-contact, #nav-tabs-contact, div[title*="Danh bạ"], div[data-translate-inner="STR_CONTACT"]');
-                if (!contactBtn) {
-                    var leftNavIcons = document.querySelectorAll('.nav__tabs__top .nav__tabs__item, .left-menu-item, [class*="nav-item"]');
-                    if (leftNavIcons.length >= 2) contactBtn = leftNavIcons[1];
+        try {
+            const idbGroups = await wv.executeJavaScript(`
+                (async function() {
+                    var names = [];
+                    try {
+                        if (!window.indexedDB || !window.indexedDB.databases) return names;
+                        var dbs = await indexedDB.databases();
+                        for (var d = 0; d < dbs.length; d++) {
+                            var dbInfo = dbs[d];
+                            if (!dbInfo || !dbInfo.name) continue;
+                            try {
+                                var db = await new Promise(function(resolve, reject) {
+                                    var req = indexedDB.open(dbInfo.name);
+                                    req.onsuccess = function() { resolve(req.result); };
+                                    req.onerror = function() { resolve(null); };
+                                });
+                                if (!db) continue;
+
+                                var storeNames = Array.from(db.objectStoreNames);
+                                for (var s = 0; s < storeNames.length; s++) {
+                                    var sName = storeNames[s].toLowerCase();
+                                    if (sName.indexOf('group') !== -1 || sName.indexOf('conv') !== -1 || sName.indexOf('thread') !== -1) {
+                                        var rows = await new Promise(function(resolve) {
+                                            try {
+                                                var tx = db.transaction(storeNames[s], 'readonly');
+                                                var store = tx.objectStore(storeNames[s]);
+                                                var reqAll = store.getAll();
+                                                reqAll.onsuccess = function() { resolve(reqAll.result || []); };
+                                                reqAll.onerror = function() { resolve([]); };
+                                            } catch (e) { resolve([]); }
+                                        });
+
+                                        for (var r = 0; r < rows.length; r++) {
+                                            var item = rows[r];
+                                            var gName = item.name || item.groupName || item.title || item.gridName || (item.data && item.data.name);
+                                            var isGrp = item.isGroup || item.type === 'group' || item.type === 1 || item.type === 2 || (item.grid && item.grid.length > 0) || (item.id && String(item.id).indexOf('g') === 0);
+                                            if (gName && (isGrp || sName.indexOf('group') !== -1)) {
+                                                names.push(String(gName).trim());
+                                            }
+                                        }
+                                    }
+                                }
+                                db.close();
+                            } catch(e) {}
+                        }
+                    } catch(e) {}
+                    return names;
+                })();
+            `);
+
+            if (Array.isArray(idbGroups) && idbGroups.length > 0) {
+                for (const name of idbGroups) {
+                    const key = name.toLowerCase().trim();
+                    if (key.length >= 2 && !foundZaloMap[key]) {
+                        foundZaloMap[key] = name.trim();
+                    }
                 }
-                if (contactBtn) {
-                    contactBtn.click();
-                    await new Promise(function(r) { setTimeout(r, 600); });
+                appendScanModalLog(`Trích xuất nhanh từ IndexedDB: tìm thấy ${idbGroups.length} nhóm!`);
+                updateScanModalStatus('Đã quét dữ liệu bộ nhớ...', 35, Object.keys(foundZaloMap).length);
+            }
+        } catch (e) {
+            console.warn('Lỗi đọc IndexedDB Zalo:', e);
+        }
 
+        // GIAI ĐOẠN 1: Mở Tab Danh Bạ -> Danh Sách Nhóm (Chứa 100% nhóm đã tham gia)
+        updateScanModalStatus('Đang mở Danh bạ nhóm trên Zalo Web...', 40);
+        appendScanModalLog('Mở tab Danh Bạ -> Danh Sách Nhóm...');
+
+        const openedGroupDirectory = await wv.executeJavaScript(`
+            (async function() {
+                function robustClick(el) {
+                    if (!el) return false;
+                    try {
+                        el.scrollIntoView({ block: 'center' });
+                        ['mousedown', 'mouseup', 'click'].forEach(function(evt) {
+                            el.dispatchEvent(new MouseEvent(evt, { bubbles: true, cancelable: true, view: window }));
+                        });
+                        if (typeof el.click === 'function') el.click();
+                        return true;
+                    } catch (e) { return false; }
+                }
+
+                // 1. Tìm và click nút Danh Bạ
+                var contactBtn = document.querySelector('[data-id="btn_Main_Tab_Contact"], [title*="Danh bạ"], [aria-label*="Danh bạ"], [title*="Contacts"], div[icon="outline-contact"]');
+                if (!contactBtn) {
+                    // Tìm bằng XPath chứa chữ "Danh bạ"
+                    var snap = document.evaluate("//*[contains(normalize-space(text()), 'Danh bạ') or contains(normalize-space(text()), 'Contacts')]", document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                    for (var i = 0; i < snap.snapshotLength; i++) {
+                        var el = snap.snapshotItem(i);
+                        if (el && el.offsetParent !== null) { contactBtn = el; break; }
+                    }
+                }
+                if (!contactBtn) {
+                    var leftNav = document.querySelectorAll('.nav__tabs__top .nav__tabs__item, .left-menu-item, [class*="nav-item"]');
+                    if (leftNav.length >= 2) contactBtn = leftNav[1];
+                }
+
+                if (contactBtn) {
+                    robustClick(contactBtn);
+                    await new Promise(function(r) { setTimeout(r, 700); });
+                }
+
+                // 2. Tìm và click "Danh sách nhóm"
+                var groupTab = null;
+                var groupSnap = document.evaluate("//*[contains(normalize-space(text()), 'Danh sách nhóm') or contains(normalize-space(text()), 'Group list')]", document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                for (var j = 0; j < groupSnap.snapshotLength; j++) {
+                    var gEl = groupSnap.snapshotItem(j);
+                    if (gEl && gEl.offsetParent !== null) {
+                        groupTab = gEl.closest('[class*="item"], [class*="tab"], [role="button"], li, div') || gEl;
+                        break;
+                    }
+                }
+
+                if (!groupTab) {
                     var subTabs = document.querySelectorAll('[data-id="sub_tab_group"], [data-id*="group"], .sub-tab-item, .contact-subtab-item, div[class*="sub-tab"]');
                     for (var t = 0; t < subTabs.length; t++) {
-                        var tabText = subTabs[t].innerText || '';
-                        if (tabText.indexOf('nhóm') !== -1 || tabText.indexOf('Nhóm') !== -1 || subTabs[t].getAttribute('data-id') === 'sub_tab_group') {
-                            subTabs[t].click();
-                            await new Promise(function(r) { setTimeout(r, 600); });
-                            return true;
+                        var tabText = (subTabs[t].innerText || '').toLowerCase();
+                        if (tabText.indexOf('nhóm') !== -1 || subTabs[t].getAttribute('data-id') === 'sub_tab_group') {
+                            groupTab = subTabs[t];
+                            break;
                         }
                     }
+                }
+
+                if (groupTab) {
+                    robustClick(groupTab);
+                    await new Promise(function(r) { setTimeout(r, 800); });
                     return true;
                 }
                 return false;
             })();
         `);
 
-        // Cuộn danh bạ từng bước và thu thập
-        appendScanModalLog('Đang cuộn danh bạ nhóm Zalo...');
-        for (let s = 1; s <= 20; s++) {
+        if (openedGroupDirectory) {
+            appendScanModalLog('Đã vào Danh Sách Nhóm! Bắt đầu quét chuyên sâu...');
+        } else {
+            appendScanModalLog('Đang thử bóc tách trực tiếp giao diện Danh Bạ...');
+        }
+
+        // Cuộn danh bạ từng bước với bộ tìm container cuộn tự động (Dynamic Scroll Container)
+        let lastZaloCount = Object.keys(foundZaloMap).length;
+        let noChangeSteps = 0;
+
+        for (let s = 1; s <= 25; s++) {
             if (stopScanRequested) break;
 
             const batch = await wv.executeJavaScript(`
                 (function() {
-                    var items = document.querySelectorAll('.group-item, [data-id*="group_item"], .contact-list-item, div[class*="group-row"], .conv-item');
                     var names = [];
-                    for (var i = 0; i < items.length; i++) {
-                        var el = items[i];
-                        var tEl = el.querySelector('.group-item__name, .contact-item__name, [class*="name"], [class*="title"]');
-                        var name = tEl ? tEl.innerText.trim() : el.innerText.trim();
-                        if (name && name.length >= 2) {
-                            var lines = name.split('\\n').map(function(l){ return l.trim(); }).filter(Boolean);
-                            var clean = lines[0] || '';
-                            if (clean && clean !== 'Zalo' && clean !== 'Cloud của tôi' && clean !== 'Truyền File') {
-                                names.push(clean);
+
+                    // Tìm container cuộn chính xác của danh bạ nhóm
+                    var allDivs = document.querySelectorAll('div, ul, main, section');
+                    var scrollContainer = null;
+                    for (var i = 0; i < allDivs.length; i++) {
+                        var d = allDivs[i];
+                        var style = window.getComputedStyle(d);
+                        if ((style.overflowY === 'auto' || style.overflowY === 'scroll') && d.scrollHeight > d.clientHeight + 40) {
+                            if (!scrollContainer || d.scrollHeight > scrollContainer.scrollHeight) {
+                                scrollContainer = d;
                             }
                         }
                     }
 
-                    var container = document.querySelector('.contact-list, #contact-list, .group-list, div[class*="contact-list"], div[class*="group-list"]');
-                    if (container) {
-                        container.scrollTop += 450;
+                    // Thu thập toàn bộ các mục nhóm có trên màn hình
+                    var groupRows = document.querySelectorAll('.group-item, [data-id*="group_item"], .contact-list-item, div[class*="group-row"], div[class*="contact-item"], div[class*="group-list"] > div');
+                    if (groupRows.length === 0 && scrollContainer) {
+                        groupRows = scrollContainer.querySelectorAll(':scope > div, :scope > ul > li, [role="listitem"]');
+                    }
+
+                    for (var k = 0; k < groupRows.length; k++) {
+                        var row = groupRows[k];
+                        var nameEl = row.querySelector('.group-item__name, .contact-item__name, [class*="name"], [class*="title"], h4, p, span');
+                        var rawText = nameEl ? nameEl.innerText.trim() : row.innerText.trim();
+                        if (rawText) {
+                            var firstLine = rawText.split('\\n').map(function(l){ return l.trim(); }).filter(Boolean)[0] || '';
+                            if (firstLine.length >= 2 && firstLine !== 'Zalo' && firstLine !== 'Cloud của tôi' && firstLine !== 'Truyền File' && firstLine !== 'Danh sách nhóm') {
+                                names.push(firstLine);
+                            }
+                        }
+                    }
+
+                    // Cuộn container
+                    if (scrollContainer) {
+                        scrollContainer.scrollTop += 450;
                     } else {
                         window.scrollBy(0, 450);
                     }
+
                     return names;
                 })();
             `);
 
             if (Array.isArray(batch)) {
                 for (const name of batch) {
-                    const key = name.toLowerCase();
-                    if (!foundZaloMap[key]) {
-                        foundZaloMap[key] = name;
+                    const key = name.toLowerCase().trim();
+                    if (key.length >= 2 && !foundZaloMap[key]) {
+                        foundZaloMap[key] = name.trim();
                     }
                 }
             }
 
             const currentCount = Object.keys(foundZaloMap).length;
-            updateScanModalStatus(`Đang cuộn danh bạ (Bước ${s}/20)...`, 30 + Math.round((s / 20) * 35), currentCount);
+            const percent = 40 + Math.round((s / 25) * 35);
+            updateScanModalStatus(`Đang cuộn danh bạ (Bước ${s}/25)...`, percent, currentCount);
+
+            if (currentCount > lastZaloCount) {
+                appendScanModalLog(`Bước ${s}: Đã phát hiện ${currentCount} nhóm (+${currentCount - lastZaloCount})`);
+                lastZaloCount = currentCount;
+                noChangeSteps = 0;
+            } else {
+                noChangeSteps++;
+                if (noChangeSteps >= 5) {
+                    appendScanModalLog(`Đã cuộn hết danh bạ nhóm Zalo sau ${s} bước.`);
+                    break;
+                }
+            }
+
             await new Promise(r => setTimeout(r, 350));
         }
 
         // GIAI ĐOẠN 2: Trở về Tab Tin Nhắn & Quét Thêm Từ Danh Sách Hội Thoại
-        updateScanModalStatus('Đang quét bổ sung từ danh sách hội thoại...', 70);
-        appendScanModalLog('Đang chuyển về tab Tin Nhắn để gom thêm...');
+        updateScanModalStatus('Đang quét bổ sung từ danh sách hội thoại...', 75);
+        appendScanModalLog('Đang chuyển về tab Tin Nhắn để gom các nhóm còn lại...');
 
         await wv.executeJavaScript(`
             (async function() {
-                var msgBtn = document.querySelector('[data-id="btn_Main_Tab_Message"], div[icon="outline-chat"], #nav-chat, #nav-tabs-chat, div[title*="Tin nhắn"]');
+                var msgBtn = document.querySelector('[data-id="btn_Main_Tab_Message"], [title*="Tin nhắn"], [aria-label*="Tin nhắn"], div[icon="outline-chat"]');
                 if (!msgBtn) {
-                    var leftNavIcons = document.querySelectorAll('.nav__tabs__top .nav__tabs__item, .left-menu-item, [class*="nav-item"]');
-                    if (leftNavIcons.length >= 1) msgBtn = leftNavIcons[0];
+                    var snap = document.evaluate("//*[contains(normalize-space(text()), 'Tin nhắn')]", document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                    for (var i = 0; i < snap.snapshotLength; i++) {
+                        var el = snap.snapshotItem(i);
+                        if (el && el.offsetParent !== null) { msgBtn = el; break; }
+                    }
+                }
+                if (!msgBtn) {
+                    var leftNav = document.querySelectorAll('.nav__tabs__top .nav__tabs__item, .left-menu-item, [class*="nav-item"]');
+                    if (leftNav.length >= 1) msgBtn = leftNav[0];
                 }
                 if (msgBtn) {
-                    msgBtn.click();
-                    await new Promise(function(r) { setTimeout(r, 500); });
+                    if (typeof msgBtn.click === 'function') msgBtn.click();
+                    await new Promise(function(r) { setTimeout(r, 600); });
                 }
             })();
         `);
 
-        for (let cs = 1; cs <= 15; cs++) {
+        // Cuộn danh sách hội thoại 25 bước
+        for (let cs = 1; cs <= 25; cs++) {
             if (stopScanRequested) break;
 
             const convBatch = await wv.executeJavaScript(`
@@ -805,14 +966,15 @@ async function triggerZaloGroupScan() {
                             var dataId = el.getAttribute('data-id') || el.id || '';
                             var hasGroupAvatar = el.querySelector('.avatar-group, .avatar--group, [class*="avatar-group"], [class*="group-avatar"]') !== null;
                             var imgCount = el.querySelectorAll('.avatar img, [class*="avatar"] img, img').length;
-                            var hasGroupIcon = el.querySelector('i[class*="group"], [data-icon*="group"], [class*="group-icon"]') !== null;
+                            var hasGroupIcon = el.querySelector('i[class*="group"], [data-icon*="group"], [class*="group-icon"], svg[class*="group"]') !== null;
                             var isGroupDataId = dataId.indexOf('g') !== -1 || dataId.indexOf('group') !== -1;
+                            var hasMemberText = (el.innerText || '').indexOf('thành viên') !== -1;
 
-                            if (isGroupDataId || hasGroupAvatar || imgCount > 1 || hasGroupIcon) {
+                            if (isGroupDataId || hasGroupAvatar || imgCount > 1 || hasGroupIcon || hasMemberText) {
                                 names.push(name);
                             }
                         }
-                        convContainer.scrollTop += 400;
+                        convContainer.scrollTop += 450;
                     }
                     return names;
                 })();
@@ -820,16 +982,16 @@ async function triggerZaloGroupScan() {
 
             if (Array.isArray(convBatch)) {
                 for (const name of convBatch) {
-                    const key = name.toLowerCase();
-                    if (!foundZaloMap[key]) {
-                        foundZaloMap[key] = name;
+                    const key = name.toLowerCase().trim();
+                    if (key.length >= 2 && !foundZaloMap[key]) {
+                        foundZaloMap[key] = name.trim();
                     }
                 }
             }
 
             const currentCount = Object.keys(foundZaloMap).length;
-            updateScanModalStatus(`Đang cuộn hội thoại (Bước ${cs}/15)...`, 70 + Math.round((cs / 15) * 25), currentCount);
-            await new Promise(r => setTimeout(r, 300));
+            updateScanModalStatus(`Đang cuộn hội thoại (Bước ${cs}/25)...`, 75 + Math.round((cs / 25) * 23), currentCount);
+            await new Promise(r => setTimeout(r, 250));
         }
 
         const finalZaloGroups = Object.values(foundZaloMap);
