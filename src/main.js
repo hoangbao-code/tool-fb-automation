@@ -87,6 +87,7 @@ function createWindow() {
             webviewTag: true,
             nodeIntegration: false,
             contextIsolation: true,
+            sandbox: false,
             spellcheck: false
         }
     });
@@ -148,20 +149,34 @@ function createWindow() {
     dbAsync.log('info', 'Ứng dụng PostHub Desktop đã khởi chạy thành công.');
 }
 
-// Khởi chạy vòng đời Electron
-app.whenReady().then(() => {
-    createWindow();
-    setupTray();
-    startFbPostWorker();
-
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) createWindow();
-        else if (mainWindow) {
+// Đảm bảo chỉ chạy 1 phiên bản duy nhất (Single Instance Lock)
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+    app.quit();
+} else {
+    app.on('second-instance', () => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
             mainWindow.show();
             mainWindow.focus();
         }
     });
-});
+
+    // Khởi chạy vòng đời Electron
+    app.whenReady().then(() => {
+        createWindow();
+        setupTray();
+        startFbPostWorker();
+
+        app.on('activate', () => {
+            if (BrowserWindow.getAllWindows().length === 0) createWindow();
+            else if (mainWindow) {
+                mainWindow.show();
+                mainWindow.focus();
+            }
+        });
+    });
+}
 
 app.on('before-quit', () => {
     isQuitting = true;

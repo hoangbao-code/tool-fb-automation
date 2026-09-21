@@ -1,10 +1,20 @@
 const { contextBridge, ipcRenderer } = require('electron');
-const path = require('path');
+
+let resolvedDir = '';
+try {
+    const path = require('path');
+    resolvedDir = __dirname || '';
+} catch (e) {
+    resolvedDir = typeof __dirname !== 'undefined' ? __dirname : '';
+}
+
+const zaloPreloadPath = resolvedDir ? `${resolvedDir.replace(/\\/g, '/')}/zaloPreload.js` : '';
+const fbPreloadPath = resolvedDir ? `${resolvedDir.replace(/\\/g, '/')}/fbPreload.js` : '';
 
 contextBridge.exposeInMainWorld('electronApi', {
     // 0. Đường dẫn Preload Webview
-    zaloPreloadPath: path.join(__dirname, 'zaloPreload.js'),
-    fbPreloadPath: path.join(__dirname, 'fbPreload.js'),
+    zaloPreloadPath: zaloPreloadPath,
+    fbPreloadPath: fbPreloadPath,
     forwardZaloMessage: (data) => ipcRenderer.send('zalo-message-from-webview', data),
     forwardFbGroups: (groups) => ipcRenderer.send('fb-groups-from-webview', groups),
 
