@@ -28,3 +28,8 @@ web/.env
 desktop/node_modules/
 desktop/data/
 desktop/.env
+node_modules/
+data/
+.env
+dist/
+

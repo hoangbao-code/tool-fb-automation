@@ -1,28 +1,46 @@
-# 🚀 PostHub Desktop (Windows App) - Tự Động Hóa Zalo sang Facebook
+# 🚀 PostHub PC - Ứng Dụng Tự Động Hóa Zalo sang Facebook
 
-Ứng dụng chuyên dụng chạy trực tiếp trên máy tính/laptop Windows:
-Tự động bắt tin từ **Zalo Web** (`chat.zalo.me`) -> **AI Gemini biên tập lại hấp dẫn** -> **Duyệt hàng đợi bài viết** -> **Đăng tự động lên các nhóm Facebook đã chọn**.
-
----
-
-## 💻 Hướng Dẫn Sử Dụng Trên Máy Tính / Laptop (Khuyên Dùng)
-
-Bạn chỉ cần máy tính Windows:
-1. Mở thư mục dự án trên máy tính.
-2. Nhấp đúp chuột vào file **`start.bat`**.
-3. Cửa sổ ứng dụng **PostHub Desktop** sẽ tự động mở lên màn hình với đầy đủ 7 Tab:
-   - 📰 **Bảng Tin & Duyệt**: Xem xét, so sánh bài gốc vs bài AI viết lại, sửa bài, bấm duyệt hoặc đăng ngay.
-   - 💬 **Zalo Web (Nhúng trực tiếp)**: Đăng nhập Zalo 1 lần lưu vĩnh viễn, tự động bắt tin ngầm, 1-click chọn nhóm theo dõi.
-   - 🌐 **Facebook (Nhúng trực tiếp)**: Tự động quét các nhóm FB bạn đã tham gia, tự động điền bài và xuất bản.
-   - 👥 **Quản Lý Nhóm FB**: Bảng danh sách nhóm FB với checkbox tích chọn nhóm đăng bài, tìm kiếm theo tên.
-   - 🤖 **AI Gemini**: Điền API key Google AI Studio miễn phí, tùy chỉnh mẫu prompt biên tập.
-   - ⚙️ **Cài Đặt**: Bật/tắt chế độ tự động đăng (Auto-Pilot), cấu hình thời gian giãn cách ngẫu nhiên (3 - 8 phút) chống checkpoint/spam, nút dừng khẩn cấp.
-   - 📋 **Nhật Ký**: Theo dõi tiến trình thời gian thực.
+Công cụ tự động hóa toàn diện dành riêng cho máy tính Windows: Tự động gom bài viết từ các nhóm Zalo bán hàng, tinh chỉnh nội dung bằng Google Gemini AI và đăng tự động lên các nhóm Facebook đã chọn.
 
 ---
 
-## ⚡ Ưu Điểm Đột Phá
-- **Không cần quét mã QR Zalo liên tục**: Đăng nhập Zalo 1 lần là lưu vĩnh viễn trong app.
-- **Không cần cài tiện ích rời hay Tampermonkey**: Zalo Web và Facebook được nhúng trực tiếp bằng Webview nội bộ.
-- **Chống spam Facebook**: Tự động tạo độ trễ ngẫu nhiên (Jitter delay) giữa các bài đăng để bảo vệ tài khoản an toàn tuyệt đối.
-- **Khởi động 1-Click**: File `start.bat` tự động chuẩn bị môi trường và mở app ngay tức thì.
+## ✨ CÁC TÍNH NĂNG CHÍNH (7 TAB VẬN HÀNH)
+
+1. **Bảng Tin & Hàng Đợi Duyệt**:
+   - Quản lý tập trung các tin nhắn mới nhất từ Zalo.
+   - Trạng thái trực quan: Chờ duyệt, Đã duyệt, Đã đăng Facebook.
+   - Sửa nhanh nội dung và hình ảnh bài đăng trước khi xuất bản.
+2. **Zalo Web Nhúng Trực Tiếp**:
+   - Sử dụng trực tiếp Zalo Web ngay trong ứng dụng, lưu phiên đăng nhập vĩnh viễn.
+   - Cơ chế tự động nhận diện tên nhóm và gom tin nhắn/hình ảnh mới nhất mỗi 2 giây.
+3. **Facebook Nhúng Trực Tiếp**:
+   - Sử dụng Facebook ngay trong ứng dụng, lưu phiên vĩnh viễn.
+   - Nút **`[ 🔍 Quét Nhóm Đã Tham Gia ]`**: Tự động điều hướng, cuộn trang nạp danh sách và quét toàn bộ các nhóm bạn đã tham gia.
+4. **Quản Lý Nhóm Facebook**:
+   - Bảng danh sách các nhóm đã tham gia với số lượng thành viên và liên kết.
+   - Tích chọn (bật/tắt) các nhóm mục tiêu để đăng bài tự động.
+5. **AI Gemini (Google AI)**:
+   - Tự động viết lại bài bán hàng chuyên nghiệp, giữ nguyên thông tin quan trọng.
+   - Hỗ trợ các model: `gemini-1.5-flash`, `gemini-1.5-pro`.
+6. **Cài Đặt Hệ Thống**:
+   - Bật/tắt chế độ tự động đăng bài khi có tin mới.
+   - Tùy chỉnh khoảng thời gian giãn cách giữa các bài đăng (tránh spam).
+7. **Nhật Ký Hoạt Động (Live Logs)**:
+   - Theo dõi chi tiết mọi thao tác và tiến trình trong thời gian thực.
+
+---
+
+## 🚀 HƯỚNG DẪN KHỞI CHẠY (1-CLICK)
+
+### Cách 1: Chạy bằng file `start.bat` (Khuyên dùng)
+- Nhấp đúp chuột vào file **`start.bat`** tại thư mục này.
+- Hệ thống sẽ tự động kiểm tra Node.js, cài đặt thư viện nếu cần và mở ứng dụng ngay lập tức.
+
+### Cách 2: Chạy bằng PowerShell `start.ps1`
+- Chuột phải vào file **`start.ps1`** -> Chọn **Run with PowerShell**.
+
+### Cách 3: Chạy bằng Terminal
+```bash
+npm install
+npm start
+```

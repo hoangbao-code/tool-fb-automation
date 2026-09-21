@@ -1,6 +1,0 @@
-<resources>
-    <style name="Theme.JammyPostHub" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:statusBarColor">@color/primary_dark</item>
-        <item name="android:navigationBarColor">#F5F5F5</item>
-    </style>
-</resources>
