@@ -588,6 +588,166 @@ async function openAddZaloGroupManual() {
     }
 }
 
+function openBulkAddZaloModal() {
+    const modal = document.getElementById('zalo-bulk-add-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        const input = document.getElementById('bulk-zalo-groups-input');
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+        if (window.lucide) lucide.createIcons();
+    }
+}
+
+function closeBulkAddZaloModal() {
+    const modal = document.getElementById('zalo-bulk-add-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function submitBulkZaloGroups() {
+    const input = document.getElementById('bulk-zalo-groups-input');
+    const raw = input?.value || '';
+    const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length >= 2);
+    if (lines.length === 0) {
+        showToast('Vui lòng nhập ít nhất một tên nhóm Zalo!', 'error');
+        return;
+    }
+
+    try {
+        const res = await window.electronApi.addZaloGroupsBulk(lines);
+        if (res.success) {
+            showToast(`✅ Đã thêm thành công ${res.added} nhóm mới (${res.count} tổng số)!`, 'success');
+            closeBulkAddZaloModal();
+            await loadZaloGroups();
+        } else {
+            showToast('Lỗi: ' + res.error, 'error');
+        }
+    } catch (e) {
+        showToast('Lỗi khi thêm nhóm: ' + e.message, 'error');
+    }
+}
+
+// QUÉT RIÊNG MỤC / THẺ PHÂN LOẠI ĐANG MỞ TRÊN ZALO WEB (CỰC KỲ CHÍNH XÁC, KHÔNG BỊ SÓT)
+async function triggerZaloCurrentViewScan() {
+    const wv = document.getElementById('zalo-wv');
+    if (!wv) return;
+
+    showScanModal('Zalo', 'Đang Quét Thẻ / Mục Zalo Đang Mở...');
+    appendScanModalLog('Kiểm tra mục phân loại hoặc tab hội thoại đang hiển thị trên Zalo Web...');
+
+    try {
+        const currentUrl = wv.getURL();
+        if (!currentUrl || currentUrl === 'about:blank' || !currentUrl.includes('zalo.me')) {
+            updateScanModalStatus('⚠️ Chưa mở Zalo Web', 100);
+            appendScanModalLog('Lỗi: Bạn chưa mở Zalo Web.');
+            showToast('Vui lòng vào tab Zalo Web, đăng nhập và chọn thẻ/mục cần quét trước!', 'error');
+            setTimeout(closeScanModal, 2000);
+            return;
+        }
+
+        updateScanModalStatus('Đang quét danh sách hội thoại trong mục hiện tại...', 35);
+
+        // Chạy trực tiếp trên view hiện tại, không chuyển tab Danh bạ
+        const scanResult = await wv.executeJavaScript(`
+            (async function() {
+                var detectedCategory = 'Mục hiện tại';
+                try {
+                    var activeTag = document.querySelector('.sub-tab-item.active, .category-item.selected, [class*="tab-item"][class*="active"], [class*="tag-item"][class*="selected"], [class*="filter-item"][class*="active"], div[class*="label-filter"] .active, div[class*="tab--active"]');
+                    if (activeTag && activeTag.innerText && activeTag.innerText.trim()) {
+                        detectedCategory = activeTag.innerText.trim();
+                    }
+                } catch(e) {}
+
+                var container = document.querySelector('#conversationList, [data-id="virtual-list"], .conv-list, .virtualized-scroll, div[class*="conv-list"]');
+                if (!container) {
+                    var all = document.querySelectorAll('div');
+                    for (var i = 0; i < all.length; i++) {
+                        var el = all[i];
+                        var rect = el.getBoundingClientRect();
+                        if (rect.left < 450 && rect.width > 120 && rect.height > 250) {
+                            var s = window.getComputedStyle(el);
+                            if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
+                                container = el;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                var names = [];
+                var seen = {};
+
+                function extractItems() {
+                    var items = document.querySelectorAll('.conv-item, [data-id*="conv_item"], div[id^="conv-item-"], div[class*="chat-item"], div[class*="conv-item"], .group-item');
+                    for (var k = 0; k < items.length; k++) {
+                        var it = items[k];
+                        var titleEl = it.querySelector('.conv-item-title__more, [class*="conv-item-title"], [class*="name"], [class*="title"], h4, p, span');
+                        var name = titleEl ? titleEl.innerText.trim() : (it.getAttribute('title') || it.innerText.split('\\n')[0].trim());
+                        if (name) {
+                            var firstLine = name.split('\\n')[0].trim();
+                            if (firstLine.length >= 2 && firstLine !== 'Zalo' && firstLine !== 'Cloud của tôi' && firstLine !== 'Truyền File') {
+                                var key = firstLine.toLowerCase();
+                                if (!seen[key]) {
+                                    seen[key] = true;
+                                    names.push(firstLine);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (container) container.scrollTop = 0;
+                await new Promise(function(r) { setTimeout(r, 250); });
+                extractItems();
+
+                var maxSteps = 20;
+                for (var step = 1; step <= maxSteps; step++) {
+                    if (container) {
+                        container.scrollTop += 320;
+                    } else {
+                        window.scrollBy(0, 320);
+                    }
+                    await new Promise(function(r) { setTimeout(r, 250); });
+                    extractItems();
+                }
+
+                return {
+                    category: detectedCategory,
+                    groups: names
+                };
+            })();
+        `);
+
+        const catName = scanResult?.category || 'Mục hiện tại';
+        const groups = scanResult?.groups || [];
+
+        appendScanModalLog(`Đang ở: "${catName}". Bóc tách được ${groups.length} nhóm/hội thoại.`);
+        updateScanModalStatus(`Đã thu thập ${groups.length} nhóm từ "${catName}"...`, 80, groups.length);
+
+        if (groups.length > 0) {
+            const res = await window.electronApi.addZaloGroupsBulk(groups);
+            appendScanModalLog(`✅ Đã lưu ${res.count} nhóm vào hệ thống (Thêm mới: ${res.added}).`);
+            updateScanModalStatus('Hoàn tất quét nhóm mục hiện tại!', 100, groups.length);
+            showToast(`✅ Đã quét thành công ${groups.length} nhóm từ "${catName}"!`, 'success');
+            await loadZaloGroups();
+            setTimeout(closeScanModal, 1500);
+        } else {
+            appendScanModalLog('⚠️ Không tìm thấy nhóm nào trong mục này. Hãy kiểm tra xem bạn có đang ở đúng tab hội thoại / phân loại không.');
+            updateScanModalStatus('Không tìm thấy nhóm', 100, 0);
+            showToast('Không tìm thấy nhóm nào trong mục đang mở. Vui lòng mở Zalo Web và chọn đúng danh sách cần quét!', 'warning');
+            setTimeout(closeScanModal, 2500);
+        }
+    } catch (e) {
+        console.error('Error triggerZaloCurrentViewScan:', e);
+        appendScanModalLog('Lỗi khi quét mục hiện tại: ' + e.message);
+        updateScanModalStatus('Lỗi khi quét!', 100);
+        showToast('Lỗi quét mục Zalo: ' + e.message, 'error');
+        setTimeout(closeScanModal, 3000);
+    }
+}
+
 // =========================================================================
 // HỆ THỐNG QUÉT NHÓM THÔNG MINH CÓ TIẾN TRÌNH TRỰC QUAN & GHI LOG THỜI GIAN THỰC
 // =========================================================================
