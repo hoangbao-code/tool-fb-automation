@@ -542,6 +542,16 @@ async function toggleZaloGroupStatus(id) {
     await loadZaloGroups();
 }
 
+async function toggleAllZaloGroupsUI(isMonitored) {
+    try {
+        await window.electronApi.toggleAllZaloGroups(isMonitored);
+        showToast(isMonitored ? 'Đã bật theo dõi tất cả nhóm Zalo!' : 'Đã tắt theo dõi tất cả nhóm Zalo.', 'info');
+        await loadZaloGroups();
+    } catch (e) {
+        showToast('Lỗi khi đổi trạng thái nhóm Zalo: ' + e.message, 'error');
+    }
+}
+
 async function deleteZaloGroupRow(id) {
     if (!confirm('Bạn có chắc muốn xóa nhóm Zalo này?')) return;
     await window.electronApi.deleteZaloGroup(id);
@@ -578,7 +588,7 @@ async function openAddZaloGroupManual() {
     }
 }
 
-// TỰ ĐỘNG QUÉT DANH SÁCH NHÓM ZALO TỪ WEBVIEW
+// TỰ ĐỘNG QUÉT TOÀN DIỆN DANH SÁCH NHÓM ZALO TỪ WEBVIEW (HỘI THOẠI & DANH BẠ)
 async function triggerZaloGroupScan() {
     const wv = document.getElementById('zalo-wv');
     if (!wv) return;
@@ -602,69 +612,135 @@ async function triggerZaloGroupScan() {
             return;
         }
 
-        showToast('🔍 Đang tự động quét danh sách nhóm từ Zalo Web...', 'info');
+        showToast('🔍 Đang tiến hành quét sâu toàn bộ nhóm Zalo (danh bạ & hội thoại)...', 'info');
 
-        // Cuộn danh sách chat để Zalo render các nhóm
-        await wv.executeJavaScript(`
-            (async function() {
-                var listEl = document.querySelector('#conversationList, .conv-list, .virtualized-scroll, div[class*="conv-list"], div[class*="scroll"]');
-                if (listEl) {
-                    listEl.scrollTop = 0;
-                    await new Promise(r => setTimeout(r, 200));
-                    listEl.scrollTop = listEl.scrollHeight / 2;
-                    await new Promise(r => setTimeout(r, 300));
-                    listEl.scrollTop = listEl.scrollHeight;
-                    await new Promise(r => setTimeout(r, 300));
-                    listEl.scrollTop = 0;
-                }
-            })();
-        `);
-        await new Promise(r => setTimeout(r, 500));
-
-        // Trích xuất danh sách nhóm từ DOM Zalo Web
+        // Thực thi kịch bản quét tự động đa tầng:
+        // 1. Quét danh sách hội thoại với progressive scrolling (thu thập trực tiếp khi cuộn, không reset scrollTop về 0)
+        // 2. Tự động chuyển qua Danh bạ -> Danh sách nhóm để lấy 100% nhóm đã tham gia
+        // 3. Trả lại màn hình Tin nhắn cũ
         const scannedGroups = await wv.executeJavaScript(`
-            (function() {
+            (async function() {
                 var found = [];
                 var seen = {};
 
-                // 1. Quét các item trong danh sách hội thoại
-                var items = document.querySelectorAll(
-                    '.conv-item, [data-id*="conv_item"], div[id^="conv-item-"], .group-item, .contact-item, div[class*="chat-item"]'
-                );
-
-                for (var i = 0; i < items.length; i++) {
-                    var el = items[i];
-                    var titleEl = el.querySelector(
-                        '.conv-item-title__more, .conv-item-title, .group-item__name, .contact-item__name, [class*="title__more"], [class*="conv-item-title"], [class*="truncate"], [data-id="chat-title"]'
-                    );
-                    var name = titleEl ? titleEl.innerText.trim() : '';
-                    if (!name) continue;
-
-                    var dataId = el.getAttribute('data-id') || el.id || '';
-                    var hasGroupAvatar = el.querySelector('.avatar-group, .avatar--group, [class*="avatar-group"], [class*="group-avatar"]') !== null;
-                    var imgCount = el.querySelectorAll('.avatar img, [class*="avatar"] img, img').length;
-                    var hasGroupIcon = el.querySelector('i[class*="group"], [data-icon*="group"], [class*="group-icon"]') !== null;
-                    var isGroupDataId = dataId.indexOf('g') !== -1 || dataId.indexOf('group') !== -1;
-
-                    // Nếu có dấu hiệu là nhóm hoặc nếu danh sách đang hiển thị
-                    if (isGroupDataId || hasGroupAvatar || imgCount > 1 || hasGroupIcon || items.length <= 25) {
-                        if (!seen[name.toLowerCase()]) {
-                            seen[name.toLowerCase()] = true;
-                            found.push(name);
-                        }
+                function addGroup(rawName) {
+                    if (!rawName) return;
+                    var name = rawName.replace(/\\s+/g, ' ').trim();
+                    if (name.length < 2) return;
+                    var lower = name.toLowerCase();
+                    // Bỏ qua các mục hệ thống Zalo
+                    if (lower === 'zalo' || lower === 'cloud của tôi' || lower === 'truyền file' || lower === 'thông báo trò chuyện' || lower === 'tin nhắn từ người lạ') return;
+                    if (!seen[lower]) {
+                        seen[lower] = true;
+                        found.push(name);
                     }
                 }
 
-                // 2. Nếu đang mở danh bạ nhóm
-                var groupItems = document.querySelectorAll('.group-item, [data-id*="group_item"], .contact-list-item');
-                for (var j = 0; j < groupItems.length; j++) {
-                    var gEl = groupItems[j];
-                    var tEl = gEl.querySelector('.group-item__name, .contact-item__name, [class*="name"], [class*="title"]');
-                    var gName = tEl ? tEl.innerText.trim() : gEl.innerText.trim();
-                    if (gName && !seen[gName.toLowerCase()]) {
-                        seen[gName.toLowerCase()] = true;
-                        found.push(gName);
+                // --- PHẦN 1: Quét danh sách hội thoại hiện tại bằng cách cuộn từng bước ---
+                var convContainer = document.querySelector('#conversationList, .conv-list, .virtualized-scroll, div[data-id="virtual-list"], div[class*="conv-list"]');
+                if (convContainer) {
+                    convContainer.scrollTop = 0;
+                    await new Promise(function(r) { setTimeout(r, 200); });
+
+                    var maxSteps = 25;
+                    var lastTop = -1;
+                    for (var s = 0; s < maxSteps; s++) {
+                        var items = convContainer.querySelectorAll('.conv-item, [data-id*="conv_item"], div[id^="conv-item-"], .group-item, div[class*="chat-item"]');
+                        for (var i = 0; i < items.length; i++) {
+                            var el = items[i];
+                            var titleEl = el.querySelector('.conv-item-title__more, .conv-item-title, .group-item__name, [class*="title__more"], [class*="conv-item-title"], [data-id="chat-title"]');
+                            var name = titleEl ? titleEl.innerText.trim() : '';
+                            if (!name) continue;
+
+                            var dataId = el.getAttribute('data-id') || el.id || '';
+                            var hasGroupAvatar = el.querySelector('.avatar-group, .avatar--group, [class*="avatar-group"], [class*="group-avatar"]') !== null;
+                            var imgCount = el.querySelectorAll('.avatar img, [class*="avatar"] img, img').length;
+                            var hasGroupIcon = el.querySelector('i[class*="group"], [data-icon*="group"], [class*="group-icon"]') !== null;
+                            var isGroupDataId = dataId.indexOf('g') !== -1 || dataId.indexOf('group') !== -1;
+
+                            if (isGroupDataId || hasGroupAvatar || imgCount > 1 || hasGroupIcon) {
+                                addGroup(name);
+                            }
+                        }
+
+                        if (convContainer.scrollTop === lastTop) break;
+                        lastTop = convContainer.scrollTop;
+                        convContainer.scrollTop += 350;
+                        await new Promise(function(r) { setTimeout(r, 150); });
                     }
+                }
+
+                // --- PHẦN 2: Tự động mở tab Danh Bạ -> Danh Sách Nhóm để lấy 100% nhóm đã tham gia ---
+                var contactBtn = document.querySelector('[data-id="btn_Main_Tab_Contact"], div[icon="outline-contact"], #nav-contact, div[title*="Danh bạ"], div[data-translate-inner="STR_CONTACT"]');
+                if (contactBtn) {
+                    contactBtn.click();
+                    await new Promise(function(r) { setTimeout(r, 600); });
+
+                    // Tìm sub-tab "Danh sách nhóm"
+                    var subTabs = document.querySelectorAll('[data-id="sub_tab_group"], [data-id*="group"], .sub-tab-item, .contact-subtab-item, div[class*="sub-tab"]');
+                    var groupTab = null;
+                    for (var t = 0; t < subTabs.length; t++) {
+                        var tabText = subTabs[t].innerText || '';
+                        if (tabText.indexOf('nhóm') !== -1 || tabText.indexOf('Nhóm') !== -1 || subTabs[t].getAttribute('data-id') === 'sub_tab_group') {
+                            groupTab = subTabs[t];
+                            break;
+                        }
+                    }
+
+                    if (groupTab) {
+                        groupTab.click();
+                        await new Promise(function(r) { setTimeout(r, 600); });
+
+                        // Cuộn toàn bộ danh sách nhóm trong danh bạ
+                        var groupListContainer = document.querySelector('.contact-list, #contact-list, .group-list, div[class*="contact-list"], div[class*="group-list"], div[class*="contact-container"]');
+                        if (!groupListContainer) {
+                            var sampleItem = document.querySelector('.group-item, [data-id*="group_item"], .contact-list-item');
+                            if (sampleItem && sampleItem.parentElement) groupListContainer = sampleItem.parentElement;
+                        }
+
+                        if (groupListContainer) {
+                            groupListContainer.scrollTop = 0;
+                            var maxGSteps = 35;
+                            var lastGTop = -1;
+                            for (var gs = 0; gs < maxGSteps; gs++) {
+                                var gItems = document.querySelectorAll('.group-item, [data-id*="group_item"], .contact-list-item, div[class*="group-row"]');
+                                for (var gi = 0; gi < gItems.length; gi++) {
+                                    var gEl = gItems[gi];
+                                    var tEl = gEl.querySelector('.group-item__name, .contact-item__name, [class*="name"], [class*="title"]');
+                                    var gName = tEl ? tEl.innerText.trim() : gEl.innerText.trim();
+                                    addGroup(gName);
+                                }
+
+                                if (groupListContainer.scrollTop === lastGTop) break;
+                                lastGTop = groupListContainer.scrollTop;
+                                groupListContainer.scrollTop += 450;
+                                await new Promise(function(r) { setTimeout(r, 150); });
+                            }
+                        } else {
+                            var gItems = document.querySelectorAll('.group-item, [data-id*="group_item"], .contact-list-item');
+                            for (var gi = 0; gi < gItems.length; gi++) {
+                                var gEl = gItems[gi];
+                                var tEl = gEl.querySelector('.group-item__name, .contact-item__name, [class*="name"], [class*="title"]');
+                                var gName = tEl ? tEl.innerText.trim() : gEl.innerText.trim();
+                                addGroup(gName);
+                            }
+                        }
+                    }
+
+                    // Quay lại tab Tin nhắn
+                    var msgBtn = document.querySelector('[data-id="btn_Main_Tab_Message"], div[icon="outline-chat"], #nav-chat, div[title*="Tin nhắn"], div[data-translate-inner="STR_CHAT"]');
+                    if (msgBtn) {
+                        msgBtn.click();
+                        await new Promise(function(r) { setTimeout(r, 300); });
+                    }
+                }
+
+                // --- PHẦN 3: Lấy tên nhóm đang mở nếu có ---
+                var curHeader = document.querySelector('.header-title, [data-id="chat-title"], #chat-header-name, .header-name');
+                if (curHeader) {
+                    var curName = curHeader.innerText.trim();
+                    var headerGroup = document.querySelector('.header-avatar-group, [class*="avatar-group"]');
+                    if (headerGroup) addGroup(curName);
                 }
 
                 return found;
@@ -694,16 +770,18 @@ async function triggerFbGroupScan() {
         const currentUrl = wv.getURL();
         if (!currentUrl || currentUrl === 'about:blank' || !currentUrl.includes('facebook.com')) {
             showToast('Đang mở Facebook... Vui lòng đăng nhập tài khoản trước khi quét!', 'info');
+            switchTab('fb');
             wv.loadURL('https://www.facebook.com/groups/joins/');
             return;
         }
 
-        if (!currentUrl.includes('/groups')) {
-            showToast('Đang mở trang Danh Sách Nhóm và quét...', 'info');
+        if (!currentUrl.includes('/groups/joins')) {
+            showToast('Đang chuyển đến trang Nhóm Bạn Đã Tham Gia trên Facebook...', 'info');
+            switchTab('fb');
             wv.loadURL('https://www.facebook.com/groups/joins/');
             wv.addEventListener('did-finish-load', function onLoaded() {
                 wv.removeEventListener('did-finish-load', onLoaded);
-                setTimeout(() => executeScanOnFbWebview(wv), 2000);
+                setTimeout(() => executeScanOnFbWebview(wv), 2500);
             });
             return;
         }
@@ -717,63 +795,95 @@ async function triggerFbGroupScan() {
 }
 
 async function executeScanOnFbWebview(wv) {
-    showToast('Đang quét danh sách nhóm Facebook trên trang...', 'info');
+    showToast('🔍 Đang tự động cuộn trang quét toàn bộ nhóm Facebook đã tham gia...', 'info');
     try {
-        // Cuộn trang nhẹ xuống để nạp thêm các nhóm ẩn
-        await wv.executeJavaScript(`window.scrollBy(0, 800);`);
-        await new Promise(r => setTimeout(r, 400));
-        await wv.executeJavaScript(`window.scrollBy(0, 1200);`);
-        await new Promise(r => setTimeout(r, 600));
+        // Chờ 1 giây để nội dung Facebook ổn định nếu vừa chuyển trang
+        await new Promise(r => setTimeout(r, 1000));
 
-        // Trích xuất trực tiếp danh sách nhóm qua executeJavaScript
+        // Trích xuất trực tiếp danh sách nhóm qua deep progressive auto-scroll
         const groups = await wv.executeJavaScript(`
-            (function() {
-                var foundGroups = [];
-                var seenUrls = {};
+            (async function() {
+                var foundGroupsMap = {};
                 var excludedIds = [
                     'feed', 'discover', 'notifications', 'joins', 'create', 'search',
                     'your_groups', 'membership_questions', 'manage', 'chats', 'member',
-                    'members', 'buy_sell_discussion', 'permalink', 'user', 'about'
+                    'members', 'buy_sell_discussion', 'permalink', 'user', 'about',
+                    'events', 'media', 'files', 'tagged', 'post', 'posts'
                 ];
 
-                var links = document.querySelectorAll('a[href*="/groups/"]');
-                for (var i = 0; i < links.length; i++) {
-                    var a = links[i];
-                    var href = a.getAttribute('href') || '';
-                    var match = href.match(/\\/groups\\/([^/?#]+)/);
-                    if (!match) continue;
+                function harvest() {
+                    var links = document.querySelectorAll('a[href*="/groups/"]');
+                    for (var i = 0; i < links.length; i++) {
+                        var a = links[i];
+                        var href = a.getAttribute('href') || '';
+                        var match = href.match(/\\/groups\\/([^/?#]+)/);
+                        if (!match) continue;
 
-                    var groupId = match[1];
-                    if (excludedIds.indexOf(groupId) !== -1) continue;
+                        var groupId = match[1];
+                        if (excludedIds.indexOf(groupId) !== -1) continue;
 
-                    var fullUrl = 'https://www.facebook.com/groups/' + groupId + '/';
-                    if (seenUrls[fullUrl]) continue;
-                    seenUrls[fullUrl] = true;
+                        var fullUrl = 'https://www.facebook.com/groups/' + groupId + '/';
 
-                    var rawText = (a.innerText || a.getAttribute('aria-label') || '').trim();
-                    var lines = rawText.split('\\n').map(function(l) { return l.trim(); }).filter(Boolean);
-                    var name = lines[0] || ('Nhóm FB (' + groupId + ')');
+                        var rawText = (a.innerText || a.getAttribute('aria-label') || '').trim();
+                        var lines = rawText.split('\\n').map(function(l) { return l.trim(); }).filter(Boolean);
+                        var name = lines[0] || '';
 
-                    if (name.indexOf('Xem tất cả') !== -1 || name.indexOf('Tạo nhóm') !== -1 || name.indexOf('http') === 0 || name.length < 2) {
-                        continue;
-                    }
+                        if (!name || name.indexOf('Xem tất cả') !== -1 || name.indexOf('Tạo nhóm') !== -1 || name.indexOf('http') === 0 || name.length < 2) {
+                            if (foundGroupsMap[fullUrl]) continue;
+                            name = 'Nhóm FB (' + groupId + ')';
+                        }
 
-                    var memberCount = '';
-                    for (var j = 0; j < lines.length; j++) {
-                        var l = lines[j];
-                        if (l.indexOf('thành viên') !== -1 || l.toLowerCase().indexOf('member') !== -1 || l.indexOf('bài viết') !== -1) {
-                            memberCount = l;
-                            break;
+                        var memberCount = '';
+                        for (var j = 0; j < lines.length; j++) {
+                            var l = lines[j];
+                            if (l.indexOf('thành viên') !== -1 || l.toLowerCase().indexOf('member') !== -1 || l.indexOf('bài viết') !== -1) {
+                                memberCount = l;
+                                break;
+                            }
+                        }
+
+                        // Ưu tiên lưu nếu chưa có hoặc nếu tên mới cụ thể hơn tên mặc định
+                        if (!foundGroupsMap[fullUrl] || (foundGroupsMap[fullUrl].name.indexOf('Nhóm FB (') === 0 && name.indexOf('Nhóm FB (') !== 0)) {
+                            foundGroupsMap[fullUrl] = {
+                                name: name,
+                                url: fullUrl,
+                                memberCount: memberCount || (foundGroupsMap[fullUrl] ? foundGroupsMap[fullUrl].memberCount : '')
+                            };
                         }
                     }
-
-                    foundGroups.push({
-                        name: name,
-                        url: fullUrl,
-                        memberCount: memberCount
-                    });
                 }
-                return foundGroups;
+
+                // Quét đợt 1 ngay tại vị trí hiện tại
+                harvest();
+
+                // Tự động cuộn trang liên tục để kích hoạt lazy-load toàn bộ nhóm Facebook
+                var maxScrolls = 25;
+                var lastHeight = document.body ? document.body.scrollHeight : 0;
+                var noChangeCount = 0;
+
+                for (var s = 0; s < maxScrolls; s++) {
+                    window.scrollBy(0, 1500);
+                    await new Promise(function(r) { setTimeout(r, 600); });
+                    harvest();
+
+                    var curHeight = document.body ? document.body.scrollHeight : 0;
+                    if (curHeight === lastHeight) {
+                        noChangeCount++;
+                        if (noChangeCount >= 3) break; // Đã đến đáy trang nhóm
+                    } else {
+                        noChangeCount = 0;
+                        lastHeight = curHeight;
+                    }
+                }
+
+                // Cuộn trở lại đầu trang
+                window.scrollTo(0, 0);
+
+                var result = [];
+                for (var key in foundGroupsMap) {
+                    result.push(foundGroupsMap[key]);
+                }
+                return result;
             })();
         `);
 
@@ -788,7 +898,7 @@ async function executeScanOnFbWebview(wv) {
             if (isLoginPage) {
                 showToast('⚠️ Bạn chưa đăng nhập Facebook! Hãy đăng nhập tài khoản trên màn hình trước rồi bấm Quét lại.', 'error');
             } else {
-                showToast('Chưa thấy nhóm nào trên trang này. Hãy chuyển sang tab Nhóm trên Facebook rồi bấm Quét lại.', 'info');
+                showToast('Chưa thấy nhóm nào trên trang này. Hãy vào mục "Nhóm bạn đã tham gia" trên Facebook rồi bấm Quét lại.', 'info');
             }
         }
     } catch (err) {
@@ -871,6 +981,16 @@ function filterFbGroupsTable() {
 async function toggleFbGroupStatus(id) {
     await window.electronApi.toggleFbGroup(id);
     loadFbGroups();
+}
+
+async function toggleAllFbGroupsUI(isActive) {
+    try {
+        await window.electronApi.toggleAllFbGroups(isActive);
+        showToast(isActive ? 'Đã bật đăng bài cho tất cả nhóm FB!' : 'Đã tắt đăng bài tất cả nhóm FB.', 'info');
+        loadFbGroups();
+    } catch (e) {
+        showToast('Lỗi khi đổi trạng thái nhóm FB: ' + e.message, 'error');
+    }
 }
 
 async function deleteFbGroupRow(id) {

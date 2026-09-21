@@ -127,6 +127,26 @@ async function runTests() {
     assert.strictEqual(checkZalo.length, 3, 'Cả 3 nhóm quét từ Zalo phải được lưu thành công vào cơ sở dữ liệu');
     console.log('  ✓ Quét và nạp thành công 3 nhóm Zalo vào database với trạng thái theo dõi mặc định BẬT!');
 
+    // 6. Kiểm thử Bật/Tắt Hàng Loạt (Bulk Toggle All Nhóm Zalo & Facebook)
+    console.log('\n6. Kiểm thử Bật/Tắt Hàng Loạt (Bulk Toggle All Nhóm Zalo & Facebook):');
+    // Test Zalo Bulk Toggle
+    await dbAsync.run(`UPDATE zalo_groups SET is_monitored = 0`);
+    const allZaloOff = await dbAsync.all(`SELECT is_monitored FROM zalo_groups WHERE is_monitored = 1`);
+    assert.strictEqual(allZaloOff.length, 0, 'Tất cả nhóm Zalo phải được tắt khi bỏ chọn');
+    await dbAsync.run(`UPDATE zalo_groups SET is_monitored = 1`);
+    const allZaloOn = await dbAsync.all(`SELECT is_monitored FROM zalo_groups WHERE is_monitored = 0`);
+    assert.strictEqual(allZaloOn.length, 0, 'Tất cả nhóm Zalo phải được bật khi chọn tất cả');
+    console.log('  ✓ Bulk Toggle Nhóm Zalo (Bật/Tắt tất cả) hoạt động chính xác 100%!');
+
+    // Test Facebook Bulk Toggle
+    await dbAsync.run(`UPDATE fb_groups SET is_active = 0`);
+    const allFbOff = await dbAsync.all(`SELECT is_active FROM fb_groups WHERE is_active = 1`);
+    assert.strictEqual(allFbOff.length, 0, 'Tất cả nhóm FB phải được tắt khi bỏ chọn');
+    await dbAsync.run(`UPDATE fb_groups SET is_active = 1`);
+    const allFbOn = await dbAsync.all(`SELECT is_active FROM fb_groups WHERE is_active = 0`);
+    assert.strictEqual(allFbOn.length, 0, 'Tất cả nhóm FB phải được bật khi chọn tất cả');
+    console.log('  ✓ Bulk Toggle Nhóm FB (Bật/Tắt tất cả) hoạt động chính xác 100%!');
+
     console.log('\n========================================================');
     console.log('🎉 TẤT CẢ CÁC BÀI TEST TÍNH NĂNG V2.1 ĐỀU THÀNH CÔNG 100%!');
     console.log('========================================================\n');

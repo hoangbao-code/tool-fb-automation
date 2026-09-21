@@ -301,6 +301,16 @@ ipcMain.handle('toggle-zalo-group', async (event, id) => {
     }
 });
 
+ipcMain.handle('toggle-all-zalo-groups', async (event, isMonitored) => {
+    try {
+        await dbAsync.run(`UPDATE zalo_groups SET is_monitored = ?`, [isMonitored ? 1 : 0]);
+        await dbAsync.log('info', `Đã ${isMonitored ? 'BẬT' : 'TẮT'} theo dõi toàn bộ nhóm Zalo.`);
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
 // 4. Nhóm Facebook
 ipcMain.handle('get-fb-groups', async () => {
     try {
@@ -334,6 +344,16 @@ ipcMain.handle('delete-fb-group', async (event, id) => {
 ipcMain.handle('toggle-fb-group', async (event, id) => {
     try {
         await dbAsync.run(`UPDATE fb_groups SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?`, [id]);
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('toggle-all-fb-groups', async (event, isActive) => {
+    try {
+        await dbAsync.run(`UPDATE fb_groups SET is_active = ?`, [isActive ? 1 : 0]);
+        await dbAsync.log('info', `Đã ${isActive ? 'BẬT' : 'TẮT'} đăng bài cho toàn bộ nhóm Facebook.`);
         return { success: true };
     } catch (e) {
         return { success: false, error: e.message };

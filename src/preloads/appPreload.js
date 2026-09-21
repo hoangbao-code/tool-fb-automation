@@ -31,12 +31,14 @@ contextBridge.exposeInMainWorld('electronApi', {
     addZaloGroupsBulk: (groups) => ipcRenderer.invoke('add-zalo-groups-bulk', groups),
     deleteZaloGroup: (id) => ipcRenderer.invoke('delete-zalo-group', id),
     toggleZaloGroup: (id) => ipcRenderer.invoke('toggle-zalo-group', id),
+    toggleAllZaloGroups: (isMonitored) => ipcRenderer.invoke('toggle-all-zalo-groups', isMonitored),
 
     // 4. Nhóm Facebook
     getFbGroups: () => ipcRenderer.invoke('get-fb-groups'),
     addFbGroup: (name, url) => ipcRenderer.invoke('add-fb-group', { name, url }),
     deleteFbGroup: (id) => ipcRenderer.invoke('delete-fb-group', id),
     toggleFbGroup: (id) => ipcRenderer.invoke('toggle-fb-group', id),
+    toggleAllFbGroups: (isActive) => ipcRenderer.invoke('toggle-all-fb-groups', isActive),
 
     // 5. Hàng đợi bài viết & Đăng bài
     getPosts: () => ipcRenderer.invoke('get-posts'),
