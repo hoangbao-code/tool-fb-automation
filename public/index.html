@@ -292,11 +292,14 @@
                         <button onclick="toggleAllZaloGroupsUI(false)" class="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all" title="Tắt theo dõi tất cả nhóm Zalo">
                             Bỏ Chọn
                         </button>
-                        <button onclick="triggerZaloCurrentViewScan()" class="bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Quét đúng danh sách nhóm trong thẻ phân loại hoặc mục bạn đang mở trên Zalo Web">
-                            <i data-lucide="filter" class="w-3.5 h-3.5"></i> Quét Mục Đang Mở
+                        <button onclick="triggerZaloKhacScan()" class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md transition-all ring-1 ring-blue-400/50" title="Chỉ quét các nhóm bạn đã chuyển sang mục 'Khác'">
+                            <i data-lucide="folder-check" class="w-4 h-4 text-sky-200"></i> Quét Mục "Khác" Zalo
                         </button>
-                        <button onclick="triggerZaloGroupScan()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Tự động quét toàn bộ danh bạ nhóm từ Zalo Web">
-                            <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét Toàn Bộ Danh Bạ
+                        <button onclick="triggerZaloCurrentViewScan()" class="bg-teal-700/80 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Quét đúng danh sách nhóm trong thẻ phân loại hoặc mục bạn đang mở trên Zalo Web">
+                            <i data-lucide="filter" class="w-3.5 h-3.5"></i> Quét Thẻ / Mục Đang Mở
+                        </button>
+                        <button onclick="triggerZaloGroupScan()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Tự động quét toàn bộ danh bạ nhóm từ Zalo Web">
+                            <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét Danh Bạ
                         </button>
                         <button onclick="openBulkAddZaloModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm" title="Dán danh sách nhiều tên nhóm (mỗi dòng một nhóm)">
                             <i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i> Dán Nhiều Nhóm
