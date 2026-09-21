@@ -45,13 +45,59 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
     }
 
     const data = await response.json();
-    const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    let resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!resultText) {
         throw new Error('Gemini không trả về nội dung hợp lệ.');
     }
 
-    await dbAsync.log('info', `AI Gemini (${model}) đã viết lại bài cho nhóm [${groupName}] thành công.`);
+    resultText = resultText.trim();
+
+    // 1. Tự động chèn thông tin liên hệ (chữ ký) nếu có
+    const sigRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'custom_signature'`);
+    if (sigRow?.value && sigRow.value.trim()) {
+        resultText += `\n\n${sigRow.value.trim()}`;
+    }
+
+    // 2. Tự động chèn dàn Hashtags cá nhân nếu có
+    const tagRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'custom_hashtags'`);
+    if (tagRow?.value && tagRow.value.trim()) {
+        resultText += `\n\n${tagRow.value.trim()}`;
+    }
+
+    await dbAsync.log('info', `AI Gemini (${model}) đã viết lại bài cho nhóm [${groupName}] thành công (đã chèn chữ ký & hashtags).`);
     return resultText.trim();
+}
+
+/**
+ * Tạo biến thể bài viết riêng biệt (Unique Spin Content) cho từng nhóm Facebook
+ * để tránh thuật toán chống spam trùng lặp của Facebook
+ */
+function spinPostForGroup(baseContent, targetGroupName = '', index = 0) {
+    if (!baseContent) return '';
+    
+    // Các câu tiêu đề mở đầu biến thể
+    const hooks = [
+        `📢 CẬP NHẬT MỚI:`,
+        `🔥 TIN HOT HÔM NAY:`,
+        `✨ DÀNH CHO ANH EM QUAN TÂM:`,
+        `💎 SIÊU PHẨM MỚI LÊN SÓNG:`,
+        `📌 THÔNG TIN ĐÁNG CHÚ Ý:`,
+        `🚀 CHIA SẺ CÙNG CẢ NHÀ:`
+    ];
+
+    // Các câu kêu gọi hành động cuối bài
+    const ctas = [
+        `👉 Mọi người quan tâm inbox hoặc liên hệ ngay nhé!`,
+        `📞 Xem chi tiết thông tin bên dưới hoặc liên hệ trực tiếp:`,
+        `🤝 Hỗ trợ tư vấn và giải đáp nhiệt tình cho anh em:`,
+        `⚡ Bác nào ưng ý nhắn tin ngay để giữ chỗ sớm nhé!`
+    ];
+
+    const chosenHook = hooks[index % hooks.length];
+    const chosenCta = ctas[index % ctas.length];
+
+    // Gắn biến thể nhẹ vào đầu bài và giữ trọn vẹn phần thân
+    return `${chosenHook}\n\n${baseContent}\n\n${chosenCta}`;
 }
 
 /**
@@ -81,4 +127,4 @@ async function testGemini(apiKey, promptTemplate, model = 'gemini-1.5-flash') {
     return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Không có kết quả trả về.';
 }
 
-module.exports = { rewriteWithGemini, testGemini };
+module.exports = { rewriteWithGemini, testGemini, spinPostForGroup };

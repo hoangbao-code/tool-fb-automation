@@ -5,6 +5,7 @@ const state = {
     settings: {},
     posts: [],
     fbGroups: [],
+    zaloGroups: [],
     filter: 'all',
     activeZaloGroup: ''
 };
@@ -207,6 +208,7 @@ async function loadInitialData() {
         loadStatus(),
         loadPosts(),
         loadFbGroups(),
+        loadZaloGroups(),
         loadAiSettings(),
         loadGeneralSettings(),
         loadLogs()
@@ -399,6 +401,7 @@ async function monitorCurrentZaloGroup() {
     const res = await window.electronApi.addZaloGroup(state.activeZaloGroup);
     if (res.success) {
         showToast(`Đã thêm nhóm [${state.activeZaloGroup}] vào danh sách tự động bắt tin!`, 'success');
+        await loadZaloGroups();
     } else {
         showToast(res.error, 'error');
     }
@@ -407,6 +410,96 @@ async function monitorCurrentZaloGroup() {
 function reloadZaloWebview() {
     const wv = document.getElementById('zalo-wv');
     if (wv) wv.reload();
+}
+
+// Quản Lý Nhóm Zalo Theo Dõi
+async function loadZaloGroups() {
+    try {
+        const res = await window.electronApi.getZaloGroups();
+        if (res.success) {
+            state.zaloGroups = res.groups;
+            const countEl = document.getElementById('zalo-groups-count');
+            if (countEl) countEl.innerText = res.groups.filter(g => g.is_monitored).length;
+            renderZaloGroupsTable();
+        }
+    } catch (e) {
+        console.error('Error loadZaloGroups:', e);
+    }
+}
+
+function renderZaloGroupsTable() {
+    const tbody = document.getElementById('zalo-groups-table-body');
+    if (!tbody) return;
+    const list = state.zaloGroups || [];
+    if (list.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="3" class="p-6 text-center text-slate-500 text-xs">
+                    Chưa có nhóm Zalo nào trong danh sách theo dõi. Bấm <b>"Thêm Nhóm"</b> hoặc bấm nút <b>"Theo Dõi Nhóm Này"</b> khi mở Zalo.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = list.map(g => `
+        <tr class="hover:bg-slate-900/50 transition-colors">
+            <td class="p-3 text-center">
+                <input type="checkbox" ${g.is_monitored ? 'checked' : ''} onchange="toggleZaloGroupStatus(${g.id})" class="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700 cursor-pointer">
+            </td>
+            <td class="p-3 font-semibold text-white">
+                ${escapeHtml(g.name)}
+            </td>
+            <td class="p-3 text-right">
+                <button onclick="deleteZaloGroupRow(${g.id})" class="text-slate-500 hover:text-rose-400 p-1 rounded transition-colors" title="Xóa">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+    lucide.createIcons();
+}
+
+function openZaloGroupsModal() {
+    const modal = document.getElementById('zalo-groups-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        renderZaloGroupsTable();
+    }
+}
+
+function closeZaloGroupsModal() {
+    const modal = document.getElementById('zalo-groups-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function toggleZaloGroupStatus(id) {
+    await window.electronApi.toggleZaloGroup(id);
+    await loadZaloGroups();
+}
+
+async function deleteZaloGroupRow(id) {
+    if (!confirm('Bạn có chắc muốn xóa nhóm Zalo này?')) return;
+    await window.electronApi.deleteZaloGroup(id);
+    showToast('Đã xóa nhóm Zalo.', 'info');
+    await loadZaloGroups();
+}
+
+async function addNewZaloGroupManual() {
+    const input = document.getElementById('add-zalo-group-name');
+    const name = input?.value?.trim();
+    if (!name) {
+        showToast('Vui lòng nhập tên nhóm Zalo!', 'error');
+        return;
+    }
+    const res = await window.electronApi.addZaloGroup(name);
+    if (res.success) {
+        showToast(`Đã thêm nhóm: ${name}`, 'success');
+        input.value = '';
+        await loadZaloGroups();
+    } else {
+        showToast(res.error, 'error');
+    }
 }
 
 // 4. Facebook Webview Controls
@@ -632,6 +725,12 @@ async function loadAiSettings() {
             document.getElementById('ai-key-input').value = res.settings.gemini_api_key || '';
             document.getElementById('ai-model-select').value = res.settings.gemini_model || 'gemini-1.5-flash';
             document.getElementById('ai-prompt-input').value = res.settings.ai_prompt_template || '';
+            const spinCheck = document.getElementById('ai-spin-enabled');
+            if (spinCheck) spinCheck.checked = res.settings.ai_spin_enabled === '1';
+            const sigInput = document.getElementById('ai-signature-input');
+            if (sigInput) sigInput.value = res.settings.custom_signature || '';
+            const tagInput = document.getElementById('ai-hashtags-input');
+            if (tagInput) tagInput.value = res.settings.custom_hashtags || '';
         }
     } catch (e) {
         console.error('Error loadAiSettings:', e);
@@ -642,11 +741,17 @@ async function saveAiConfig() {
     const key = document.getElementById('ai-key-input').value.trim();
     const model = document.getElementById('ai-model-select').value;
     const prompt = document.getElementById('ai-prompt-input').value.trim();
+    const spinEnabled = document.getElementById('ai-spin-enabled')?.checked ? '1' : '0';
+    const signature = document.getElementById('ai-signature-input')?.value || '';
+    const hashtags = document.getElementById('ai-hashtags-input')?.value || '';
 
     await window.electronApi.saveSettings({
         gemini_api_key: key,
         gemini_model: model,
-        ai_prompt_template: prompt
+        ai_prompt_template: prompt,
+        ai_spin_enabled: spinEnabled,
+        custom_signature: signature,
+        custom_hashtags: hashtags
     });
     showToast('Đã lưu cấu hình Google Gemini AI!', 'success');
 }
@@ -690,6 +795,8 @@ async function loadGeneralSettings() {
             document.getElementById('cfg-emergency-stop').value = res.settings.emergency_stop || '0';
             document.getElementById('cfg-delay-min').value = res.settings.delay_min_seconds || '180';
             document.getElementById('cfg-delay-max').value = res.settings.delay_max_seconds || '480';
+            const smartSched = document.getElementById('cfg-smart-scheduler');
+            if (smartSched) smartSched.value = res.settings.smart_scheduler_enabled || '0';
         }
     } catch (e) {
         console.error('Error loadGeneralSettings:', e);
@@ -701,15 +808,73 @@ async function saveAllSettings() {
     const stop = document.getElementById('cfg-emergency-stop').value;
     const min = document.getElementById('cfg-delay-min').value;
     const max = document.getElementById('cfg-delay-max').value;
+    const smartSched = document.getElementById('cfg-smart-scheduler')?.value || '0';
 
     await window.electronApi.saveSettings({
         auto_post_enabled: auto,
         emergency_stop: stop,
         delay_min_seconds: min,
-        delay_max_seconds: max
+        delay_max_seconds: max,
+        smart_scheduler_enabled: smartSched
     });
     showToast('Đã lưu cấu hình cài đặt hệ thống!', 'success');
     loadStatus();
+}
+
+// Sao Lưu & Phục Hồi Dữ Liệu
+async function exportDataBackup() {
+    try {
+        const res = await window.electronApi.exportBackup();
+        if (res.success) {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res.data, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            const dateStr = new Date().toISOString().slice(0, 10);
+            downloadAnchor.setAttribute("download", `posthub_backup_${dateStr}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showToast('Đã xuất file sao lưu thành công!', 'success');
+        } else {
+            showToast('Lỗi xuất sao lưu: ' + res.error, 'error');
+        }
+    } catch (e) {
+        console.error('Error exportBackup:', e);
+        showToast('Lỗi xuất sao lưu: ' + e.message, 'error');
+    }
+}
+
+function triggerImportBackup() {
+    const fileInput = document.getElementById('import-backup-file');
+    if (fileInput) fileInput.click();
+}
+
+async function handleBackupFileSelected(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const json = JSON.parse(e.target.result);
+            if (!confirm(`Bạn có chắc muốn phục hồi dữ liệu từ file "${file.name}"? Dữ liệu hiện tại sẽ được cập nhật.`)) {
+                event.target.value = '';
+                return;
+            }
+            const res = await window.electronApi.importBackup(json);
+            if (res.success) {
+                showToast(`Phục hồi thành công: ${res.stats.importedSettings} cài đặt, ${res.stats.importedFbGroups} nhóm FB, ${res.stats.importedZaloGroups} nhóm Zalo!`, 'success');
+                await loadInitialData();
+            } else {
+                showToast('Lỗi phục hồi: ' + res.error, 'error');
+            }
+        } catch (err) {
+            showToast('Định dạng file JSON không hợp lệ: ' + err.message, 'error');
+        } finally {
+            event.target.value = '';
+        }
+    };
+    reader.readAsText(file);
 }
 
 // 8. Modal Biên Tập & Đăng Bài

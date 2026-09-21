@@ -1,4 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const path = require('path');
 
 contextBridge.exposeInMainWorld('electronApi', {
     // 0. Đường dẫn Preload Webview
@@ -18,6 +19,7 @@ contextBridge.exposeInMainWorld('electronApi', {
     getZaloGroups: () => ipcRenderer.invoke('get-zalo-groups'),
     addZaloGroup: (name) => ipcRenderer.invoke('add-zalo-group', name),
     deleteZaloGroup: (id) => ipcRenderer.invoke('delete-zalo-group', id),
+    toggleZaloGroup: (id) => ipcRenderer.invoke('toggle-zalo-group', id),
 
     // 4. Nhóm Facebook
     getFbGroups: () => ipcRenderer.invoke('get-fb-groups'),
@@ -37,13 +39,10 @@ contextBridge.exposeInMainWorld('electronApi', {
     // 7. Nhật ký
     getLogs: () => ipcRenderer.invoke('get-logs'),
 
-    // 8. Tương tác với Webview Zalo & Facebook
-    onZaloWebviewEvent: (callback) => {
-        ipcRenderer.on('zalo-webview-event', (event, data) => callback(data));
-    },
-    onFbWebviewEvent: (callback) => {
-        ipcRenderer.on('fb-webview-event', (event, data) => callback(data));
-    },
+    // 8. Sao lưu & Phục hồi dữ liệu
+    exportBackup: () => ipcRenderer.invoke('export-backup'),
+    importBackup: (backupData) => ipcRenderer.invoke('import-backup', backupData),
+    showNotification: (title, body) => ipcRenderer.invoke('show-notification', { title, body }),
 
     // 9. Lắng nghe các sự kiện hệ thống thời gian thực
     on: (channel, callback) => {
@@ -52,7 +51,8 @@ contextBridge.exposeInMainWorld('electronApi', {
             'new-post-ready',
             'post-published',
             'fb-groups-updated',
-            'new-log-entry'
+            'new-log-entry',
+            'status-updated'
         ];
         if (validChannels.includes(channel)) {
             ipcRenderer.on(channel, (event, ...args) => callback(...args));

@@ -1,13 +1,13 @@
 {
   "name": "posthub-desktop",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "PostHub - Tự Động Hóa Zalo sang Facebook (Ứng Dụng Desktop Windows)",
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "test": "node tests/test_fb_scan.js"
+    "test": "node tests/test_fb_scan.js && node tests/test_upgrades.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

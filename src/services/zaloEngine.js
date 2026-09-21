@@ -18,17 +18,20 @@ async function processZaloMessage({ groupName, sender, text, images = [] }) {
     const cleanSender = (sender || 'Thành viên').trim();
     const cleanText = (text || '').trim();
 
-    // 1. Kiểm tra nhóm theo dõi
+    // 1. Kiểm tra nhóm theo dõi (Chỉ lấy từ các group được bạn chỉ định)
     const monitoredGroups = await dbAsync.all(`SELECT name FROM zalo_groups WHERE is_monitored = 1`);
-    if (monitoredGroups.length > 0) {
-        const isMatched = monitoredGroups.some(g => 
-            g.name.toLowerCase() === cleanGroupName.toLowerCase() ||
-            cleanGroupName.toLowerCase().includes(g.name.toLowerCase())
-        );
-        if (!isMatched) {
-            console.log(`[Bỏ qua] Tin từ nhóm [${cleanGroupName}] vì chưa chọn theo dõi.`);
-            return;
-        }
+    if (monitoredGroups.length === 0) {
+        // Chưa chọn theo dõi nhóm Zalo nào -> Bỏ qua tin nhắn
+        return;
+    }
+    const isMatched = monitoredGroups.some(g => 
+        g.name.toLowerCase() === cleanGroupName.toLowerCase() ||
+        cleanGroupName.toLowerCase().includes(g.name.toLowerCase()) ||
+        g.name.toLowerCase().includes(cleanGroupName.toLowerCase())
+    );
+    if (!isMatched) {
+        // Không thuộc danh sách nhóm Zalo được theo dõi -> Bỏ qua
+        return;
     }
 
     // 2. Lưu tin nhắn thô vào SQLite

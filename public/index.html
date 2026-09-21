@@ -166,6 +166,9 @@
                         <button onclick="monitorCurrentZaloGroup()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 shadow-sm transition-all">
                             <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Theo dõi nhóm này
                         </button>
+                        <button onclick="openZaloGroupsModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 transition-all">
+                            <i data-lucide="list-checks" class="w-3.5 h-3.5 text-blue-400"></i> Nhóm Theo Dõi (<span id="zalo-groups-count">0</span>)
+                        </button>
                     </div>
                     <div class="flex items-center gap-2">
                         <button onclick="reloadZaloWebview()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all">
@@ -275,12 +278,33 @@
 
                     <div class="space-y-1.5">
                         <label class="block text-xs font-semibold text-slate-300">Mẫu Prompt Biên Tập Bài Đăng</label>
-                        <textarea id="ai-prompt-input" rows="6" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono leading-relaxed"></textarea>
+                        <textarea id="ai-prompt-input" rows="5" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono leading-relaxed"></textarea>
                         <div class="flex items-center gap-2 text-[11px] text-slate-400">
                             <span>Các biến chèn tự động:</span>
                             <code class="bg-slate-800 px-1.5 py-0.5 rounded text-blue-400 font-mono">{CONTENT}</code>
                             <code class="bg-slate-800 px-1.5 py-0.5 rounded text-indigo-400 font-mono">{SENDER}</code>
                             <code class="bg-slate-800 px-1.5 py-0.5 rounded text-emerald-400 font-mono">{GROUP}</code>
+                        </div>
+                    </div>
+
+                    <!-- Unique Spin Content -->
+                    <div class="p-3.5 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between">
+                        <div>
+                            <b class="text-xs text-white">Unique Spin Content: Tự động biến thể văn phong theo từng nhóm FB</b>
+                            <p class="text-[11px] text-slate-400">Đổi nhẹ tiêu đề, câu kêu gọi theo từng nhóm để tránh bị thuật toán Facebook bóp tương tác khi đăng hàng loạt.</p>
+                        </div>
+                        <input type="checkbox" id="ai-spin-enabled" class="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700 cursor-pointer">
+                    </div>
+
+                    <!-- Chữ ký & Hashtags -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold text-slate-300">Thông Tin Liên Hệ / Chữ Ký (Tự chèn cuối bài)</label>
+                            <textarea id="ai-signature-input" rows="3" placeholder="📞 Hotline/Zalo: 0912.xxx.xxx&#10;🌐 Website: ..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans"></textarea>
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold text-slate-300">Dàn Hashtags Cá Nhân (Tự chèn cuối bài)</label>
+                            <textarea id="ai-hashtags-input" rows="3" placeholder="#nhadep #bds #chothue #giatot" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans"></textarea>
                         </div>
                     </div>
 
@@ -342,7 +366,38 @@
                         </div>
                     </div>
 
-                    <div class="flex justify-end pt-4 border-t border-slate-800">
+                    <!-- Khung Giờ Vàng (Smart Scheduler) -->
+                    <div class="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <b class="text-xs text-white flex items-center gap-1.5">
+                                    <i data-lucide="clock" class="w-4 h-4 text-amber-400"></i>
+                                    Lên Lịch Theo Khung Giờ Vàng (Smart Scheduler)
+                                </b>
+                                <p class="text-[11px] text-slate-400">Chỉ tự động xuất bản vào các khung giờ có lượng người online Facebook đông nhất.</p>
+                            </div>
+                            <select id="cfg-smart-scheduler" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="0">Tắt - Đăng rải rác bất cứ lúc nào có tin</option>
+                                <option value="1">Bật - Chỉ đăng trong Khung Giờ Vàng</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-wrap gap-2 text-xs text-slate-300">
+                            <span class="bg-amber-950/40 border border-amber-800/40 text-amber-300 px-2.5 py-1 rounded-md font-mono">🌅 Sáng: 08:00 - 09:30</span>
+                            <span class="bg-amber-950/40 border border-amber-800/40 text-amber-300 px-2.5 py-1 rounded-md font-mono">☀️ Trưa: 11:30 - 13:00</span>
+                            <span class="bg-amber-950/40 border border-amber-800/40 text-amber-300 px-2.5 py-1 rounded-md font-mono">🌙 Tối: 19:30 - 21:30</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-4 border-t border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <button onclick="exportDataBackup()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all">
+                                <i data-lucide="download" class="w-3.5 h-3.5 text-blue-400"></i> Xuất File Sao Lưu (.json)
+                            </button>
+                            <button onclick="triggerImportBackup()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all">
+                                <i data-lucide="upload" class="w-3.5 h-3.5 text-emerald-400"></i> Phục Hồi Dữ Liệu
+                            </button>
+                            <input type="file" id="import-backup-file" class="hidden" accept=".json" onchange="handleBackupFileSelected(event)">
+                        </div>
                         <button onclick="saveAllSettings()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-xs font-semibold shadow-sm transition-all">
                             Lưu Cài Đặt Hệ Thống
                         </button>
@@ -407,6 +462,51 @@
                         <i data-lucide="send" class="w-3.5 h-3.5"></i> Duyệt & Đăng Luôn
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL QUẢN LÝ NHÓM ZALO THEO DÕI -->
+    <div id="zalo-groups-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-white text-base flex items-center gap-2">
+                    <i data-lucide="list-checks" class="w-4 h-4 text-blue-400"></i>
+                    Quản Lý Danh Sách Nhóm Zalo Theo Dõi
+                </h3>
+                <button onclick="closeZaloGroupsModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <p class="text-xs text-slate-400">Chỉ những tin nhắn thuộc các nhóm Zalo được BẬT dưới đây mới được hệ thống tự động gom tin.</p>
+
+            <div class="flex gap-2">
+                <input type="text" id="add-zalo-group-name" placeholder="Nhập chính xác tên nhóm Zalo..." class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button onclick="addNewZaloGroupManual()" class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i> Thêm Nhóm
+                </button>
+            </div>
+
+            <div class="bg-slate-950/60 rounded-xl border border-slate-800 max-h-64 overflow-y-auto">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-900/90 text-slate-400 uppercase font-semibold border-b border-slate-800">
+                        <tr>
+                            <th class="p-3 w-12 text-center">Bật</th>
+                            <th class="p-3">Tên Nhóm Zalo</th>
+                            <th class="p-3 text-right w-16">Xóa</th>
+                        </tr>
+                    </thead>
+                    <tbody id="zalo-groups-table-body" class="divide-y divide-slate-800/60">
+                        <!-- Dynamic rows -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex justify-end pt-2">
+                <button onclick="closeZaloGroupsModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold">
+                    Đóng
+                </button>
             </div>
         </div>
     </div>

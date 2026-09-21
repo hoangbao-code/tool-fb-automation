@@ -1,4 +1,5 @@
 const { dbAsync } = require('../db');
+const { spinPostForGroup } = require('./gemini');
 
 let fbWebviewRef = null;
 let eventBroadcaster = null;
@@ -10,6 +11,31 @@ function setFbWebview(wv) {
 
 function setFbEventBroadcaster(fn) {
     eventBroadcaster = fn;
+}
+
+/**
+ * Kiểm tra xem thời điểm hiện tại có nằm trong Khung Giờ Vàng hay không
+ */
+function isWithinGoldenHours(slotsJson, testDate = null) {
+    if (!slotsJson) return true;
+    try {
+        const slots = typeof slotsJson === 'string' ? JSON.parse(slotsJson) : slotsJson;
+        if (!Array.isArray(slots) || slots.length === 0) return true;
+
+        const now = testDate || new Date();
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+        return slots.some(slot => {
+            if (!slot.start || !slot.end) return false;
+            const [sh, sm] = slot.start.split(':').map(Number);
+            const [eh, em] = slot.end.split(':').map(Number);
+            const startMin = sh * 60 + (sm || 0);
+            const endMin = eh * 60 + (em || 0);
+            return currentMinutes >= startMin && currentMinutes <= endMin;
+        });
+    } catch (e) {
+        return true;
+    }
 }
 
 /**
@@ -51,15 +77,26 @@ async function publishPost(postId) {
         throw new Error('Chưa có nhóm Facebook nào được chọn. Hãy vào tab Nhóm FB để tích chọn ít nhất 1 nhóm.');
     }
 
-    await dbAsync.log('info', `Bắt đầu xuất bản bài viết #${postId} lên ${activeFbGroups.length} nhóm Facebook...`);
+    const spinRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'ai_spin_enabled'`);
+    const isSpinEnabled = spinRow?.value === '1';
+
+    await dbAsync.log('info', `Bắt đầu xuất bản bài viết #${postId} lên ${activeFbGroups.length} nhóm Facebook (Spin content: ${isSpinEnabled ? 'BẬT' : 'TẮT'})...`);
 
     // Gửi lệnh đăng bài trực tiếp vào Facebook Webview thông qua preload script
     if (fbWebviewRef) {
         try {
+            const baseText = post.rewritten_text || post.original_text;
+            const payloadGroups = activeFbGroups.map((group, idx) => ({
+                id: group.id,
+                name: group.name,
+                url: group.url,
+                content: isSpinEnabled ? spinPostForGroup(baseText, group.name, idx) : baseText
+            }));
+
             fbWebviewRef.send('publish-to-fb', {
                 postId: post.id,
-                content: post.rewritten_text || post.original_text,
-                groups: activeFbGroups
+                content: baseText,
+                groups: payloadGroups
             });
         } catch (e) {
             console.error('Lỗi gửi lệnh sang FB Webview:', e);
@@ -72,14 +109,14 @@ async function publishPost(postId) {
     );
 
     if (eventBroadcaster) {
-        eventBroadcaster('post-published', { id: postId, status: 'posted' });
+        eventBroadcaster('post-published', { id: postId, status: 'posted', groupCount: activeFbGroups.length });
     }
     await dbAsync.log('info', `Đã xuất bản thành công bài đăng #${postId}.`);
     return { success: true };
 }
 
 /**
- * Worker tự động đăng bài theo chu kỳ giãn cách ngẫu nhiên (Jitter Delay)
+ * Worker tự động đăng bài theo chu kỳ giãn cách ngẫu nhiên & Khung Giờ Vàng
  */
 function startFbPostWorker() {
     if (isWorkerStarted) return;
@@ -91,6 +128,16 @@ function startFbPostWorker() {
             const stopSetting = await dbAsync.get(`SELECT value FROM settings WHERE key = 'emergency_stop'`);
 
             if (autoSetting?.value !== '1' || stopSetting?.value === '1') return;
+
+            // Kiểm tra Lên lịch Khung Giờ Vàng (Smart Scheduler)
+            const schedulerRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'smart_scheduler_enabled'`);
+            if (schedulerRow?.value === '1') {
+                const slotsRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'smart_scheduler_slots'`);
+                if (!isWithinGoldenHours(slotsRow?.value)) {
+                    // Ngoài khung giờ vàng -> Tạm hoãn đợi khung giờ tiếp theo
+                    return;
+                }
+            }
 
             // Tìm bài viết ở trạng thái 'approved'
             const pendingPost = await dbAsync.get(`SELECT * FROM posts WHERE status = 'approved' ORDER BY id ASC LIMIT 1`);
@@ -124,5 +171,6 @@ module.exports = {
     setFbEventBroadcaster,
     handleScannedGroups,
     publishPost,
-    startFbPostWorker
+    startFbPostWorker,
+    isWithinGoldenHours
 };

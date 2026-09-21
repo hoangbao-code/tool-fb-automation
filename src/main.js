@@ -1,5 +1,6 @@
-const { app, BrowserWindow, ipcMain, session } = require('electron');
+const { app, BrowserWindow, ipcMain, session, Tray, Menu, Notification, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const dotenv = require('dotenv');
 const { dbAsync } = require('./db');
 const { testGemini } = require('./services/gemini');
@@ -14,6 +15,64 @@ const {
 dotenv.config();
 
 let mainWindow = null;
+let tray = null;
+let isQuitting = false;
+
+function showNativeNotification(title, body) {
+    try {
+        if (Notification.isSupported()) {
+            new Notification({
+                title: title || 'PostHub PC',
+                body: body || ''
+            }).show();
+        }
+    } catch (e) {
+        console.error('Lỗi hiển thị notification:', e);
+    }
+}
+
+function setupTray() {
+    if (tray) return;
+
+    const iconPath = path.join(__dirname, '..', 'public', 'assets', 'icon.png');
+    let trayIcon;
+    if (fs.existsSync(iconPath)) {
+        trayIcon = nativeImage.createFromPath(iconPath);
+    } else {
+        trayIcon = nativeImage.createEmpty();
+    }
+
+    tray = new Tray(trayIcon);
+    tray.setToolTip('PostHub PC - Tự Động Hóa Zalo sang Facebook');
+
+    const contextMenu = Menu.buildFromTemplate([
+        {
+            label: 'Mở Giao Diện PostHub',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.show();
+                    mainWindow.focus();
+                }
+            }
+        },
+        { type: 'separator' },
+        {
+            label: 'Thoát Hoàn Toàn',
+            click: () => {
+                isQuitting = true;
+                app.quit();
+            }
+        }
+    ]);
+
+    tray.setContextMenu(contextMenu);
+    tray.on('double-click', () => {
+        if (mainWindow) {
+            mainWindow.show();
+            mainWindow.focus();
+        }
+    });
+}
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -38,6 +97,19 @@ function createWindow() {
     // Nạp giao diện chính
     mainWindow.loadFile(path.join(__dirname, '..', 'public', 'index.html'));
 
+    // Bắt sự kiện đóng cửa sổ -> Thu nhỏ xuống System Tray thay vì thoát app
+    mainWindow.on('close', (event) => {
+        if (!isQuitting) {
+            event.preventDefault();
+            mainWindow.hide();
+            showNativeNotification(
+                'PostHub PC đang chạy ngầm',
+                'Ứng dụng đã thu nhỏ xuống khay hệ thống cạnh đồng hồ và vẫn tự động hóa 24/7.'
+            );
+            return false;
+        }
+    });
+
     // Cấu hình User-Agent Desktop chuẩn cho Webview Zalo & Facebook
     const desktopUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
     
@@ -51,6 +123,17 @@ function createWindow() {
     const broadcast = (channel, data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send(channel, data);
+        }
+        if (channel === 'new-zalo-message') {
+            showNativeNotification(
+                `Tin Zalo mới [${data.groupName}]`,
+                `${data.sender}: ${data.content ? data.content.substring(0, 60) : '[Hình ảnh]'}`
+            );
+        } else if (channel === 'post-published') {
+            showNativeNotification(
+                'Xuất bản Facebook thành công!',
+                `Bài viết #${data.id} đã được đăng lên Facebook.`
+            );
         }
     };
 
@@ -68,15 +151,24 @@ function createWindow() {
 // Khởi chạy vòng đời Electron
 app.whenReady().then(() => {
     createWindow();
+    setupTray();
     startFbPostWorker();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
+        else if (mainWindow) {
+            mainWindow.show();
+            mainWindow.focus();
+        }
     });
 });
 
+app.on('before-quit', () => {
+    isQuitting = true;
+});
+
 app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit();
+    if (process.platform !== 'darwin' && isQuitting) app.quit();
 });
 
 // ==========================================
@@ -158,6 +250,15 @@ ipcMain.handle('add-zalo-group', async (event, name) => {
 ipcMain.handle('delete-zalo-group', async (event, id) => {
     try {
         await dbAsync.run(`DELETE FROM zalo_groups WHERE id = ?`, [id]);
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('toggle-zalo-group', async (event, id) => {
+    try {
+        await dbAsync.run(`UPDATE zalo_groups SET is_monitored = CASE WHEN is_monitored = 1 THEN 0 ELSE 1 END WHERE id = ?`, [id]);
         return { success: true };
     } catch (e) {
         return { success: false, error: e.message };
@@ -261,6 +362,31 @@ ipcMain.handle('get-logs', async () => {
     } catch (e) {
         return { success: false, error: e.message };
     }
+});
+
+// 8. Sao lưu & Phục hồi dữ liệu
+ipcMain.handle('export-backup', async () => {
+    try {
+        const data = await dbAsync.exportBackup();
+        return { success: true, data };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('import-backup', async (event, backupData) => {
+    try {
+        const stats = await dbAsync.importBackup(backupData);
+        await dbAsync.log('info', `Đã phục hồi dữ liệu: ${stats.importedSettings} cài đặt, ${stats.importedFbGroups} nhóm FB, ${stats.importedZaloGroups} nhóm Zalo.`);
+        return { success: true, stats };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('show-notification', async (event, { title, body }) => {
+    showNativeNotification(title, body);
+    return { success: true };
 });
 
 // ==============================================================

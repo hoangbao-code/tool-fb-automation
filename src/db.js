@@ -89,7 +89,16 @@ db.serialize(() => {
         ['auto_post_enabled', '0'],
         ['delay_min_seconds', '180'],
         ['delay_max_seconds', '480'],
-        ['emergency_stop', '0']
+        ['emergency_stop', '0'],
+        ['custom_signature', ''],
+        ['custom_hashtags', '#bds #nhadep #chothue #giatot'],
+        ['ai_spin_enabled', '1'],
+        ['smart_scheduler_enabled', '0'],
+        ['smart_scheduler_slots', JSON.stringify([
+            { start: "08:00", end: "09:30" },
+            { start: "11:30", end: "13:00" },
+            { start: "19:30", end: "21:30" }
+        ])]
     ];
 
     defaultSettings.forEach(([key, val]) => {
@@ -122,6 +131,65 @@ const dbAsync = {
         } catch (e) {
             console.error('Log error:', e);
         }
+    },
+    exportBackup: async () => {
+        const settings = await dbAsync.all(`SELECT * FROM settings`);
+        const fbGroups = await dbAsync.all(`SELECT name, url, member_count, is_active FROM fb_groups`);
+        const zaloGroups = await dbAsync.all(`SELECT name, is_monitored FROM zalo_groups`);
+        return {
+            version: '2.1.0',
+            exported_at: new Date().toISOString(),
+            settings,
+            fbGroups,
+            zaloGroups
+        };
+    },
+    importBackup: async (backup) => {
+        if (!backup || typeof backup !== 'object') throw new Error('File sao lưu không hợp lệ!');
+        let importedSettings = 0;
+        let importedFbGroups = 0;
+        let importedZaloGroups = 0;
+
+        if (Array.isArray(backup.settings)) {
+            for (const s of backup.settings) {
+                if (s.key && s.value !== undefined) {
+                    await dbAsync.run(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`, [s.key, s.value]);
+                    importedSettings++;
+                }
+            }
+        }
+
+        if (Array.isArray(backup.fbGroups)) {
+            for (const g of backup.fbGroups) {
+                if (g.url) {
+                    await dbAsync.run(`
+                        INSERT INTO fb_groups (name, url, member_count, is_active)
+                        VALUES (?, ?, ?, ?)
+                        ON CONFLICT(url) DO UPDATE SET
+                            name = excluded.name,
+                            member_count = excluded.member_count,
+                            is_active = excluded.is_active
+                    `, [g.name || 'Nhóm FB', g.url, g.member_count || '', g.is_active !== undefined ? g.is_active : 1]);
+                    importedFbGroups++;
+                }
+            }
+        }
+
+        if (Array.isArray(backup.zaloGroups)) {
+            for (const zg of backup.zaloGroups) {
+                if (zg.name) {
+                    await dbAsync.run(`
+                        INSERT INTO zalo_groups (name, is_monitored)
+                        VALUES (?, ?)
+                        ON CONFLICT(name) DO UPDATE SET
+                            is_monitored = excluded.is_monitored
+                    `, [zg.name, zg.is_monitored !== undefined ? zg.is_monitored : 1]);
+                    importedZaloGroups++;
+                }
+            }
+        }
+
+        return { importedSettings, importedFbGroups, importedZaloGroups };
     }
 };
 
