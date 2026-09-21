@@ -1,0 +1,51 @@
+{
+  "facebook": {
+    "primaryUrl": "https://m.facebook.com/groups/?category=membership",
+    "fallbackUrl": "https://www.facebook.com/groups/joins/",
+    "checkpointIndicatorSelectors": [
+      "#checkpointSubmitButton",
+      "[id*='checkpoint']",
+      "form[action*='checkpoint']",
+      "input[name='nh']",
+      "div[data-sigil*='checkpoint']"
+    ],
+    "loginIndicatorSelectors": [
+      "input[name='email']",
+      "input[name='pass']",
+      "#m_login_button",
+      "[data-testid='royal_login_button']",
+      "#login_form"
+    ],
+    "groupItemLinkSelector": "a[href*='/groups/']",
+    "groupCardContainer": "div[role='feed'] > div, div[data-mcomponent='MContainer'], div[class*='group']",
+    "nameSelector": "span, strong, h3, h4",
+    "memberCountSelector": "div, span",
+    "excludedPathIds": [
+      "feed", "discover", "notifications", "joins", "create", "search",
+      "your_groups", "membership_questions", "manage", "chats", "member",
+      "members", "buy_sell_discussion", "permalink", "user", "about",
+      "events", "media", "files", "tagged", "post", "posts"
+    ]
+  },
+  "zalo": {
+    "url": "https://chat.zalo.me",
+    "qrLoginSelector": "#qr-container, .qrcode-img, [class*='qrcode'], input[placeholder*='Số điện thoại']",
+    "loggedInSelector": "#conversationList, div[data-id='virtual-list'], [data-id='btn_Main_Tab_Message'], [data-id='btn_Main_Tab_Contact']",
+    "virtualListSelector": "#conversationList, .conv-list, .virtualized-scroll, div[data-id='virtual-list'], div[class*='conv-list']",
+    "chatItemSelector": ".conv-item, [data-id*='conv_item'], div[id^='conv-item-'], .group-item, div[class*='chat-item']",
+    "titleSelector": ".conv-item-title__more, .conv-item-title, .group-item__name, [class*='title__more'], [class*='conv-item-title'], [data-id='chat-title']",
+    "lastMsgTimeSelector": ".conv-item-time, [class*='time'], [data-id='time']",
+    "groupAvatarSelector": ".avatar-group, .avatar--group, [class*='avatar-group'], [class*='group-avatar']",
+    "contactsTabSelector": "[data-id='btn_Main_Tab_Contact'], div[icon='outline-contact'], #nav-contact, div[title*='Danh bạ']",
+    "groupSubTabSelector": "[data-id='sub_tab_group'], [data-id*='group'], div[title*='nhóm'], div[title*='Nhóm']",
+    "groupListItemSelector": ".group-item, [data-id*='group_item'], .contact-list-item, div[class*='group-row']"
+  },
+  "safety": {
+    "minDelayMs": 1500,
+    "maxDelayMs": 3500,
+    "enrichMinDelayMs": 5000,
+    "enrichMaxDelayMs": 10000,
+    "maxFbGroups": 300,
+    "maxConsecutiveStallCount": 3
+  }
+}
