@@ -2,29 +2,41 @@ const { dbAsync } = require('../db');
 const { rewriteWithGemini } = require('./gemini');
 
 /**
+ * Chuẩn hóa tên nhóm: Xóa bỏ khoảng trắng non-breaking (\u00A0), bỏ đếm số thành viên (vd: "(150 thành viên)")
+ */
+function normalizeName(str) {
+    if (!str || typeof str !== 'string') return '';
+    return str
+        .replace(/[\u00A0\s]+/g, ' ')
+        .replace(/\s*\(\d+.*?\)$/, '')
+        .trim()
+        .toLowerCase();
+}
+
+/**
  * Kiểm tra xem tin nhắn có phải bài đăng giá trị hay không (lọc bỏ tin chat ngắn, rác)
  */
 function isValidHistoricalPost(content) {
     if (!content || typeof content !== 'string') return false;
     const clean = content.trim();
-    if (clean.length < 25) return false;
+    if (clean.length < 20) return false;
 
     // Các từ ngữ hội thoại ngắn hoặc tin rác thông thường
     const spamPatterns = [
         /^(ok|oke|okie|dạ|da|vang|vâng|alo|chấm|inbox|\.|\?)$/i,
         /^(chào|hello|hi|xin chào|good morning)/i,
-        /^(đã gửi một|đã tham gia|đã rời khỏi|đã đổi ảnh)/i
+        /^(đã gửi một|đã tham gia|đã rời khỏi|đã đổi ảnh|đã ghim)/i
     ];
 
     for (const pat of spamPatterns) {
         if (pat.test(clean)) return false;
     }
 
-    // Ưu tiên tin có chứa các dấu hiệu bài đăng (giá, liên hệ, diện tích, thông tin...)
-    const hasPostKeywords = /(bán|cho thuê|cần|tuyển|giá|lh|liên hệ|sđt|dt|phone|tỷ|triệu|m2|phòng|nhà|căn hộ|khu vực|tphcm|hà nội|\d{9,11})/i.test(clean);
+    // Nhận diện bài đăng bán hàng, bất động sản, CHDV, phòng trọ, tuyển dụng
+    const hasPostKeywords = /(bán|cho thuê|cần|tuyển|giá|lh|liên hệ|sđt|dt|phone|tỷ|triệu|tr\/|m2|phòng|nhà|căn hộ|chdv|studio|trống|nội thất|ban công|cọc|pass|ở ghép|homestay|chung cư|khu vực|tphcm|hà nội|q\d+|\d{9,11})/i.test(clean);
     
-    // Nếu dài trên 50 ký tự hoặc có từ khóa bài đăng thì xem là hợp lệ
-    return clean.length >= 50 || (clean.length >= 25 && hasPostKeywords);
+    // Nếu dài trên 40 ký tự hoặc có từ khóa bài đăng (>= 20 ký tự) thì xem là hợp lệ
+    return clean.length >= 40 || (clean.length >= 20 && hasPostKeywords);
 }
 
 /**
@@ -37,7 +49,14 @@ async function processHistoricalZaloMessages(messages, options = {}) {
 
     const maxPostsToQueue = options.limit || 50; // Giới hạn tối đa cho 1 đợt quét
     const monitoredGroups = await dbAsync.all(`SELECT name FROM zalo_groups WHERE is_monitored = 1`);
-    const monitoredNames = new Set(monitoredGroups.map(g => g.name.toLowerCase().trim()));
+    
+    // Danh sách tên nhóm chuẩn hóa
+    const monitoredList = monitoredGroups.map(g => ({
+        raw: g.name,
+        normalized: normalizeName(g.name)
+    })).filter(g => g.normalized.length > 0);
+
+    const monitoredSet = new Set(monitoredList.map(g => g.normalized));
 
     // Kiểm tra cài đặt tự động đăng bài
     const autoSetting = await dbAsync.get(`SELECT value FROM settings WHERE key = 'auto_post_enabled'`);
@@ -53,20 +72,42 @@ async function processHistoricalZaloMessages(messages, options = {}) {
     for (const msg of messages) {
         if (queuedCount >= maxPostsToQueue) break;
 
-        let groupName = (msg.groupName || options.activeGroupName || 'Nhóm Zalo').trim();
+        let rawGroupName = (msg.groupName || options.activeGroupName || 'Nhóm Zalo').trim();
         const text = (msg.text || msg.content || '').trim();
         const sender = (msg.sender || 'Thành viên').trim();
 
         // 1. Kiểm tra nhóm có thuộc diện theo dõi không
-        if (monitoredNames.size > 0 && !options.ignoreGroupFilter) {
-            const isMatch = monitoredNames.has(groupName.toLowerCase()) || 
-                            (options.activeGroupName && monitoredNames.has(options.activeGroupName.toLowerCase()));
-            if (!isMatch) {
-                skippedCount++;
-                continue;
+        if (!options.ignoreGroupFilter && monitoredSet.size > 0) {
+            const cleanTarget = normalizeName(rawGroupName);
+            const cleanActive = normalizeName(options.activeGroupName);
+
+            let matchedCanonicalName = '';
+
+            // So khớp trực tiếp hoặc tương đối
+            if (cleanTarget && monitoredSet.has(cleanTarget)) {
+                matchedCanonicalName = rawGroupName;
+            } else if (cleanActive && monitoredSet.has(cleanActive)) {
+                matchedCanonicalName = options.activeGroupName;
+            } else {
+                for (const item of monitoredList) {
+                    if ((cleanTarget && (cleanTarget.includes(item.normalized) || item.normalized.includes(cleanTarget))) ||
+                        (cleanActive && (cleanActive.includes(item.normalized) || item.normalized.includes(cleanActive)))) {
+                        matchedCanonicalName = item.raw;
+                        break;
+                    }
+                }
             }
-            if (!monitoredNames.has(groupName.toLowerCase()) && options.activeGroupName) {
-                groupName = options.activeGroupName;
+
+            // Nếu không tìm thấy nhóm nào khớp và không phải tên chung
+            if (!matchedCanonicalName) {
+                if (cleanTarget === 'nhóm zalo đang mở' || cleanTarget === 'nhóm zalo') {
+                    matchedCanonicalName = options.activeGroupName || monitoredList[0]?.raw || rawGroupName;
+                } else {
+                    skippedCount++;
+                    continue;
+                }
+            } else {
+                rawGroupName = matchedCanonicalName;
             }
         }
 
@@ -89,14 +130,14 @@ async function processHistoricalZaloMessages(messages, options = {}) {
         // 4. Lưu vào bảng messages
         const msgResult = await dbAsync.run(
             `INSERT INTO messages (group_name, sender, content, images) VALUES (?, ?, ?, ?)`,
-            [groupName, sender, text, JSON.stringify(msg.images || [])]
+            [rawGroupName, sender, text, JSON.stringify(msg.images || [])]
         );
 
         // 5. Gửi sang AI Gemini để biên tập lại thành bài đăng Facebook
         try {
             let rewritten = '';
             try {
-                rewritten = await rewriteWithGemini(text, sender, groupName);
+                rewritten = await rewriteWithGemini(text, sender, rawGroupName);
             } catch (aiErr) {
                 console.warn(`[HistoryScanner] Lỗi gọi Gemini: ${aiErr.message}. Sử dụng nội dung gốc.`);
                 rewritten = text;
@@ -107,11 +148,11 @@ async function processHistoricalZaloMessages(messages, options = {}) {
             const initialStatus = isAuto ? 'approved' : 'pending';
             await dbAsync.run(
                 `INSERT INTO posts (message_id, group_name, original_text, rewritten_text, target_fb_group, status) VALUES (?, ?, ?, ?, ?, ?)`,
-                [msgResult.id, groupName, text, rewritten, targetFbStr, initialStatus]
+                [msgResult.id, rawGroupName, text, rewritten, targetFbStr, initialStatus]
             );
 
             queuedCount++;
-            await dbAsync.log('info', `[Quét Lịch Sử] Đã nạp bài viết từ [${groupName}] vào hàng đợi (#${queuedCount}) - Trạng thái: ${initialStatus}`);
+            await dbAsync.log('info', `[Quét Lịch Sử] Đã nạp bài viết từ [${rawGroupName}] vào hàng đợi (#${queuedCount}) - Trạng thái: ${initialStatus}`);
         } catch (postErr) {
             console.error(`[HistoryScanner] Lỗi lưu bài viết:`, postErr);
             skippedCount++;
@@ -128,6 +169,7 @@ async function processHistoricalZaloMessages(messages, options = {}) {
 }
 
 module.exports = {
+    normalizeName,
     isValidHistoricalPost,
     processHistoricalZaloMessages
 };

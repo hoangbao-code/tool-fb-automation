@@ -22,9 +22,18 @@ async function runHistoryScannerTests() {
     const realEstatePost = 'Chính chủ cần bán gấp căn hộ 2PN 70m2 tại Vinhomes Central Park giá 4.2 tỷ, LH: 0901234567';
     assert.strictEqual(isValidHistoricalPost(realEstatePost), true, 'Bài viết bất động sản hợp lệ phải được chấp nhận');
 
+    const chdvPost = 'Studio ban công full nội thất 35m2 giá 6.5tr cọc 1th lh 0938112233';
+    assert.strictEqual(isValidHistoricalPost(chdvPost), true, 'Bài viết CHDV phòng trọ hợp lệ phải được chấp nhận');
+
     const hiringPost = 'Tuyển dụng nhân viên kinh doanh online lương cứng 10 triệu + hoa hồng cao, liên hệ ngay.';
     assert.strictEqual(isValidHistoricalPost(hiringPost), true, 'Bài viết tuyển dụng hợp lệ phải được chấp nhận');
-    console.log('  ✓ Nhận diện chính xác bài đăng giá trị (Bất động sản, tuyển dụng, buôn bán)');
+    console.log('  ✓ Nhận diện chính xác bài đăng giá trị (Bất động sản, CHDV, phòng trọ, tuyển dụng, buôn bán)');
+
+    // 1.1 Kiểm thử chuẩn hóa tên nhóm normalizeName
+    const { normalizeName } = require('../src/services/historyScanner');
+    assert.strictEqual(normalizeName('UNICORN\u00A0TEAM'), 'unicorn team', 'Phải chuẩn hóa non-breaking space \\u00A0');
+    assert.strictEqual(normalizeName('Sale phòng (150 thành viên)'), 'sale phòng', 'Phải loại bỏ số thành viên trong ngoặc');
+    console.log('  ✓ Chuẩn hóa tên nhóm thành công (xóa \\u00A0 và số thành viên)');
 
     // 2. Thiết lập môi trường test trong DB
     console.log('\n2. Kiểm thử nạp lịch sử & Khử trùng lặp (processHistoricalZaloMessages):');

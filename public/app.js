@@ -2054,20 +2054,30 @@ async function startZaloHistoryScanAction() {
 
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Đang Xử Lý...`;
+        btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Đang Quét...`;
         if (window.lucide) lucide.createIcons();
     }
 
     if (progressArea) progressArea.classList.remove('hidden');
-    if (statusText) statusText.innerText = `Đang kết nối Zalo Web để quét tin trong ${days} ngày qua...`;
-    if (counterText) counterText.innerText = 'Đang đọc...';
-    if (progressBar) progressBar.style.width = '20%';
+    if (statusText) statusText.innerText = `Đang chuẩn bị quét lịch sử tin nhắn trong ${days} ngày qua...`;
+    if (counterText) counterText.innerText = 'Bắt đầu...';
+    if (progressBar) progressBar.style.width = '15%';
 
     try {
-        const currentUrl = wv.getURL ? wv.getURL() : '';
-        if (!currentUrl || !currentUrl.includes('zalo.me')) {
-            showToast('Vui lòng mở Zalo Web và đăng nhập trước khi quét lịch sử!', 'error');
-            if (statusText) statusText.innerText = '⚠️ Bạn chưa đăng nhập Zalo Web';
+        // Đảm bảo tab Zalo Web đang hiển thị để Chromium render DOM đầy đủ
+        if (state.currentTab !== 'zalo') {
+            switchTab('zalo');
+            await new Promise(r => setTimeout(r, 400));
+        }
+
+        let currentUrl = '';
+        try {
+            currentUrl = wv.getURL ? wv.getURL() : '';
+        } catch (e) {}
+
+        if (!currentUrl || currentUrl === 'about:blank' || !currentUrl.includes('zalo.me')) {
+            showToast('Vui lòng đăng nhập Zalo Web trước khi quét lịch sử!', 'error');
+            if (statusText) statusText.innerText = '⚠️ Bạn chưa mở hoặc chưa đăng nhập Zalo Web';
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> Thử Lại`;
@@ -2076,21 +2086,20 @@ async function startZaloHistoryScanAction() {
             return;
         }
 
-        if (statusText) statusText.innerText = 'Đang trích xuất tin nhắn từ IndexedDB và lịch sử hội thoại...';
-        if (progressBar) progressBar.style.width = '45%';
+        if (statusText) statusText.innerText = `Đang quét lịch sử hội thoại và cuộn tải tin cũ (${days} ngày)...`;
+        if (progressBar) progressBar.style.width = '35%';
 
         // Chạy script trích xuất tin nhắn trực tiếp từ Webview Zalo
         const extractedMessages = await wv.executeJavaScript(`
-            (async function(daysToScan) {
-                const minTimestamp = Date.now() - (daysToScan * 24 * 60 * 60 * 1000);
+            (async function(daysToScan, scopeMode) {
                 const results = [];
                 const seenKeys = new Set();
 
-                function record(groupName, sender, text, images, ts) {
+                function addRecord(groupName, sender, text, images) {
                     if (!text || typeof text !== 'string') return;
                     const clean = text.trim();
                     if (clean.length < 20) return;
-                    const key = (groupName || '') + '::' + clean.substring(0, 60);
+                    const key = (groupName || '') + '::' + clean.substring(0, 70);
                     if (seenKeys.has(key)) return;
                     seenKeys.add(key);
                     results.push({
@@ -2098,154 +2107,158 @@ async function startZaloHistoryScanAction() {
                         sender: (sender || 'Thành viên').trim(),
                         text: clean,
                         images: images || [],
-                        timestamp: ts || Date.now()
+                        timestamp: Date.now()
                     });
                 }
 
-                // 1. Quét từ IndexedDB của Zalo (Lưu cache offline toàn bộ tin nhắn)
-                try {
-                    if (window.indexedDB && window.indexedDB.databases) {
-                        const dbs = await window.indexedDB.databases();
-                        for (const dbInfo of dbs) {
-                            if (!dbInfo.name) continue;
-                            await new Promise((resolve) => {
-                                const req = window.indexedDB.open(dbInfo.name);
-                                req.onerror = () => resolve();
-                                req.onsuccess = async (e) => {
-                                    try {
-                                        const db = e.target.result;
-                                        const storeNames = Array.from(db.objectStoreNames || []);
-                                        for (const sName of storeNames) {
-                                            const lower = sName.toLowerCase();
-                                            if (lower.includes('msg') || lower.includes('message') || lower.includes('chat')) {
-                                                await new Promise((resStore) => {
-                                                    try {
-                                                        const tx = db.transaction(sName, 'readonly');
-                                                        const store = tx.objectStore(sName);
-                                                        const getReq = store.getAll ? store.getAll() : null;
-                                                        if (getReq) {
-                                                            getReq.onsuccess = () => {
-                                                                const list = getReq.result || [];
-                                                                for (const item of list) {
-                                                                    const ts = item.ts || item.timestamp || item.createTime || item.cliMsgId || item.time || 0;
-                                                                    if (ts && ts > 0 && ts < minTimestamp) continue;
-
-                                                                    let content = '';
-                                                                    if (typeof item.message === 'string') content = item.message;
-                                                                    else if (typeof item.content === 'string') content = item.content;
-                                                                    else if (typeof item.text === 'string') content = item.text;
-                                                                    else if (item.msg && typeof item.msg === 'string') content = item.msg;
-                                                                    else if (item.desc && typeof item.desc === 'string') content = item.desc;
-
-                                                                    const gName = item.threadName || item.groupName || item.displayName || item.title || '';
-                                                                    const sender = item.senderName || item.fromName || item.sender || 'Thành viên';
-
-                                                                    if (content) {
-                                                                        record(gName, sender, content, [], ts);
-                                                                    }
-                                                                }
-                                                                resStore();
-                                                            };
-                                                            getReq.onerror = () => resStore();
-                                                        } else {
-                                                            resStore();
-                                                        }
-                                                    } catch (err) {
-                                                        resStore();
-                                                    }
-                                                });
-                                            }
-                                        }
-                                        db.close();
-                                        resolve();
-                                    } catch (err) {
-                                        resolve();
-                                    }
-                                };
-                            });
+                function getActiveTitle() {
+                    var selectors = [
+                        '#header-title',
+                        '.header-title',
+                        '.chat-title',
+                        '[data-id="chat-title"]',
+                        '.conv-item.active .conv-item-title__more',
+                        '.conv-item.selected .conv-item-title__more',
+                        '.chat-info__general__title',
+                        'div[class*="header"] span[class*="title"]',
+                        'div[class*="header"] h4'
+                    ];
+                    for (var i = 0; i < selectors.length; i++) {
+                        var el = document.querySelector(selectors[i]);
+                        if (el && el.innerText && el.innerText.trim()) {
+                            return el.innerText.trim().split('\\n')[0].trim();
                         }
                     }
-                } catch (e) {
-                    console.warn('[ZaloHistoryScanner] Lỗi đọc IDB:', e);
+                    return '';
                 }
 
-                // 2. Quét từ DOM chat đang mở và tự động cuộn lên tải tin cũ
-                try {
-                    let activeGroupName = '';
-                    const titleSelectors = ['#header-title', '.header-title', '.chat-title', '[data-id="chat-title"]', '.conv-item.active .conv-item-title__more'];
-                    for (const sel of titleSelectors) {
-                        const el = document.querySelector(sel);
-                        if (el && el.innerText && el.innerText.trim()) {
-                            activeGroupName = el.innerText.trim();
-                            break;
-                        }
-                    }
+                // Tìm khung cuộn tin nhắn ở panel bên phải
+                function findChatScrollElement() {
+                    var preferred = document.querySelector('.chat-message-list, #messageView, .message-view__body, [data-id="chat-message-list"], .chat-date');
+                    if (preferred) return preferred;
 
-                    function harvestDom() {
-                        const msgEls = document.querySelectorAll('.chat-message, .msg-view, [id^="msg-"], div[class*="message-view"], div[data-id*="msg"]');
-                        msgEls.forEach((el) => {
-                            const senderEl = el.querySelector('.sender-name, [class*="sender"], [class*="author"]');
-                            const sender = senderEl ? senderEl.innerText.trim() : 'Thành viên';
-                            const textEl = el.querySelector('.content-text, .msg-text, [class*="content-text"], [class*="text-msg"]');
-                            const text = textEl ? textEl.innerText.trim() : '';
-
-                            if (!text || text.length < 20) return;
-
-                            const images = [];
-                            el.querySelectorAll('img').forEach((img) => {
-                                const src = img.getAttribute('src');
-                                if (src && !src.includes('avatar') && !src.includes('icon') && !src.includes('emoji')) {
-                                    images.push(src);
-                                }
-                            });
-
-                            record(activeGroupName || 'Nhóm Zalo Đang Mở', sender, text, images, Date.now());
-                        });
-                    }
-
-                    harvestDom();
-
-                    // Tìm khung cuộn tin nhắn để cuộn lên trên vài nhịp
-                    let scrollable = document.querySelector('.chat-date, .message-view__body, [class*="message-list"], #messageView');
-                    if (!scrollable) {
-                        const divs = document.querySelectorAll('div');
-                        for (let d of divs) {
-                            if (d.scrollHeight > d.clientHeight && d.clientHeight > 250) {
-                                const s = window.getComputedStyle(d);
-                                if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
-                                    scrollable = d;
-                                    break;
-                                }
+                    var allDivs = document.querySelectorAll('div, main');
+                    for (var i = 0; i < allDivs.length; i++) {
+                        var d = allDivs[i];
+                        var s = window.getComputedStyle(d);
+                        if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && d.clientHeight > 180) {
+                            var r = d.getBoundingClientRect();
+                            if (r.left >= 200 && r.width >= 250) {
+                                return d;
                             }
                         }
                     }
+                    return null;
+                }
 
-                    if (scrollable) {
-                        for (let step = 0; step < 4; step++) {
-                            scrollable.scrollTop = 0;
-                            await new Promise(r => setTimeout(r, 450));
-                            harvestDom();
+                // Bóc tách tin nhắn trong chat view hiện tại
+                function harvestCurrentChat(currentGroupName) {
+                    var msgBoxes = Array.from(document.querySelectorAll(
+                        '[id*="msg"], [data-id*="msg"], .chat-item, .msg-item, .chat-message, div[class*="chat-message"], div[class*="message-view"], div[class*="bubble"], div[class*="msg-"]'
+                    ));
+
+                    // Fallback nếu selector không ra: lấy các div trong chat container
+                    var chatScroll = findChatScrollElement();
+                    if (msgBoxes.length === 0 && chatScroll) {
+                        var divs = Array.from(chatScroll.querySelectorAll('div'));
+                        msgBoxes = divs.filter(function(d) {
+                            var t = (d.innerText || '').trim();
+                            return t.length >= 25 && d.children.length <= 5;
+                        });
+                    }
+
+                    msgBoxes.forEach(function(el) {
+                        // Người gửi
+                        var senderEl = el.querySelector('.sender-name, [class*="sender"], [class*="author"], [class*="name"]');
+                        var sender = senderEl ? senderEl.innerText.trim() : 'Thành viên';
+
+                        // Nội dung tin nhắn
+                        var textEl = el.querySelector('.content-text, .msg-text, [class*="content-text"], [class*="text-msg"], [class*="text-message"], [class*="message-content"], [class*="bubble-content"], p, pre');
+                        var text = '';
+                        if (textEl && textEl.innerText && textEl.innerText.trim().length >= 15) {
+                            text = textEl.innerText.trim();
+                        } else {
+                            text = (el.innerText || '').trim();
+                        }
+
+                        // Loại trừ các thông báo hệ thống của Zalo
+                        if (/^(đã đổi ảnh|đã tham gia|đã rời khỏi|đã gửi một nhãn dán|đã ghim)/i.test(text)) {
+                            return;
+                        }
+
+                        // Hình ảnh đính kèm
+                        var images = [];
+                        el.querySelectorAll('img').forEach(function(img) {
+                            var src = img.getAttribute('src');
+                            if (src && !src.includes('avatar') && !src.includes('icon') && !src.includes('emoji') && !src.startsWith('data:image/svg')) {
+                                images.push(src);
+                            }
+                        });
+
+                        addRecord(currentGroupName, sender, text, images);
+                    });
+                }
+
+                // HÀM QUÉT LỊCH SỬ CHAT CỦA MỘT HỘI THOẠI
+                async function scanActiveConversationHistory(gName) {
+                    harvestCurrentChat(gName);
+
+                    var chatScroll = findChatScrollElement();
+                    if (chatScroll) {
+                        // Cuộn lên 6 nhịp để Zalo nạp tin nhắn cũ trong 1 tuần
+                        var scrollSteps = Math.min(daysToScan * 2, 8);
+                        for (var s = 0; s < scrollSteps; s++) {
+                            chatScroll.scrollTop = 0;
+                            chatScroll.dispatchEvent(new Event('scroll', { bubbles: true }));
+                            await new Promise(function(r) { setTimeout(r, 450); });
+                            harvestCurrentChat(gName);
                         }
                     }
-                } catch (e) {
-                    console.warn('[ZaloHistoryScanner] Lỗi DOM chat:', e);
+                }
+
+                // 1. Quét ngay hội thoại hiện tại
+                var activeName = getActiveTitle() || 'Nhóm Zalo Đang Mở';
+                await scanActiveConversationHistory(activeName);
+
+                // 2. Nếu chọn quét 'monitored' hoặc 'all': tự động duyệt qua các nhóm trong danh sách hội thoại bên trái
+                if (scopeMode !== 'active') {
+                    var convRows = Array.from(document.querySelectorAll(
+                        '.conv-item, [data-id*="conv"], [data-id*="thread"], div[class*="chat-item"], div[class*="conv-item"], div[class*="rel-item"], [role="listitem"]'
+                    ));
+
+                    // Duyệt tối đa 12 hội thoại trong danh sách để thu thập lịch sử
+                    var maxConvs = Math.min(convRows.length, 12);
+                    for (var c = 0; c < maxConvs; c++) {
+                        var row = convRows[c];
+                        var titleEl = row.querySelector('.conv-item-title__more, [class*="conv-item-title"], [class*="title"], [class*="name"], h4, h5');
+                        var rName = titleEl ? titleEl.innerText.trim().split('\\n')[0].trim() : '';
+
+                        if (rName && rName !== activeName) {
+                            try {
+                                row.click();
+                                await new Promise(function(r) { setTimeout(r, 700); });
+                                var newActiveName = getActiveTitle() || rName;
+                                await scanActiveConversationHistory(newActiveName);
+                            } catch (clickErr) {}
+                        }
+                    }
                 }
 
                 return results;
-            })(${days});
+            })(${days}, "${scope}");
         `);
 
         const messagesCount = Array.isArray(extractedMessages) ? extractedMessages.length : 0;
-        if (statusText) statusText.innerText = `Thu thập được ${messagesCount} tin. Đang lọc & gửi AI biên tập...`;
+        if (statusText) statusText.innerText = `Thu thập được ${messagesCount} tin. Đang lọc bài chất lượng & gửi AI...`;
         if (counterText) counterText.innerText = `${messagesCount} tin`;
-        if (progressBar) progressBar.style.width = '70%';
+        if (progressBar) progressBar.style.width = '65%';
 
         if (messagesCount === 0) {
-            showToast('Không tìm thấy tin nhắn nào thỏa điều kiện trong khoảng thời gian đã chọn!', 'info');
-            if (statusText) statusText.innerText = 'Không tìm thấy tin nhắn mới để xử lý.';
+            showToast('Không tìm thấy tin nhắn nào trong hội thoại Zalo hiện tại!', 'info');
+            if (statusText) statusText.innerText = 'Không phát hiện tin nhắn nào trong cửa sổ chat Zalo.';
             if (btn) {
                 btn.disabled = false;
-                btn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> Bắt Đầu Quét & Nạp`;
+                btn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> Thử Lại`;
                 if (window.lucide) lucide.createIcons();
             }
             return;
@@ -2257,12 +2270,12 @@ async function startZaloHistoryScanAction() {
             options: {
                 limit: limit,
                 activeGroupName: state.activeZaloGroup,
-                ignoreGroupFilter: scope === 'all'
+                ignoreGroupFilter: scope === 'all' || scope === 'active'
             }
         });
 
         if (progressBar) progressBar.style.width = '100%';
-        if (statusText) statusText.innerText = `Hoàn tất! Đã nạp ${result.queued || 0} bài vào hàng đợi để đăng dần.`;
+        if (statusText) statusText.innerText = `Hoàn tất! Đã nạp ${result.queued || 0} bài vào hàng đợi để đăng dần (Bỏ qua: ${result.skipped || 0}).`;
         if (counterText) counterText.innerText = `${result.queued || 0} bài mới`;
 
         showToast(`Quét lịch sử hoàn tất: Đã nạp thành công ${result.queued || 0} bài vào hàng đợi!`, 'success');
