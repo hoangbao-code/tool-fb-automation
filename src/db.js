@@ -84,7 +84,7 @@ db.serialize(() => {
     // Giá trị cấu hình mặc định
     const defaultSettings = [
         ['gemini_api_key', ''],
-        ['gemini_model', 'gemini-1.5-flash'],
+        ['gemini_model', 'gemini-3.7-flash'],
         ['ai_prompt_template', `Bạn là chuyên gia marketing mạng xã hội. Hãy viết lại bài đăng sau đây từ nhóm Zalo thành một bài đăng Facebook hấp dẫn, chuyên nghiệp, giữ đúng toàn bộ thông tin quan trọng (giá, địa chỉ, số điện thoại liên hệ), có thêm icon sinh động và hashtag liên quan:\n\nNội dung gốc:\n{CONTENT}`],
         ['auto_post_enabled', '0'],
         ['delay_min_seconds', '180'],
@@ -104,6 +104,9 @@ db.serialize(() => {
     defaultSettings.forEach(([key, val]) => {
         db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)`, [key, val]);
     });
+
+    // Tự động nâng cấp mô hình đã lỗi thời (404 deprecated) sang gemini-3.7-flash
+    db.run(`UPDATE settings SET value = 'gemini-3.7-flash' WHERE key = 'gemini_model' AND (value = 'gemini-1.5-flash' OR value = 'gemini-1.5-pro')`);
 });
 
 const dbAsync = {

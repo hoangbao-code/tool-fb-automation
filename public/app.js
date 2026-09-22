@@ -363,16 +363,22 @@ function renderPosts() {
                     Đích đăng: <b class="text-slate-200">${escapeHtml(p.target_fb_group || 'Các nhóm Facebook đã chọn')}</b>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button onclick="openEditModal(${p.id})" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg flex items-center gap-1.5 transition-all">
+                    <button onclick="reRewritePostUI(${p.id})" id="btn-ai-rewrite-${p.id}" class="px-2.5 py-1.5 bg-amber-950/70 hover:bg-amber-900/90 text-amber-300 border border-amber-800/60 font-semibold rounded-lg flex items-center gap-1 transition-all text-xs" title="Yêu cầu Gemini AI viết lại bài này">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Viết lại AI
+                    </button>
+                    <button onclick="openEditModal(${p.id})" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg flex items-center gap-1 transition-all text-xs">
                         <i data-lucide="edit-2" class="w-3.5 h-3.5 text-blue-400"></i> Sửa bài
                     </button>
+                    <button onclick="deletePostDirectUI(${p.id})" class="px-2.5 py-1.5 bg-rose-950/70 hover:bg-rose-900/90 text-rose-300 border border-rose-800/60 font-semibold rounded-lg flex items-center gap-1 transition-all text-xs" title="Xóa bài viết này khỏi hàng đợi">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-400"></i> Xóa
+                    </button>
                     ${p.status !== 'posted' ? `
-                        <button onclick="publishPostDirect(${p.id})" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition-all">
+                        <button onclick="publishPostDirect(${p.id})" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition-all text-xs">
                             <i data-lucide="send" class="w-3.5 h-3.5"></i> Duyệt & Đăng Luôn
                         </button>
                     ` : `
-                        <span class="text-emerald-400 font-semibold flex items-center gap-1 text-[11px]">
-                            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Đã đăng thành công
+                        <span class="text-emerald-400 font-semibold flex items-center gap-1 text-[11px] px-2 py-1 bg-emerald-950/50 rounded-lg border border-emerald-900/40">
+                            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Đã đăng
                         </span>
                     `}
                 </div>
@@ -385,6 +391,62 @@ function renderPosts() {
 function refreshPosts() {
     loadPosts();
     showToast('Đã làm mới hàng đợi!', 'info');
+}
+
+// Xóa tất cả bài viết trong bảng tin (Không chạm vào danh sách nhóm Zalo & FB)
+async function clearAllPostsUI() {
+    const filterDesc = state.filter === 'all' ? 'tất cả bài viết' : `các bài viết thuộc trạng thái [${getStatusLabel(state.filter)}]`;
+    const res = await window.electronApi.clearAllPosts(state.filter);
+    if (res.success) {
+        showToast(`Đã xóa sạch ${filterDesc} trong bảng tin! (Giữ nguyên toàn bộ nhóm Zalo & Facebook)`, 'success');
+        await loadPosts();
+        await loadStatus();
+    } else {
+        showToast(res.error || 'Lỗi khi xóa bài viết', 'error');
+    }
+}
+
+// Xóa 1 bài viết trực tiếp không cần popup xác nhận phiền phức
+async function deletePostDirectUI(id) {
+    const res = await window.electronApi.deletePost(id);
+    if (res.success) {
+        showToast(`Đã xóa bài viết #${id}!`, 'info');
+        await loadPosts();
+        await loadStatus();
+    } else {
+        showToast(res.error || 'Lỗi khi xóa bài viết', 'error');
+    }
+}
+
+// Viết lại 1 bài bằng AI Gemini trực tiếp từ giao diện
+async function reRewritePostUI(id) {
+    const btn = document.getElementById(`btn-ai-rewrite-${id}`);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin text-amber-400"></i> Đang viết...`;
+    }
+    showToast(`Đang dùng Gemini AI viết lại bài #${id}...`, 'info');
+    try {
+        const res = await window.electronApi.reRewritePost(id);
+        if (res.success) {
+            showToast(`AI đã viết lại bài #${id} thành công!`, 'success');
+            await loadPosts();
+        } else {
+            showToast(res.error || 'Lỗi khi AI viết lại bài', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = `<i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Viết lại AI`;
+                lucide.createIcons();
+            }
+        }
+    } catch (e) {
+        showToast(e.message, 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Viết lại AI`;
+            lucide.createIcons();
+        }
+    }
 }
 
 // 3. Zalo Webview Controls
@@ -1701,15 +1763,56 @@ async function openAddFbGroupModal() {
 }
 
 // 6. Cấu hình AI Gemini
+function setPromptPreset(type) {
+    const promptInput = document.getElementById('ai-prompt-input');
+    if (type === 'web_bds') {
+        promptInput.value = `Bạn là một chuyên viên content marketing bất động sản cho thuê tại TP.HCM. Nhiệm vụ của bạn là nhận thông tin thô của phòng/căn hộ và viết lại thành bài đăng Facebook Marketplace chuyên nghiệp, hấp dẫn.
+
+Quy tắc trình bày:
+1. Tiêu đề: Giật tít nổi bật bằng icon và chữ in hoa (nhấn mạnh loại phòng, ưu điểm chính, trạng thái vào ở).
+2. Vị trí (Location): Nêu địa chỉ kèm các mốc nhận diện nổi tiếng lân cận (công viên, trường học, bệnh viện, trục đường lớn) và các quận kết nối nhanh.
+3. Thông tin phòng & Tiện ích: Liệt kê rõ số phòng/tầng, giờ giấc tự do, chỗ để xe, an ninh, thang máy (nếu có).
+4. Nội thất: Nêu bật "Full nội thất - xách vali vào ở", khu bếp, máy giặt...
+5. Thông tin liên hệ: Luôn chốt bằng số điện thoại: 0354084364 (zalo - sdt) hoặc WhatsApp / Zalo / Phone đối với bản tiếng Anh.
+6. Tone giọng: Chuyên nghiệp, gọn gàng, dùng icon trực quan, không dùng từ ngữ rườm rà.
+
+---
+Dữ liệu đầu vào:
+[Dán thông tin phòng thô vào đây]`;
+        showToast('Đã nạp mẫu Prompt BĐS chuẩn Gemini Web!', 'info');
+    } else if (type === 'viral') {
+        promptInput.value = `Bạn là một chuyên gia sáng tạo nội dung bán hàng trên Facebook. Hãy viết lại bài đăng sau để thu hút người mua/thuê ngay lập tức:
+- Giật tít bắt mắt với icon phù hợp.
+- Giữ nguyên các thông tin thực tế quan trọng: giá, địa chỉ, diện tích, tiện nghi, số điện thoại.
+- Trình bày dạng danh sách gạch đầu dòng ngắn gọn, dễ đọc lướt trên điện thoại.
+- Kêu gọi hành động (CTA) khẩn trương và lịch sự.
+- KHÔNG viết lời chào mở đầu hay kết thúc nhảm nhí, chỉ xuất bài đăng hoàn chỉnh.
+
+Dữ liệu đầu vào:
+{CONTENT}`;
+        showToast('Đã nạp mẫu Prompt Viral!', 'info');
+    }
+}
+
 async function loadAiSettings() {
     try {
         const res = await window.electronApi.getSettings();
         if (res.success) {
             state.settings = res.settings;
+            if (res.settings.gemini_api_key) {
+                const keyEl = document.getElementById('ai-key-input');
+                if (keyEl) keyEl.value = res.settings.gemini_api_key;
+            }
             const savedModel = res.settings.gemini_model;
-            const validModels = ['gemini-1.5-flash', 'gemini-3.6-flash', 'gemini-1.5-pro'];
-            document.getElementById('ai-model-select').value = (validModels.includes(savedModel) ? savedModel : 'gemini-1.5-flash');
-            document.getElementById('ai-prompt-input').value = res.settings.ai_prompt_template || '';
+            const validModels = ['gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-3.5-flash'];
+            const selectEl = document.getElementById('ai-model-select');
+            if (selectEl) {
+                selectEl.value = (validModels.includes(savedModel) ? savedModel : 'gemini-3.7-flash');
+            }
+            const promptEl = document.getElementById('ai-prompt-input');
+            if (promptEl) {
+                promptEl.value = res.settings.ai_prompt_template || '';
+            }
             const spinCheck = document.getElementById('ai-spin-enabled');
             if (spinCheck) spinCheck.checked = res.settings.ai_spin_enabled === '1';
             const sigInput = document.getElementById('ai-signature-input');
@@ -1915,10 +2018,9 @@ async function publishPostDirect(id) {
 
 async function deletePostFromModal() {
     const id = document.getElementById('modal-post-id').value;
-    if (!confirm('Bạn có chắc muốn xóa bài viết này khỏi hàng đợi?')) return;
     await window.electronApi.deletePost(id);
     closePostModal();
-    showToast('Đã xóa bài viết.', 'info');
+    showToast(`Đã xóa bài viết #${id} khỏi hàng đợi.`, 'info');
     loadPosts();
     loadStatus();
 }

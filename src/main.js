@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const dotenv = require('dotenv');
 const { dbAsync } = require('./db');
-const { testGemini } = require('./services/gemini');
+const { testGemini, rewriteWithGemini } = require('./services/gemini');
 const { processZaloMessage, setEventBroadcaster } = require('./services/zaloEngine');
 const {
     handleScannedGroups,
@@ -416,6 +416,36 @@ ipcMain.handle('delete-post', async (event, id) => {
     try {
         await dbAsync.run(`DELETE FROM posts WHERE id = ?`, [id]);
         return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('clear-all-posts', async (event, statusFilter) => {
+    try {
+        if (statusFilter && statusFilter !== 'all') {
+            await dbAsync.run(`DELETE FROM posts WHERE status = ?`, [statusFilter]);
+            await dbAsync.log('info', `Đã xóa các bài viết trong bảng tin có trạng thái: ${statusFilter}.`);
+        } else {
+            await dbAsync.run(`DELETE FROM posts`);
+            await dbAsync.log('info', 'Đã xóa toàn bộ danh sách bài viết trong bảng tin duyệt (Giữ nguyên các nhóm Zalo & FB).');
+        }
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('re-rewrite-post', async (event, id) => {
+    try {
+        const post = await dbAsync.get(`SELECT * FROM posts WHERE id = ?`, [id]);
+        if (!post) throw new Error('Không tìm thấy bài viết');
+        const originalText = post.original_text || post.rewritten_text || '';
+        if (!originalText) throw new Error('Bài viết không có nội dung gốc');
+        const newText = await rewriteWithGemini(originalText, post.sender, post.group_name);
+        await dbAsync.run(`UPDATE posts SET rewritten_text = ? WHERE id = ?`, [newText, id]);
+        await dbAsync.log('info', `Đã dùng Gemini AI viết lại bài viết #${id}.`);
+        return { success: true, rewritten_text: newText };
     } catch (e) {
         return { success: false, error: e.message };
     }

@@ -1,18 +1,41 @@
 const { dbAsync } = require('../db');
 
-/**
- * Gọi Google Gemini API với cơ chế tự động chuyển đổi mô hình dự phòng (Auto-Fallback)
- * nếu mô hình cũ bị Google khai tử (như gemini-2.0-flash -> gemini-3.6-flash).
- */
-async function callGeminiApi(apiKey, requestedModel, prompt) {
-    let cleanModel = requestedModel?.trim() || 'gemini-1.5-flash';
-    if (cleanModel === 'gemini-2.0-flash') {
-        cleanModel = 'gemini-1.5-flash';
+function cleanGeminiOutput(text) {
+    if (!text) return '';
+    let clean = text.trim();
+    
+    // Bỏ markdown codeblocks nếu có ```markdown ... ```
+    clean = clean.replace(/^```(?:markdown|text)?\s*\n/i, '').replace(/\n```\s*$/i, '');
+
+    // Bỏ dòng mở đầu kiểu chào hỏi / nhận xét / filler
+    const introPatterns = [
+        /^(dưới đây là|đây là|chào bạn|sau đây là|gợi ý bài đăng|bài viết được viết lại|tuyệt vời|rất vui|tôi sẽ).*?:\s*\n+/i,
+        /^(dưới đây là|đây là|chào bạn|sau đây là|tuyệt vời|tuyệt vời!).*?!\s*\n+/i,
+        /^---\s*\n+/
+    ];
+    for (const pat of introPatterns) {
+        clean = clean.replace(pat, '');
     }
 
-    // Danh sách các mô hình theo thứ tự ưu tiên (ưu tiên mô hình ổn định, dung lượng lớn nhất)
+    // Bỏ dòng kết thúc kiểu chào tạm biệt / hy vọng
+    clean = clean.replace(/\n+(hy vọng bài viết|chúc bạn|nếu bạn cần|lưu ý|mong bài viết|bài viết này được viết).*?$/i, '');
+    clean = clean.replace(/\n+---\s*$/i, '');
+    
+    return clean.trim();
+}
+
+/**
+ * Gọi Google Gemini API với cơ chế tự động chuyển đổi mô hình dự phòng (Auto-Fallback)
+ */
+async function callGeminiApi(apiKey, requestedModel, prompt) {
+    let cleanModel = requestedModel?.trim() || 'gemini-3.7-flash';
+    if (cleanModel === 'gemini-2.0-flash' || cleanModel === 'gemini-1.5-flash') {
+        cleanModel = 'gemini-3.7-flash';
+    }
+
+    // Danh sách các mô hình hoạt động ổn định nhất trên Google AI Studio (ưu tiên 3.7-flash, 3.8-flash, 2.5-flash)
     const modelsToTry = [cleanModel];
-    const candidateList = ['gemini-1.5-flash', 'gemini-3.6-flash', 'gemini-1.5-pro', 'gemini-2.5-flash'];
+    const candidateList = ['gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-3.6-flash'];
     for (const cand of candidateList) {
         if (!modelsToTry.includes(cand)) modelsToTry.push(cand);
     }
@@ -26,7 +49,7 @@ async function callGeminiApi(apiKey, requestedModel, prompt) {
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                signal: AbortSignal.timeout(12000),
+                signal: AbortSignal.timeout(15000),
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: prompt }] }],
                     generationConfig: {
@@ -47,8 +70,6 @@ async function callGeminiApi(apiKey, requestedModel, prompt) {
             const errText = await response.text();
             lastError = new Error(`Lỗi từ Gemini API (${response.status}): ${errText}`);
             
-            // Nếu model trả về 503 (quá tải/high demand), 429 (rate limit), 404 (khai tử), hoặc lỗi server (5xx)
-            // -> Tự động chuyển sang model dự phòng kế tiếp ngay lập tức
             const shouldFallback = response.status === 503 
                 || response.status === 429 
                 || response.status === 404 
@@ -61,7 +82,7 @@ async function callGeminiApi(apiKey, requestedModel, prompt) {
             if (shouldFallback && !isLast) {
                 const nextModel = modelsToTry[i + 1];
                 console.warn(`[Gemini API] Model ${curModel} gặp sự cố (${response.status} - Quá tải/Bận), đang tự động chuyển sang ${nextModel}...`);
-                await new Promise(r => setTimeout(r, 500));
+                await new Promise(r => setTimeout(r, 400));
                 continue;
             } else {
                 throw lastError;
@@ -77,7 +98,7 @@ async function callGeminiApi(apiKey, requestedModel, prompt) {
                 || msg.includes('no longer available');
 
             if (isRecoverable && !isLast) {
-                await new Promise(r => setTimeout(r, 500));
+                await new Promise(r => setTimeout(r, 400));
                 continue;
             }
             throw err;
@@ -99,34 +120,48 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
         throw new Error('Chưa cấu hình Gemini API Key. Vui lòng vào tab AI Gemini để nhập API Key miễn phí.');
     }
 
-    const model = modelRow?.value?.trim() || 'gemini-3.6-flash';
+    const model = modelRow?.value?.trim() || 'gemini-3.7-flash';
     let template = overridePrompt || promptRow?.value || 'Hãy viết lại bài đăng sau để đăng lên Facebook:\n{CONTENT}';
 
     let finalPrompt = template;
-    if (finalPrompt.includes('{CONTENT}')) {
-        finalPrompt = finalPrompt.replace('{CONTENT}', content.trim());
+    const placeholderRegex = /\[Dán.*?\]|\{CONTENT\}/gi;
+    if (placeholderRegex.test(finalPrompt)) {
+        finalPrompt = finalPrompt.replace(placeholderRegex, content.trim());
     } else {
         finalPrompt = `${finalPrompt}\n\nNội dung cần viết lại:\n${content.trim()}`;
     }
     finalPrompt = finalPrompt.replace(/{SENDER}/g, sender || 'Thành viên');
     finalPrompt = finalPrompt.replace(/{GROUP}/g, groupName || 'Nhóm Zalo');
 
-    const { text: resultTextRaw, modelUsed } = await callGeminiApi(apiKey, model, finalPrompt);
-    let resultText = resultTextRaw;
+    // Thêm quy tắc ràng buộc để AI xuất chuẩn 100% không nói nhảm
+    if (!finalPrompt.includes('CHỈ XUẤT DUY NHẤT')) {
+        finalPrompt += `\n\n[QUY TẮC BẮT BUỘC: CHỈ XUẤT DUY NHẤT BÀI ĐĂNG FACEBOOK HOÀN CHỈNH. TUYỆT ĐỐI KHÔNG CÓ CÂU CHÀO MỞ ĐẦU (KHÔNG "Tuyệt vời", "Dưới đây là", "Chào bạn"), KHÔNG GIẢI THÍCH HAY BÌNH LUẬN GÌ THÊM].`;
+    }
 
-    // 1. Tự động chèn thông tin liên hệ (chữ ký) nếu có
+    const { text: resultTextRaw, modelUsed } = await callGeminiApi(apiKey, model, finalPrompt);
+    let resultText = cleanGeminiOutput(resultTextRaw);
+
+    // 1. Tự động chèn thông tin liên hệ (chữ ký) nếu có và chưa có trong bài
     const sigRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'custom_signature'`);
     if (sigRow?.value && sigRow.value.trim()) {
-        resultText += `\n\n${sigRow.value.trim()}`;
+        const sig = sigRow.value.trim();
+        const phoneMatch = sig.match(/\d{9,11}/);
+        const hasPhoneAlready = phoneMatch && resultText.includes(phoneMatch[0]);
+        if (!hasPhoneAlready && !resultText.includes(sig)) {
+            resultText += `\n\n${sig}`;
+        }
     }
 
-    // 2. Tự động chèn dàn Hashtags cá nhân nếu có
+    // 2. Tự động chèn dàn Hashtags cá nhân nếu có và chưa có trong bài
     const tagRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'custom_hashtags'`);
     if (tagRow?.value && tagRow.value.trim()) {
-        resultText += `\n\n${tagRow.value.trim()}`;
+        const customTags = tagRow.value.trim();
+        if (!resultText.includes(customTags)) {
+            resultText += `\n\n${customTags}`;
+        }
     }
 
-    await dbAsync.log('info', `AI Gemini (${modelUsed}) đã viết lại bài cho nhóm [${groupName}] thành công (đã chèn chữ ký & hashtags).`);
+    await dbAsync.log('info', `AI Gemini (${modelUsed}) đã viết lại bài cho nhóm [${groupName}] thành công.`);
     return resultText.trim();
 }
 
@@ -175,4 +210,4 @@ async function testGemini(apiKey, promptTemplate, model = 'gemini-3.6-flash') {
     return `[Mô hình sử dụng: ${modelUsed}]\n\n${text}`;
 }
 
-module.exports = { rewriteWithGemini, testGemini, spinPostForGroup };
+module.exports = { rewriteWithGemini, testGemini, spinPostForGroup, callGeminiApi, cleanGeminiOutput };

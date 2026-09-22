@@ -47,6 +47,8 @@ contextBridge.exposeInMainWorld('electronApi', {
     updatePost: (id, text, status) => ipcRenderer.invoke('update-post', { id, text, status }),
     publishPost: (id) => ipcRenderer.invoke('publish-post', id),
     deletePost: (id) => ipcRenderer.invoke('delete-post', id),
+    clearAllPosts: (statusFilter) => ipcRenderer.invoke('clear-all-posts', statusFilter),
+    reRewritePost: (id) => ipcRenderer.invoke('re-rewrite-post', id),
 
     // 6. Thử nghiệm AI
     testAi: (apiKey, promptTemplate, model) => ipcRenderer.invoke('test-ai', { apiKey, promptTemplate, model }),
