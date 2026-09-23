@@ -33,10 +33,10 @@ function isValidHistoricalPost(content) {
     }
 
     // Nhận diện bài đăng bán hàng, bất động sản, CHDV, phòng trọ, tuyển dụng
-    const hasPostKeywords = /(bán|cho thuê|cần|tuyển|giá|lh|liên hệ|sđt|dt|phone|tỷ|triệu|tr\/|m2|phòng|nhà|căn hộ|chdv|studio|trống|nội thất|ban công|cọc|pass|ở ghép|homestay|chung cư|khu vực|tphcm|hà nội|q\d+|\d{9,11})/i.test(clean);
+    const hasPostKeywords = /(bán|cho thuê|cần|tuyển|giá|lh|liên hệ|sđt|dt|phone|tỷ|triệu|tr\/|tr\b|m2|phòng|nhà|căn hộ|chdv|studio|trống|nội thất|ban công|cọc|pass|ở ghép|homestay|chung cư|khu vực|tphcm|hà nội|q\d+|\d{9,11}|kv\s*:|tc\s*:|quận|p\.|đường|khách|ngắn hạn|dài hạn|tiện ích|view|căn|lầu|tầng|hẻm|oto|xe hơi|zalo|call|apartment|room|rent|studio|condo|district|price|contact|deposit)/i.test(clean);
     
-    // Nếu dài trên 40 ký tự hoặc có từ khóa bài đăng (>= 20 ký tự) thì xem là hợp lệ
-    return clean.length >= 40 || (clean.length >= 20 && hasPostKeywords);
+    // Nếu dài trên 35 ký tự hoặc có từ khóa bài đăng (>= 15 ký tự) thì xem là hợp lệ
+    return clean.length >= 35 || (clean.length >= 15 && hasPostKeywords);
 }
 
 /**
@@ -103,8 +103,8 @@ async function processHistoricalZaloMessages(messages, options = {}) {
                 if (cleanTarget === 'nhóm zalo đang mở' || cleanTarget === 'nhóm zalo') {
                     matchedCanonicalName = options.activeGroupName || monitoredList[0]?.raw || rawGroupName;
                 } else {
-                    skippedCount++;
-                    continue;
+                    // Chấp nhận nhóm đang quét để không bỏ sót bài đăng phòng của người dùng
+                    matchedCanonicalName = rawGroupName;
                 }
             } else {
                 rawGroupName = matchedCanonicalName;
@@ -127,16 +127,15 @@ async function processHistoricalZaloMessages(messages, options = {}) {
             continue;
         }
 
-        // 4. Lưu vào bảng messages
+        // 4. Lưu vào bảng messages (kèm toàn bộ danh sách ảnh đã gom)
         const msgResult = await dbAsync.run(
             `INSERT INTO messages (group_name, sender, content, images) VALUES (?, ?, ?, ?)`,
             [rawGroupName, sender, text, JSON.stringify(msg.images || [])]
         );
 
         // 5. Gửi sang AI Gemini Web để biên tập lại thành bài đăng Facebook hoàn chỉnh
-        // Quy tắc: Chỉ khi lấy được bài viết biên tập từ Gemini Web thì MỚI đưa vào bảng tin posts!
         try {
-            await dbAsync.log('info', `[Quét Lịch Sử] Đang gửi bài viết (${text.length} ký tự) từ [${rawGroupName}] sang Gemini Web...`);
+            await dbAsync.log('info', `[Quét Lịch Sử] Đang gửi bài viết (${text.length} ký tự, ${msg.images?.length || 0} ảnh) từ [${rawGroupName}] sang Gemini Web...`);
 
             const rewritten = await rewriteWithGemini(text, sender, rawGroupName);
 
@@ -152,14 +151,19 @@ async function processHistoricalZaloMessages(messages, options = {}) {
             );
 
             queuedCount++;
-            await dbAsync.log('info', `[Quét Lịch Sử] ✓ AI đã biên tập xong bài #${queuedCount} cho nhóm [${rawGroupName}]. Đã đưa vào Bảng Tin (ID: #${postInsertRes.id}).`);
+            await dbAsync.log('info', `[Quét Lịch Sử] ✓ AI đã biên tập xong bài #${queuedCount} cho nhóm [${rawGroupName}]. Đã đưa vào Bảng Tin (ID: #${postInsertRes.id}, ${msg.images?.length || 0} ảnh).`);
 
             // Nghỉ an toàn 3.5 giây giữa các tin để Chrome Gemini xử lý mượt mà, không bị nghẽn lệnh
             await new Promise(r => setTimeout(r, 3500));
         } catch (aiErr) {
-            console.warn(`[HistoryScanner] Bỏ qua bài viết vì AI chưa hoàn tất: ${aiErr.message}`);
-            await dbAsync.log('warn', `[Quét Lịch Sử] Bỏ qua tin từ [${rawGroupName}] (Lý do: ${aiErr.message}). Không nạp tin thô vào bảng tin.`);
-            skippedCount++;
+            console.warn(`[HistoryScanner] AI gặp sự cố: ${aiErr.message}`);
+            // Bảo toàn tuyệt đối nội dung bài viết và hình ảnh của người dùng vào hàng chờ duyệt
+            const postInsertRes = await dbAsync.run(
+                `INSERT INTO posts (message_id, group_name, original_text, rewritten_text, target_fb_group, status) VALUES (?, ?, ?, ?, ?, ?)`,
+                [msgResult.id, rawGroupName, text, text, targetFbStr, 'pending']
+            );
+            queuedCount++;
+            await dbAsync.log('warn', `[Quét Lịch Sử] Đã lưu bài #${queuedCount} và ${msg.images?.length || 0} ảnh từ [${rawGroupName}] vào hàng chờ duyệt (AI chưa phản hồi kịp: ${aiErr.message}. Bạn có thể bấm "Viết lại AI" trên Bảng tin).`);
         }
     }
 

@@ -2875,7 +2875,7 @@ async function startZaloHistoryScanAction() {
                 function addRecord(groupName, sender, text, images) {
                     if (!text || typeof text !== 'string') return;
                     const clean = text.trim();
-                    if (clean.length < 20) return;
+                    if (clean.length < 15 && (!images || images.length === 0)) return;
                     const key = (groupName || '') + '::' + clean.substring(0, 70);
                     if (seenKeys.has(key)) return;
                     seenKeys.add(key);
@@ -2928,52 +2928,111 @@ async function startZaloHistoryScanAction() {
                     return null;
                 }
 
-                // Bóc tách tin nhắn trong chat view hiện tại
+                // Trích xuất toàn bộ ảnh đính kèm (img tag, data-src, background-image)
+                function extractImagesFromEl(el) {
+                    var imgs = [];
+                    if (!el) return imgs;
+
+                    // 1. Quét thẻ <img>
+                    el.querySelectorAll('img').forEach(function(img) {
+                        var src = img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-orig-src') || img.src;
+                        if (!src) return;
+                        var lower = src.toLowerCase();
+                        if (lower.includes('avatar') || lower.includes('emoji') || lower.includes('icon') || lower.includes('sticker') || lower.startsWith('data:image/svg')) {
+                            return;
+                        }
+                        if (img.classList.contains('avatar') || img.closest('.avatar, .sender-avatar, [class*="avatar"]')) {
+                            return;
+                        }
+                        if (!imgs.includes(src)) imgs.push(src);
+                    });
+
+                    // 2. Quét background-image (cho các ô lưới ảnh của Zalo)
+                    el.querySelectorAll('div[style*="background"], a[style*="background"], span[style*="background"]').forEach(function(bEl) {
+                        var bg = bEl.style.backgroundImage || window.getComputedStyle(bEl).backgroundImage || '';
+                        var match = bg.match(/url\(["']?(https?:\/\/[^"']+|blob:[^"']+)["']?\)/i);
+                        if (match && match[1]) {
+                            var url = match[1];
+                            var lower = url.toLowerCase();
+                            if (!lower.includes('avatar') && !lower.includes('emoji') && !lower.includes('icon') && !lower.includes('sticker') && !imgs.includes(url)) {
+                                imgs.push(url);
+                            }
+                        }
+                    });
+
+                    return imgs;
+                }
+
+                // Bóc tách tin nhắn trong chat view hiện tại và gom ảnh liền kề của cùng 1 người đăng
                 function harvestCurrentChat(currentGroupName) {
                     var msgBoxes = Array.from(document.querySelectorAll(
                         '[id*="msg"], [data-id*="msg"], .chat-item, .msg-item, .chat-message, div[class*="chat-message"], div[class*="message-view"], div[class*="bubble"], div[class*="msg-"]'
                     ));
 
-                    // Fallback nếu selector không ra: lấy các div trong chat container
                     var chatScroll = findChatScrollElement();
                     if (msgBoxes.length === 0 && chatScroll) {
                         var divs = Array.from(chatScroll.querySelectorAll('div'));
                         msgBoxes = divs.filter(function(d) {
                             var t = (d.innerText || '').trim();
-                            return t.length >= 25 && d.children.length <= 5;
+                            return (t.length >= 15 || d.querySelector('img')) && d.children.length <= 6;
                         });
                     }
 
-                    msgBoxes.forEach(function(el) {
-                        // Người gửi
-                        var senderEl = el.querySelector('.sender-name, [class*="sender"], [class*="author"], [class*="name"]');
-                        var sender = senderEl ? senderEl.innerText.trim() : 'Thành viên';
+                    // Bước 1: Trích xuất thô từng bong bóng chat
+                    var rawItems = [];
+                    var lastKnownSender = 'Thành viên';
 
-                        // Nội dung tin nhắn
+                    msgBoxes.forEach(function(el) {
+                        var senderEl = el.querySelector('.sender-name, [class*="sender"], [class*="author"], [class*="name"]');
+                        var sender = senderEl ? senderEl.innerText.trim() : lastKnownSender;
+                        if (sender && sender !== 'Thành viên') {
+                            lastKnownSender = sender;
+                        }
+
                         var textEl = el.querySelector('.content-text, .msg-text, [class*="content-text"], [class*="text-msg"], [class*="text-message"], [class*="message-content"], [class*="bubble-content"], p, pre');
                         var text = '';
-                        if (textEl && textEl.innerText && textEl.innerText.trim().length >= 15) {
+                        if (textEl && textEl.innerText && textEl.innerText.trim().length >= 10) {
                             text = textEl.innerText.trim();
                         } else {
                             text = (el.innerText || '').trim();
                         }
 
-                        // Loại trừ các thông báo hệ thống của Zalo
                         if (/^(đã đổi ảnh|đã tham gia|đã rời khỏi|đã gửi một nhãn dán|đã ghim)/i.test(text)) {
                             return;
                         }
 
-                        // Hình ảnh đính kèm
-                        var images = [];
-                        el.querySelectorAll('img').forEach(function(img) {
-                            var src = img.getAttribute('src');
-                            if (src && !src.includes('avatar') && !src.includes('icon') && !src.includes('emoji') && !src.startsWith('data:image/svg')) {
-                                images.push(src);
-                            }
-                        });
+                        var images = extractImagesFromEl(el);
 
-                        addRecord(currentGroupName, sender, text, images);
+                        rawItems.push({
+                            sender: sender || 'Thành viên',
+                            text: text,
+                            images: images
+                        });
                     });
+
+                    // Bước 2: Gom cụm tin nhắn cùng người gửi liền kề (Clustering)
+                    // Bài viết và ảnh thường được người đăng gửi liên tiếp 2-4 tin kế nhau
+                    for (var i = 0; i < rawItems.length; i++) {
+                        var cur = rawItems[i];
+                        if (!cur.text || cur.text.length < 15) continue;
+
+                        var mergedImages = cur.images.slice();
+
+                        // Quét các bong bóng ảnh lân cận trước/sau từ cùng một người đăng
+                        for (var j = Math.max(0, i - 2); j <= Math.min(rawItems.length - 1, i + 5); j++) {
+                            if (j === i) continue;
+                            var other = rawItems[j];
+                            if (other.sender === cur.sender && other.images.length > 0) {
+                                other.images.forEach(function(imgSrc) {
+                                    if (!mergedImages.includes(imgSrc)) {
+                                        mergedImages.push(imgSrc);
+                                    }
+                                });
+                            }
+                        }
+
+                        addRecord(currentGroupName, cur.sender, cur.text, mergedImages);
+                    }
                 }
 
                 // HÀM QUÉT LỊCH SỬ CHAT CỦA MỘT HỘI THOẠI

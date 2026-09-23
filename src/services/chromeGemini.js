@@ -426,16 +426,21 @@ const INJECT_SCRIPT = (promptText) => `
     // 2. Tìm nút Gửi
     function findSendButton() {
         const sendSelectors = [
-            'button[aria-label*="Send"]',
+            'button[aria-label*="Gửi tin nhắn"]',
+            'button[aria-label*="Send message"]',
             'button[aria-label*="Gửi"]',
-            'button[aria-label*="send"]',
+            'button[aria-label*="Send"]',
             'button[aria-label*="gửi"]',
+            'button[aria-label*="send"]',
             'button.send-button',
-            'button[mat-icon-button][aria-label*="Send"]'
+            'button[mat-icon-button][aria-label*="Send"]',
+            '.send-button-container button'
         ];
         for (const s of sendSelectors) {
-            const btn = document.querySelector(s);
-            if (btn && !btn.disabled && btn.offsetParent !== null) return btn;
+            try {
+                const btn = document.querySelector(s);
+                if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true' && btn.offsetParent !== null) return btn;
+            } catch(e) {}
         }
         return null;
     }
@@ -446,12 +451,20 @@ const INJECT_SCRIPT = (promptText) => `
         return list.length;
     }
 
-    // 4. Lấy nội dung phản hồi mới nhất
+    // 4. Lấy nội dung phản hồi sạch (loại bỏ hoàn toàn các nút toolbar: Sao chép, Thích, Chia sẻ, Google...)
+    function getCleanResponseText(el) {
+        if (!el) return '';
+        const clone = el.cloneNode(true);
+        const toRemove = clone.querySelectorAll('button, .response-actions, message-actions, .actions-container, mat-toolbar, .sources-container, .citation-tag, .feedback-container, .tool-call, .tool-result');
+        toRemove.forEach(b => b.remove());
+        return (clone.innerText || clone.textContent || '').trim();
+    }
+
     function getLatestResponseText() {
         const list = document.querySelectorAll('message-content, .model-response-text, model-response, [data-message-author-role="model"]');
         if (list.length === 0) return null;
         const last = list[list.length - 1];
-        return last.innerText || last.textContent;
+        return getCleanResponseText(last);
     }
 
     // 5. Kiểm tra AI còn đang gõ/stream không
@@ -462,11 +475,14 @@ const INJECT_SCRIPT = (promptText) => `
             'button[aria-label*="stop"]',
             'button[aria-label*="dừng"]',
             '.sparkle-animation',
-            '.generating'
+            '.generating',
+            '[data-test-id*="stop"]'
         ];
         for (const s of stopSelectors) {
-            const el = document.querySelector(s);
-            if (el && el.offsetParent !== null) return true;
+            try {
+                const el = document.querySelector(s);
+                if (el && el.offsetParent !== null) return true;
+            } catch(e) {}
         }
         return false;
     }
@@ -488,30 +504,44 @@ const INJECT_SCRIPT = (promptText) => `
     }
 
     const initialResponseCount = getResponseCount();
+    const previousLatestText = getLatestResponseText() || '';
 
-    // Điền nội dung vào ô chat
+    // Điền nội dung vào ô chat: Sử dụng execCommand để kích hoạt đầy đủ ProseMirror/Lexical editor
     inputEl.focus();
-    if (inputEl.tagName === 'TEXTAREA' || inputEl.tagName === 'INPUT') {
-        inputEl.value = prompt;
-        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-        inputEl.dispatchEvent(new Event('change', { bubbles: true }));
-    } else {
-        // ContentEditable element
-        inputEl.innerText = prompt;
-        inputEl.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: prompt }));
+    try {
+        document.execCommand('selectAll', false, null);
+        document.execCommand('delete', false, null);
+        document.execCommand('insertText', false, prompt);
+    } catch(e) {}
+
+    // Fallback nếu execCommand không gán được text
+    if (!inputEl.innerText || !inputEl.innerText.trim()) {
+        if (inputEl.tagName === 'TEXTAREA' || inputEl.tagName === 'INPUT') {
+            inputEl.value = prompt;
+        } else {
+            inputEl.innerHTML = '<p>' + prompt.replace(/\n/g, '<br>') + '</p>';
+        }
     }
+    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+    inputEl.dispatchEvent(new Event('change', { bubbles: true }));
 
     await new Promise(r => setTimeout(r, 600));
 
     // Bấm nút gửi hoặc dispatch phím Enter
-    const sendBtn = findSendButton();
+    let sendBtn = findSendButton();
+    for (let i = 0; i < 5; i++) {
+        if (sendBtn) break;
+        await new Promise(r => setTimeout(r, 200));
+        sendBtn = findSendButton();
+    }
+
     if (sendBtn) {
         sendBtn.click();
     } else {
         inputEl.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13 }));
     }
 
-    // Chờ phản hồi bắt đầu sinh và hoàn thành (tối đa 38 giây)
+    // Chờ phản hồi bắt đầu sinh và hoàn thành
     const startTime = Date.now();
     let generationStarted = false;
     let lastLength = 0;
@@ -521,15 +551,16 @@ const INJECT_SCRIPT = (promptText) => `
         await new Promise(r => setTimeout(r, 1000));
         const currentCount = getResponseCount();
         const generating = isAiGenerating();
+        const currentText = getLatestResponseText() || '';
 
-        if (currentCount > initialResponseCount || generating) {
+        // Nhận diện AI bắt đầu trả lời
+        if (currentCount > initialResponseCount || generating || (currentText && currentText !== previousLatestText)) {
             generationStarted = true;
         }
 
         if (generationStarted && !generating) {
-            // Kiểm tra xem độ dài text có ổn định trong 2 lần kiểm tra liên tiếp không
-            const currentText = getLatestResponseText() || '';
-            if (currentText.length > 30) {
+            // Đảm bảo là phản hồi MỚI (khác với câu trả lời cũ trước đó)
+            if (currentText.length > 30 && currentText !== previousLatestText) {
                 if (currentText.length === lastLength) {
                     stableCount++;
                     if (stableCount >= 2) {
@@ -549,7 +580,8 @@ const INJECT_SCRIPT = (promptText) => `
     }
 
     const fallbackText = getLatestResponseText();
-    if (fallbackText && fallbackText.length > 20) {
+    // TUYỆT ĐỐI KHÔNG TRẢ VỀ CÂU TRẢ LỜI CŨ TỪ TRƯỚC
+    if (fallbackText && fallbackText.length > 20 && fallbackText !== previousLatestText) {
         return { 
             success: true, 
             text: fallbackText,
@@ -558,7 +590,12 @@ const INJECT_SCRIPT = (promptText) => `
         };
     }
 
-    return { success: false, error: 'Quá thời gian chờ Gemini trả lời trên Chrome (đã đợi hơn 65 giây).' };
+    return { 
+        success: false, 
+        error: generationStarted 
+            ? 'AI vẫn đang gõ hoặc chưa hoàn tất bài viết.' 
+            : 'Gemini chưa gửi được tin hoặc chưa phản hồi bài mới.' 
+    };
 })();
 `;
 
