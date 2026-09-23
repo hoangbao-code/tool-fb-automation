@@ -15,6 +15,9 @@ const { processHistoricalZaloMessages } = require('./services/historyScanner');
 
 dotenv.config();
 
+// Ẩn các cờ tự động hóa Chromium để vượt qua cơ chế kiểm tra bảo mật Google
+app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
+
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
@@ -113,7 +116,8 @@ function createWindow() {
     });
 
     // Cấu hình User-Agent Desktop chuẩn cho Webview Zalo & Facebook
-    const desktopUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+    const desktopUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
+    const firefoxUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/134.0';
     
     const zaloSession = session.fromPartition('persist:zalo');
     zaloSession.setUserAgent(desktopUA);
@@ -122,7 +126,23 @@ function createWindow() {
     fbSession.setUserAgent(desktopUA);
 
     const geminiSession = session.fromPartition('persist:gemini');
-    geminiSession.setUserAgent(desktopUA);
+    geminiSession.setUserAgent(firefoxUA);
+
+    // Can thiệp Request Headers để vượt qua cơ chế chặn "This browser or app may not be secure" của Google
+    geminiSession.webRequest.onBeforeSendHeaders((details, callback) => {
+        const url = details.url.toLowerCase();
+        if (url.includes('google.com') || url.includes('google.com.vn') || url.includes('gstatic.com')) {
+            details.requestHeaders['User-Agent'] = firefoxUA;
+            delete details.requestHeaders['Sec-Ch-Ua'];
+            delete details.requestHeaders['Sec-Ch-Ua-Mobile'];
+            delete details.requestHeaders['Sec-Ch-Ua-Platform'];
+            delete details.requestHeaders['Sec-Ch-Ua-Model'];
+            delete details.requestHeaders['sec-ch-ua'];
+            delete details.requestHeaders['sec-ch-ua-mobile'];
+            delete details.requestHeaders['sec-ch-ua-platform'];
+        }
+        callback({ cancel: false, requestHeaders: details.requestHeaders });
+    });
 
     // Kênh phát sự kiện từ Backend sang UI
     const broadcast = (channel, data) => {

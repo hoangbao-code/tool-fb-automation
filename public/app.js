@@ -68,6 +68,11 @@ function setupWebviews() {
                     updateGeminiStatusUI('Mất kết nối mạng', 'error');
                 }
             });
+            geminiWv.addEventListener('new-window', (e) => {
+                if (e.url) {
+                    geminiWv.loadURL(e.url);
+                }
+            });
         }
 
         // Định kỳ đọc tên nhóm Zalo đang mở & tự động bắt tin mới bằng executeJavaScript
