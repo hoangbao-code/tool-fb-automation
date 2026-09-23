@@ -1,23 +1,21 @@
 @echo off
-chcp 65001 >nul
-title PostHub PC - Tự Động Hóa Zalo sang Facebook
+title PostHub PC - Tu Dong Hoa Zalo sang Facebook
 color 0B
 
-:: 1. Xác định thư mục dự án PostHub
+echo ===================================================================
+echo     POSTHUB PC - TU DONG HOA ZALO SANG FACEBOOK (DESKTOP)
+echo ===================================================================
+echo.
+
 set "PROJECT_DIR=C:\Users\bao\.gemini\antigravity\scratch\zalo_fb_poster_apk"
 if exist "%~dp0package.json" (
     set "PROJECT_DIR=%~dp0"
 )
 
-echo ===================================================================
-echo     POSTHUB PC - TỰ ĐỘNG HÓA ZALO SANG FACEBOOK (DESKTOP)
-echo ===================================================================
-echo [INFO] Đang mở từ thư mục: %PROJECT_DIR%
-echo.
-
+echo [INFO] Thu muc ung dung: %PROJECT_DIR%
 cd /d "%PROJECT_DIR%"
 
-:: 2. Kiểm tra & Bổ sung PATH cho Node.js nếu cần
+:: Kiem tra Node.js
 where node >nul 2>nul
 if %errorlevel% neq 0 (
     if exist "C:\Program Files\nodejs\node.exe" (
@@ -27,33 +25,31 @@ if %errorlevel% neq 0 (
 
 where node >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [LỖI] Không tìm thấy Node.js trên máy tính!
-    echo Vui lòng cài đặt Node.js từ trang: https://nodejs.org
-    echo Sau khi cài đặt xong, hãy mở lại file này.
-    echo.
+    echo [LOI] Khong tim thay Node.js tren may tinh!
+    echo Vui long cai dat Node.js tu: https://nodejs.org
     pause
     exit /b 1
 )
 
-:: 3. Kiểm tra và cài đặt thư viện nếu chưa có
+:: Kiem tra thu vien
 if not exist "node_modules\" (
-    echo [INFO] Đang cài đặt thư viện cần thiết lần đầu...
-    call npm install
+    echo [INFO] Dang cai dat thu vien can thiet...
+    call npm.cmd install
     if %errorlevel% neq 0 (
-        echo [LỖI] Cài đặt thư viện thất bại! Vui lòng kiểm tra kết nối mạng.
+        echo [LOI] Cai dat thu vien that bai!
         pause
         exit /b 1
     )
 )
 
-:: 4. Khởi chạy ứng dụng PostHub Desktop
-echo [OK] Đang khởi chạy ứng dụng PostHub Desktop...
+:: Khoi chay ung dung
+echo [OK] Dang khoi chay PostHub Desktop...
 echo.
 
-call npm start
+call npm.cmd start
 
 if %errorlevel% neq 0 (
     echo.
-    echo [THÔNG BÁO] Ứng dụng đã đóng lại (Mã thoát: %errorlevel%).
+    echo [THONG BAO] Ung dung da dong (Ma thoat: %errorlevel%).
     pause
 )
