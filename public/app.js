@@ -1140,93 +1140,108 @@ async function triggerZaloKhacScan() {
                 var names = [];
                 var seen = {};
 
-                function isValidName(str) {
+                function isValidGroupName(str) {
                     if (!str || str.length < 2) return false;
+                    // Bỏ qua nếu là timestamp (10:30, 2 ngày trước, etc.)
                     if (/^\\d{1,2}:\\d{2}$/.test(str)) return false;
                     if (/^\\d+\\s*(ngày|giờ|phút|giây|tháng)/.test(str)) return false;
                     var lower = str.toLowerCase().trim();
-                    var systemWords = ['ưu tiên', 'khác', 'zalo', 'cloud của tôi', 'truyền file', 'hôm qua', 'vừa xong', 'đã gửi', 'tin nhắn', 'danh bạ'];
+                    var systemWords = ['ưu tiên', 'khác', 'zalo', 'cloud của tôi', 'truyền file', 'hôm qua', 'vừa xong', 'đã gửi', 'tin nhắn', 'danh bạ', 'tin nhắn từ người lạ', 'tìm kiếm'];
                     if (systemWords.indexOf(lower) !== -1) return false;
+                    // Bỏ qua nếu là tiền tố tin nhắn
+                    if (/^(tin nhắn|hình ảnh|nhãn dán|video|tệp tin|bạn:|\\w+:)/i.test(lower)) return false;
+                    // Không lấy nếu là tin nhắn quá dài (thường tên nhóm không dài quá 90 ký tự)
+                    if (str.length > 90) return false;
                     return true;
                 }
 
                 function extractNameFromRow(row) {
-                    // 1. Thử các selector title chuẩn
-                    var titleEl = row.querySelector('.conv-item-title__more, [class*="conv-item-title"], [class*="title"], [class*="name"], h4, h5, [data-id="chat-title"]');
+                    // Tuyệt đối không lấy thẻ con của conv-message (chứa tin nhắn gần nhất)
+                    var titleEl = row.querySelector('.conv-item-title__more, [class*="conv-item-title__more"], [class*="conv-item-title"], [data-id="chat-title"]');
                     if (titleEl && titleEl.innerText && titleEl.innerText.trim()) {
-                        var t = titleEl.innerText.trim().split('\\n')[0].trim();
-                        if (isValidName(t)) return t;
+                        var t = titleEl.innerText.trim().split('\\n')[0].replace(/\\u00A0/g, ' ').trim();
+                        // Bỏ số thành viên nếu có ví dụ: "Nhóm BĐS (150)" -> "Nhóm BĐS"
+                        t = t.replace(/\\s*\\(\\d+\\s*thành viên\\)/gi, '').replace(/\\s*\\(\\d+\\)/g, '').trim();
+                        if (isValidGroupName(t)) return t;
                     }
 
-                    // 2. Tìm thẻ con có chữ in đậm (bold/strong) là tên nhóm
-                    var allChildren = row.querySelectorAll('div, span, p, h4, strong, b');
-                    for (var c = 0; c < allChildren.length; c++) {
-                        var child = allChildren[c];
-                        if (child.children.length === 0 && child.innerText && child.innerText.trim()) {
-                            var text = child.innerText.trim();
-                            if (isValidName(text)) {
-                                var fw = window.getComputedStyle(child).fontWeight;
-                                if (fw === 'bold' || fw === 'bolder' || parseInt(fw) >= 500) {
-                                    return text;
-                                }
-                            }
-                        }
+                    // Thử thuộc tính title trên row hoặc titleEl
+                    var titleAttr = (titleEl && titleEl.getAttribute('title')) || row.getAttribute('title');
+                    if (titleAttr && isValidGroupName(titleAttr.trim())) {
+                        return titleAttr.trim().split('\\n')[0].replace(/\\u00A0/g, ' ').trim();
                     }
 
-                    // 3. Fallback: Lấy dòng đầu tiên trong innerText
-                    var lines = (row.innerText || '').split('\\n').map(function(l) { return l.trim(); }).filter(Boolean);
-                    for (var l = 0; l < lines.length; l++) {
-                        if (isValidName(lines[l])) return lines[l];
+                    // Thử phần tử đầu tiên trong body trước khi tới conv-message
+                    var body = row.querySelector('.conv-item-body, [class*="conv-item-body"]');
+                    if (body && body.firstElementChild) {
+                        var first = body.firstElementChild.innerText.trim().split('\\n')[0].replace(/\\u00A0/g, ' ').trim();
+                        if (isValidGroupName(first)) return first;
                     }
+
                     return '';
                 }
 
-                // BƯỚC 1: KHÔNG CLICK BẤT KỲ TAB NÀO để tránh làm đổi tab của người dùng
-                // Quét đúng danh sách các nhóm đang hiển thị trực tiếp trong mục Khác hiện tại
+                // BƯỚC 1: Bấm vào tab "Khác" trên thanh phân loại nếu chưa chọn
+                try {
+                    var allSpans = Array.from(document.querySelectorAll('div, span, button, a, [role="tab"]'));
+                    for (var i = 0; i < allSpans.length; i++) {
+                        var el = allSpans[i];
+                        if (el.children.length === 0 && el.innerText && el.innerText.trim().toLowerCase() === 'khác') {
+                            var r = el.getBoundingClientRect();
+                            if (r.left >= 50 && r.left <= 420 && r.top <= 160) {
+                                el.click();
+                                if (el.parentElement) el.parentElement.click();
+                                await new Promise(function(r) { setTimeout(r, 600); });
+                                break;
+                            }
+                        }
+                    }
+                } catch(e) {}
 
-                // BƯỚC 2: Tìm container cuộn danh sách hội thoại
+                // BƯỚC 2: Tìm container cuộn danh sách hội thoại bên trái (KHÔNG BAO GIỜ LẤY KHUNG CHAT BÊN PHẢI)
                 var scrollContainer = null;
-                var allDivs = document.querySelectorAll('div, ul, main, section');
-                for (var d = 0; d < allDivs.length; d++) {
-                    var el = allDivs[d];
-                    var s = window.getComputedStyle(el);
-                    if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && el.clientHeight > 140) {
+                var firstConv = document.querySelector('.conv-item, [id^="conv-item-"], [data-id*="conv_item"]');
+                if (firstConv) {
+                    var p = firstConv.parentElement;
+                    while (p && p !== document.body) {
+                        var s = window.getComputedStyle(p);
+                        var rect = p.getBoundingClientRect();
+                        // Cột danh sách hội thoại luôn có left < 150 và right <= 460
+                        if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && p.clientHeight > 100 && rect.left < 150 && rect.right <= 460) {
+                            scrollContainer = p;
+                            break;
+                        }
+                        p = p.parentElement;
+                    }
+                }
+
+                // Fallback nếu không qua parent: tìm div scroll ở đúng tọa độ cột trái
+                if (!scrollContainer) {
+                    var allDivs = document.querySelectorAll('div, ul, section');
+                    for (var d = 0; d < allDivs.length; d++) {
+                        var el = allDivs[d];
                         var rect = el.getBoundingClientRect();
-                        if (rect.left < 500 && rect.width > 150) {
-                            if (!scrollContainer || el.scrollHeight >= scrollContainer.scrollHeight) {
+                        if (rect.left >= 40 && rect.left <= 100 && rect.right <= 450 && rect.height > 150) {
+                            var s = window.getComputedStyle(el);
+                            if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
                                 scrollContainer = el;
+                                break;
                             }
                         }
                     }
                 }
 
-                // BƯỚC 3: Hàm bóc tách hội thoại (Kết hợp cả Selector class lẫn Quét Hình Học)
+                // BƯỚC 3: Thu hoạch các nhóm hiển thị
                 function harvestVisible() {
-                    // A. Selector class
-                    var rows = Array.from(document.querySelectorAll('.conv-item, [data-id*="conv"], [data-id*="thread"], div[class*="chat-item"], div[class*="conv-item"], div[class*="rel-item"], [role="listitem"]'));
+                    var root = scrollContainer || document;
+                    // Chỉ tìm conv-item nằm trong cột bên trái (rect.left < 450)
+                    var items = Array.from(root.querySelectorAll('.conv-item, [id^="conv-item-"], [data-id*="conv_item"]')).filter(function(it) {
+                        var r = it.getBoundingClientRect();
+                        return r.left < 450 && r.height >= 40;
+                    });
 
-                    // B. Geometrical fallback: tìm div dạng hàng hội thoại có avatar và text
-                    if (rows.length === 0) {
-                        var root = scrollContainer || document.body;
-                        var allBoxes = Array.from(root.querySelectorAll('div'));
-                        var customRows = [];
-                        for (var b = 0; b < allBoxes.length; b++) {
-                            var box = allBoxes[b];
-                            var bRect = box.getBoundingClientRect();
-                            if (bRect.height >= 45 && bRect.height <= 95 && bRect.width >= 160 && bRect.left < 450) {
-                                var hasImg = box.querySelector('img, [class*="avatar"], svg, [class*="thumb"]');
-                                if (hasImg) {
-                                    customRows.push(box);
-                                }
-                            }
-                        }
-                        rows = customRows.filter(function(item, idx, arr) {
-                            return !arr.some(function(other) { return other !== item && other.contains(item); });
-                        });
-                    }
-
-                    for (var k = 0; k < rows.length; k++) {
-                        var name = extractNameFromRow(rows[k]);
+                    for (var k = 0; k < items.length; k++) {
+                        var name = extractNameFromRow(items[k]);
                         if (name) {
                             var key = name.toLowerCase();
                             if (!seen[key]) {
@@ -1237,21 +1252,21 @@ async function triggerZaloKhacScan() {
                     }
                 }
 
-                // Đưa container lên đầu
+                // Đưa danh sách hội thoại lên đầu
                 if (scrollContainer) scrollContainer.scrollTop = 0;
-                await new Promise(function(r) { setTimeout(r, 250); });
+                await new Promise(function(r) { setTimeout(r, 300); });
                 harvestVisible();
 
-                // BƯỚC 4: Cuộn 25 bước để lấy hết toàn bộ nhóm trong mục Khác
+                // BƯỚC 4: Cuộn 25 bước chỉ trong container danh sách hội thoại bên trái
                 var maxSteps = 25;
                 for (var step = 1; step <= maxSteps; step++) {
                     if (scrollContainer) {
-                        scrollContainer.scrollTop += 320;
+                        scrollContainer.scrollTop += 350;
+                        await new Promise(function(r) { setTimeout(r, 220); });
+                        harvestVisible();
                     } else {
-                        window.scrollBy(0, 320);
+                        break;
                     }
-                    await new Promise(function(r) { setTimeout(r, 220); });
-                    harvestVisible();
                 }
 
                 return {
@@ -1330,57 +1345,81 @@ async function triggerZaloCurrentViewScan() {
                     }
                 } catch(e) {}
 
-                var container = document.querySelector('#conversationList, [data-id="virtual-list"], .conv-list, .virtualized-scroll, div[class*="conv-list"]');
-                if (!container) {
-                    var all = document.querySelectorAll('div');
-                    for (var i = 0; i < all.length; i++) {
-                        var el = all[i];
-                        var rect = el.getBoundingClientRect();
-                        if (rect.left < 450 && rect.width > 120 && rect.height > 250) {
-                            var s = window.getComputedStyle(el);
-                            if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
-                                container = el;
-                                break;
-                            }
-                        }
-                    }
-                }
-
                 var names = [];
                 var seen = {};
 
-                function extractItems() {
-                    var items = document.querySelectorAll('.conv-item, [data-id*="conv_item"], div[id^="conv-item-"], div[class*="chat-item"], div[class*="conv-item"], .group-item');
+                function isValidGroupName(str) {
+                    if (!str || str.length < 2) return false;
+                    if (/^\\d{1,2}:\\d{2}$/.test(str)) return false;
+                    if (/^\\d+\\s*(ngày|giờ|phút|giây|tháng)/.test(str)) return false;
+                    var lower = str.toLowerCase().trim();
+                    var systemWords = ['ưu tiên', 'khác', 'zalo', 'cloud của tôi', 'truyền file', 'hôm qua', 'vừa xong', 'đã gửi', 'tin nhắn', 'danh bạ', 'tin nhắn từ người lạ', 'tìm kiếm'];
+                    if (systemWords.indexOf(lower) !== -1) return false;
+                    if (/^(tin nhắn|hình ảnh|nhãn dán|video|tệp tin|bạn:|\\w+:)/i.test(lower)) return false;
+                    if (str.length > 90) return false;
+                    return true;
+                }
+
+                function extractNameFromRow(row) {
+                    var titleEl = row.querySelector('.conv-item-title__more, [class*="conv-item-title__more"], [class*="conv-item-title"], [data-id="chat-title"]');
+                    if (titleEl && titleEl.innerText && titleEl.innerText.trim()) {
+                        var t = titleEl.innerText.trim().split('\\n')[0].replace(/\\u00A0/g, ' ').trim();
+                        t = t.replace(/\\s*\\(\\d+\\s*thành viên\\)/gi, '').replace(/\\s*\\(\\d+\\)/g, '').trim();
+                        if (isValidGroupName(t)) return t;
+                    }
+                    var titleAttr = (titleEl && titleEl.getAttribute('title')) || row.getAttribute('title');
+                    if (titleAttr && isValidGroupName(titleAttr.trim())) {
+                        return titleAttr.trim().split('\\n')[0].replace(/\\u00A0/g, ' ').trim();
+                    }
+                    return '';
+                }
+
+                var scrollContainer = null;
+                var firstConv = document.querySelector('.conv-item, [id^="conv-item-"], [data-id*="conv_item"]');
+                if (firstConv) {
+                    var p = firstConv.parentElement;
+                    while (p && p !== document.body) {
+                        var s = window.getComputedStyle(p);
+                        var rect = p.getBoundingClientRect();
+                        if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && p.clientHeight > 100 && rect.left < 150 && rect.right <= 460) {
+                            scrollContainer = p;
+                            break;
+                        }
+                        p = p.parentElement;
+                    }
+                }
+
+                function harvestVisible() {
+                    var root = scrollContainer || document;
+                    var items = Array.from(root.querySelectorAll('.conv-item, [id^="conv-item-"], [data-id*="conv_item"]')).filter(function(it) {
+                        var r = it.getBoundingClientRect();
+                        return r.left < 450 && r.height >= 40;
+                    });
                     for (var k = 0; k < items.length; k++) {
-                        var it = items[k];
-                        var titleEl = it.querySelector('.conv-item-title__more, [class*="conv-item-title"], [class*="name"], [class*="title"], h4, p, span');
-                        var name = titleEl ? titleEl.innerText.trim() : (it.getAttribute('title') || it.innerText.split('\\n')[0].trim());
+                        var name = extractNameFromRow(items[k]);
                         if (name) {
-                            var firstLine = name.split('\\n')[0].trim();
-                            if (firstLine.length >= 2 && firstLine !== 'Zalo' && firstLine !== 'Cloud của tôi' && firstLine !== 'Truyền File') {
-                                var key = firstLine.toLowerCase();
-                                if (!seen[key]) {
-                                    seen[key] = true;
-                                    names.push(firstLine);
-                                }
+                            var key = name.toLowerCase();
+                            if (!seen[key]) {
+                                seen[key] = true;
+                                names.push(name);
                             }
                         }
                     }
                 }
 
-                if (container) container.scrollTop = 0;
+                if (scrollContainer) scrollContainer.scrollTop = 0;
                 await new Promise(function(r) { setTimeout(r, 250); });
-                extractItems();
+                harvestVisible();
 
                 var maxSteps = 20;
                 for (var step = 1; step <= maxSteps; step++) {
-                    if (container) {
-                        container.scrollTop += 320;
+                    if (scrollContainer) {
+                        scrollContainer.scrollTop += 350;
+                        await new Promise(function(r) { setTimeout(r, 220); });
+                        harvestVisible();
                     } else {
-                        window.scrollBy(0, 320);
+                        break;
                     }
-                    await new Promise(function(r) { setTimeout(r, 250); });
-                    extractItems();
                 }
 
                 return {
