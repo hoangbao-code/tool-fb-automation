@@ -12,6 +12,11 @@ const {
     setFbEventBroadcaster
 } = require('./services/fbEngine');
 const { processHistoricalZaloMessages } = require('./services/historyScanner');
+const {
+    launchChromeGemini,
+    isChromeDebuggingActive,
+    sendPromptToChromeGemini
+} = require('./services/chromeGemini');
 
 dotenv.config();
 
@@ -479,6 +484,35 @@ ipcMain.handle('test-ai', async (event, { apiKey, promptTemplate, model }) => {
     try {
         const result = await testGemini(apiKey, promptTemplate, model);
         return { success: true, result };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+// 6b. Quản lý & Tự động hóa Google Chrome Gemini
+ipcMain.handle('launch-chrome-gemini', async () => {
+    try {
+        const res = await launchChromeGemini();
+        return res;
+    } catch (e) {
+        return { success: false, message: e.message };
+    }
+});
+
+ipcMain.handle('check-chrome-gemini', async () => {
+    try {
+        const res = await isChromeDebuggingActive();
+        return { success: true, active: res.active, browser: res.browser };
+    } catch (e) {
+        return { success: false, active: false, error: e.message };
+    }
+});
+
+ipcMain.handle('test-chrome-gemini', async (event, prompt) => {
+    try {
+        const testPrompt = prompt || 'Viết lại tin BĐS ngắn gọn 3 dòng kèm hashtag: Cho thuê căn hộ studio 35m2 full nội thất view Landmark 81 Bình Thạnh giá 7.5 triệu/tháng liên hệ 0901234567';
+        const res = await sendPromptToChromeGemini(testPrompt);
+        return res;
     } catch (e) {
         return { success: false, error: e.message };
     }

@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
     switchTab('feed');
     await loadInitialData();
+    checkChromeGeminiUI(true);
 });
 
 // Thiết lập Webview Zalo & Facebook với Preload chuyên dụng
@@ -445,13 +446,145 @@ function updateGeminiStatusUI(text, status = 'ready') {
     if (!el) return;
     if (status === 'busy') {
         el.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-spin"></span> ${escapeHtml(text)}`;
-        el.className = 'text-amber-300 text-xs flex items-center gap-1.5 font-medium';
+        el.className = 'text-amber-300 text-xs flex items-center gap-1.5 font-medium px-2.5 py-1 bg-slate-900 rounded-lg border border-slate-800';
     } else if (status === 'error') {
         el.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> ${escapeHtml(text)}`;
-        el.className = 'text-rose-400 text-xs flex items-center gap-1.5 font-medium';
-    } else {
+        el.className = 'text-rose-400 text-xs flex items-center gap-1.5 font-medium px-2.5 py-1 bg-slate-900 rounded-lg border border-slate-800';
+    } else if (status === 'connected') {
         el.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ${escapeHtml(text)}`;
-        el.className = 'text-emerald-400 text-xs flex items-center gap-1.5 font-medium';
+        el.className = 'text-emerald-400 text-xs flex items-center gap-1.5 font-medium px-2.5 py-1 bg-slate-900 rounded-lg border border-emerald-900/50';
+    } else {
+        el.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-500"></span> ${escapeHtml(text)}`;
+        el.className = 'text-slate-400 text-xs flex items-center gap-1.5 font-medium px-2.5 py-1 bg-slate-900 rounded-lg border border-slate-800';
+    }
+}
+
+let isGeminiWvVisible = false;
+
+function toggleGeminiViewMode() {
+    isGeminiWvVisible = !isGeminiWvVisible;
+    const dash = document.getElementById('gemini-chrome-dashboard');
+    const wvCont = document.getElementById('gemini-wv-container');
+    const btn = document.getElementById('btn-toggle-gemini-mode');
+
+    if (isGeminiWvVisible) {
+        if (dash) dash.classList.add('hidden');
+        if (wvCont) wvCont.classList.remove('hidden');
+        if (btn) btn.innerHTML = `<i data-lucide="monitor" class="w-3.5 h-3.5"></i> Bảng Điều Khiển Chrome`;
+    } else {
+        if (dash) dash.classList.remove('hidden');
+        if (wvCont) wvCont.classList.add('hidden');
+        if (btn) btn.innerHTML = `<i data-lucide="layout" class="w-3.5 h-3.5"></i> Chế độ Webview`;
+    }
+    lucide.createIcons();
+}
+
+async function checkChromeGeminiUI(silent = false) {
+    if (!window.electronApi || !window.electronApi.checkChromeGemini) return false;
+    try {
+        const res = await window.electronApi.checkChromeGemini();
+        if (res.active) {
+            updateGeminiStatusUI('Đã kết nối Chrome (Cổng 9222)', 'connected');
+            if (!silent) showToast('Đã kết nối thành công với Google Chrome!', 'success');
+        } else {
+            updateGeminiStatusUI('Chrome chưa bật (Bấm nút để mở)', 'ready');
+            if (!silent) showToast('Chưa phát hiện Google Chrome trên cổng 9222. Hãy bấm "Mở Google Chrome Gemini".', 'info');
+        }
+        return res.active;
+    } catch (e) {
+        updateGeminiStatusUI('Lỗi kiểm tra Chrome', 'error');
+        if (!silent) showToast('Lỗi kiểm tra Chrome: ' + e.message, 'error');
+        return false;
+    }
+}
+
+async function launchChromeGeminiUI() {
+    if (!window.electronApi || !window.electronApi.launchChromeGemini) return;
+    updateGeminiStatusUI('Đang mở Google Chrome...', 'busy');
+    showToast('Đang khởi chạy Google Chrome... Hãy đăng nhập Google và mở cuộc trò chuyện Gemini của bạn!', 'info');
+
+    try {
+        const res = await window.electronApi.launchChromeGemini();
+        if (res.success) {
+            showToast(res.message || 'Đã mở Google Chrome thành công!', 'success');
+            setTimeout(async () => {
+                await checkChromeGeminiUI(true);
+            }, 3000);
+        } else {
+            showToast(res.message || 'Không thể mở Chrome', 'error');
+            updateGeminiStatusUI('Không thể mở Chrome', 'error');
+        }
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
+        updateGeminiStatusUI('Lỗi mở Chrome', 'error');
+    }
+}
+
+async function testChromeGeminiUI() {
+    updateGeminiStatusUI('Đang gửi tin thử sang Chrome...', 'busy');
+    showToast('Đang gửi tin thử sang Google Chrome Gemini...', 'info');
+
+    try {
+        const samplePrompt = 'Viết lại tin BĐS ngắn gọn 3 dòng kèm hashtag: Cho thuê căn hộ studio 35m2 full nội thất view Landmark 81 Bình Thạnh giá 7.5 triệu/tháng liên hệ 0901234567';
+        const res = await window.electronApi.testChromeGemini(samplePrompt);
+        if (res.success && res.text) {
+            updateGeminiStatusUI('Chrome Gemini phản hồi tốt!', 'connected');
+            showToast('Chrome Gemini đã phản hồi thành công!', 'success');
+            alert('🎉 Kết quả phản hồi từ Google Chrome Gemini Web:\n\n' + res.text);
+        } else {
+            updateGeminiStatusUI('Lỗi phản hồi từ Chrome', 'error');
+            showToast(res.error || 'Chrome Gemini chưa phản hồi', 'error');
+            alert('⚠️ Thông báo từ hệ thống:\n\n' + (res.error || 'Chrome Gemini chưa sẵn sàng. Hãy bấm "Mở Google Chrome Gemini", đăng nhập và mở tab gemini.google.com.'));
+        }
+    } catch (e) {
+        updateGeminiStatusUI('Lỗi gửi tin', 'error');
+        showToast('Lỗi: ' + e.message, 'error');
+    }
+}
+
+async function runInteractiveChromeTestUI() {
+    const inputEl = document.getElementById('chrome-test-input');
+    const resultEl = document.getElementById('chrome-test-result');
+    const btn = document.getElementById('btn-run-chrome-test');
+
+    const content = inputEl?.value?.trim();
+    if (!content) {
+        showToast('Vui lòng nhập nội dung tin nhắn thử nghiệm', 'warning');
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Đang gửi vào Chrome & đợi AI trả lời...`;
+    }
+    if (resultEl) {
+        resultEl.innerHTML = `<span class="text-amber-400 italic">Đang tương tác với Google Chrome Gemini... Vui lòng đợi trong giây lát...</span>`;
+    }
+
+    try {
+        const res = await window.electronApi.testChromeGemini(content);
+        if (res.success && res.text) {
+            if (resultEl) {
+                resultEl.textContent = res.text;
+            }
+            showToast('AI Chrome Gemini đã biên tập xong!', 'success');
+        } else {
+            if (resultEl) {
+                resultEl.innerHTML = `<span class="text-rose-400 font-bold">Lỗi: ${escapeHtml(res.error || 'Không nhận được kết quả')}</span>`;
+            }
+            showToast(res.error || 'Lỗi khi lấy dữ liệu từ Chrome Gemini', 'error');
+        }
+    } catch (e) {
+        if (resultEl) {
+            resultEl.innerHTML = `<span class="text-rose-400 font-bold">Lỗi: ${escapeHtml(e.message)}</span>`;
+        }
+        showToast('Lỗi: ' + e.message, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> Gửi Vào Chrome Gemini & Xem Kết Quả`;
+            lucide.createIcons();
+        }
     }
 }
 
@@ -659,7 +792,7 @@ async function testGeminiWebChatUI() {
     }
 }
 
-// Viết lại 1 bài bằng AI Gemini trực tiếp từ giao diện (Ưu tiên Gemini Web -> Tự động dự phòng API)
+// Viết lại 1 bài bằng AI Gemini trực tiếp từ giao diện (Ưu tiên Google Chrome Gemini -> Tự động dự phòng API)
 async function reRewritePostUI(id) {
     const btn = document.getElementById(`btn-ai-rewrite-${id}`);
     if (btn) {
@@ -667,39 +800,16 @@ async function reRewritePostUI(id) {
         btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin text-amber-400"></i> Đang viết...`;
     }
 
-    const post = state.posts.find(p => p.id === id);
-    const content = post?.original_text || post?.rewritten_text || '';
-    let newText = '';
-
-    // 1. Thử qua Gemini Webview trước (nếu người dùng đang mở hoặc đã đăng nhập)
-    const geminiWv = document.getElementById('gemini-wv');
-    if (geminiWv) {
-        try {
-            showToast(`Đang đưa bài #${id} vào Gemini Web để viết lại...`, 'info');
-            newText = await rewriteWithGeminiWeb(content);
-            if (newText) {
-                await window.electronApi.updatePost(id, newText, post?.status || 'pending');
-                showToast(`Gemini Web đã biên tập xong bài #${id}!`, 'success');
-            }
-        } catch (webErr) {
-            console.warn('Gemini Webview chưa sẵn sàng, chuyển sang API dự phòng:', webErr.message);
+    showToast(`Đang dùng AI Gemini viết lại bài #${id}...`, 'info');
+    try {
+        const res = await window.electronApi.reRewritePost(id);
+        if (res.success) {
+            showToast(`AI đã biên tập lại bài #${id} thành công!`, 'success');
+        } else {
+            showToast(res.error || 'Lỗi khi AI viết lại bài', 'error');
         }
-    }
-
-    // 2. Nếu Gemini Webview chưa phản hồi, tự động dùng Gemini API dự phòng
-    if (!newText) {
-        showToast(`Đang dùng Gemini API dự phòng viết lại bài #${id}...`, 'info');
-        try {
-            const res = await window.electronApi.reRewritePost(id);
-            if (res.success) {
-                newText = res.rewritten_text;
-                showToast(`AI API đã viết lại bài #${id} thành công!`, 'success');
-            } else {
-                showToast(res.error || 'Lỗi khi AI viết lại bài', 'error');
-            }
-        } catch (e) {
-            showToast(e.message, 'error');
-        }
+    } catch (e) {
+        showToast(e.message, 'error');
     }
 
     await loadPosts();

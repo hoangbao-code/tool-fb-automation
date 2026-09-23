@@ -50,8 +50,11 @@ contextBridge.exposeInMainWorld('electronApi', {
     clearAllPosts: (statusFilter) => ipcRenderer.invoke('clear-all-posts', statusFilter),
     reRewritePost: (id) => ipcRenderer.invoke('re-rewrite-post', id),
 
-    // 6. Thử nghiệm AI
+    // 6. Thử nghiệm AI & Chrome Gemini
     testAi: (apiKey, promptTemplate, model) => ipcRenderer.invoke('test-ai', { apiKey, promptTemplate, model }),
+    launchChromeGemini: () => ipcRenderer.invoke('launch-chrome-gemini'),
+    checkChromeGemini: () => ipcRenderer.invoke('check-chrome-gemini'),
+    testChromeGemini: (prompt) => ipcRenderer.invoke('test-chrome-gemini', prompt),
 
     // 7. Nhật ký
     getLogs: () => ipcRenderer.invoke('get-logs'),

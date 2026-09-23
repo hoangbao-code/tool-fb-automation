@@ -347,36 +347,114 @@
                 </div>
             </section>
 
-            <!-- TAB 5: GEMINI WEB (NHÚNG TRỰC TIẾP TRONG APP) -->
+            <!-- TAB 5: GEMINI WEB (KẾT NỐI GOOGLE CHROME THẬT & WEBVIEW) -->
             <section id="tab-ai" class="tab-pane webview-pane h-full flex-col">
-                <!-- Thanh công cụ điều khiển Gemini Web -->
-                <div class="h-12 bg-slate-950 border-b border-slate-800 px-4 flex items-center justify-between shrink-0">
-                    <div class="flex items-center gap-3 text-xs">
-                        <span class="font-extrabold text-amber-400 bg-amber-950/60 px-2.5 py-1 rounded-md border border-amber-800/50 flex items-center gap-1.5 shadow-sm">
-                            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Gemini Web Trực Tiếp
-                        </span>
-                        <span id="gemini-status-indicator" class="text-slate-400 text-xs flex items-center gap-1.5 font-medium">
-                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Sẵn sàng tự động gửi tin
-                        </span>
-                        <button onclick="testGeminiWebChatUI()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Gửi một tin nhắn bất động sản mẫu vào cuộc trò chuyện Gemini Web đang mở">
-                            <i data-lucide="send" class="w-3.5 h-3.5 text-amber-200"></i> Thử Gửi Tin Vào Chat
+                <!-- Thanh công cụ điều khiển Gemini -->
+                <div class="min-h-14 py-2 bg-slate-950 border-b border-slate-800 px-4 flex flex-wrap items-center justify-between shrink-0 gap-3">
+                    <div class="flex items-center flex-wrap gap-2 text-xs">
+                        <button onclick="launchChromeGeminiUI()" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-2 shadow-md transition-all">
+                            <i data-lucide="chrome" class="w-4 h-4 text-amber-300"></i> Mở Google Chrome Gemini
                         </button>
-                        <button onclick="openAiApiSettingsModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 transition-all" title="Cấu hình Mẫu Prompt, API Key & Chữ ký liên hệ">
-                            <i data-lucide="settings-2" class="w-3.5 h-3.5 text-blue-400"></i> Cài Đặt Prompt & API
+                        <span id="gemini-status-indicator" class="text-slate-400 text-xs flex items-center gap-1.5 font-medium px-2.5 py-1 bg-slate-900 rounded-lg border border-slate-800">
+                            <span class="w-2 h-2 rounded-full bg-slate-500"></span> Đang kiểm tra Chrome...
+                        </span>
+                        <button onclick="checkChromeGeminiUI()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all" title="Kiểm tra xem Chrome đã kết nối chưa">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-emerald-400"></i> Kiểm Tra Kết Nối
+                        </button>
+                        <button onclick="testChromeGeminiUI()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Thử gửi một tin bài mẫu vào Chrome Gemini và nhận kết quả">
+                            <i data-lucide="send" class="w-3.5 h-3.5 text-amber-200"></i> Thử Viết Lại Bằng Chrome
                         </button>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button onclick="loadGeminiHome()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all" title="Về trang chủ Gemini">
-                            <i data-lucide="home" class="w-3.5 h-3.5"></i> Trang Chủ
+                        <button onclick="openAiApiSettingsModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all" title="Cấu hình Mẫu Prompt, API Key & Chữ ký liên hệ">
+                            <i data-lucide="settings-2" class="w-3.5 h-3.5 text-blue-400"></i> Cài Đặt Prompt & API
                         </button>
-                        <button onclick="reloadGeminiWebview()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all">
-                            <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Tải lại Gemini
+                        <button onclick="toggleGeminiViewMode()" id="btn-toggle-gemini-mode" class="bg-slate-800 hover:bg-slate-700 text-slate-400 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all" title="Chuyển đổi giữa Bảng điều khiển Chrome và Webview nhúng">
+                            <i data-lucide="layout" class="w-3.5 h-3.5"></i> Chế độ Webview
                         </button>
                     </div>
                 </div>
 
-                <!-- Webview nhúng Gemini Web -->
-                <div class="flex-1 w-full bg-slate-900 relative">
+                <!-- BẢNG ĐIỀU KHIỂN GOOGLE CHROME GEMINI (MẶC ĐỊNH) -->
+                <div id="gemini-chrome-dashboard" class="flex-1 w-full bg-slate-900/90 p-6 overflow-y-auto space-y-6">
+                    <!-- Card Trạng thái & Bật Chrome -->
+                    <div class="bg-gradient-to-br from-slate-950 to-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                        <div class="absolute -top-12 -right-12 w-48 h-48 bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
+                        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">Khuyên Dùng Nhất</span>
+                                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                                        <i data-lucide="sparkles" class="w-5 h-5 text-amber-400"></i>
+                                        Tự Động Hóa Gemini Qua Trình Duyệt Google Chrome Thật
+                                    </h2>
+                                </div>
+                                <p class="text-xs text-slate-400 max-w-2xl leading-relaxed">
+                                    Sử dụng trình duyệt Google Chrome chính thức có sẵn trên máy tính của bạn. Hoàn toàn không bao giờ bị Google chặn đăng nhập, giữ nguyên các cuộc hội thoại, Gems và cách xưng hô bạn đã cấu hình trên Gemini Web!
+                                </p>
+                            </div>
+                            <button onclick="launchChromeGeminiUI()" class="px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm flex items-center gap-2.5 shadow-lg shadow-blue-600/30 hover:scale-105 transition-all shrink-0">
+                                <i data-lucide="external-link" class="w-4 h-4"></i> Mở Chrome Gemini Ngay
+                            </button>
+                        </div>
+
+                        <!-- 3 Bước thực hiện nhanh -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-800/80">
+                            <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800/60 flex items-start gap-3">
+                                <span class="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center shrink-0 text-sm">1</span>
+                                <div>
+                                    <h4 class="text-xs font-bold text-white">Bấm "Mở Chrome Gemini"</h4>
+                                    <p class="text-[11px] text-slate-400 mt-0.5">Cửa sổ Google Chrome chuyên dụng cho PostHub sẽ xuất hiện.</p>
+                                </div>
+                            </div>
+                            <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800/60 flex items-start gap-3">
+                                <span class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center shrink-0 text-sm">2</span>
+                                <div>
+                                    <h4 class="text-xs font-bold text-white">Đăng Nhập Tài Khoản</h4>
+                                    <p class="text-[11px] text-slate-400 mt-0.5">Đăng nhập tài khoản Google của bạn trên Chrome (100% bảo mật & lưu vĩnh viễn).</p>
+                                </div>
+                            </div>
+                            <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800/60 flex items-start gap-3">
+                                <span class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 font-bold flex items-center justify-center shrink-0 text-sm">3</span>
+                                <div>
+                                    <h4 class="text-xs font-bold text-white">Để Chrome Chạy & Tận Hưởng</h4>
+                                    <p class="text-[11px] text-slate-400 mt-0.5">Tin Zalo mới hoặc nút "Viết lại AI" sẽ tự động chuyển sang Chrome để biên tập.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Khu vực thử nghiệm trực tiếp -->
+                    <div class="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="test-tube" class="w-4 h-4 text-emerald-400"></i>
+                                <h3 class="text-sm font-bold text-white">Thử Nghiệm Gửi Tin & Viết Lại Bằng Chrome Gemini</h3>
+                            </div>
+                            <span class="text-[11px] text-slate-500">Gửi trực tiếp vào tab Gemini đang mở trên Chrome</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="space-y-2">
+                                <label class="text-xs font-semibold text-slate-300">Nội dung tin nhắn mẫu:</label>
+                                <textarea id="chrome-test-input" rows="5" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Nhập hoặc dán nội dung tin nhắn thô cần viết lại...">Cho thuê phòng trọ cao cấp full nội thất Quận Bình Thạnh, gần ngã tư Hàng Xanh. Diện tích 30m2, có máy lạnh tủ lạnh ban công thoáng mát, giờ giấc tự do. Giá 5.5 triệu/tháng. LH xem phòng: 0901234567</textarea>
+                                <button onclick="runInteractiveChromeTestUI()" id="btn-run-chrome-test" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md transition-all">
+                                    <i data-lucide="play" class="w-3.5 h-3.5"></i> Gửi Vào Chrome Gemini & Xem Kết Quả
+                                </button>
+                            </div>
+
+                            <div class="space-y-2">
+                                <label class="text-xs font-semibold text-slate-300">Kết quả bài viết AI trả về:</label>
+                                <div id="chrome-test-result" class="w-full h-[142px] bg-slate-900/60 border border-slate-800 rounded-xl p-3 text-xs text-slate-300 overflow-y-auto whitespace-pre-line font-mono">
+                                    <span class="text-slate-500 italic">Bấm "Gửi Vào Chrome Gemini" để kiểm tra kết quả bài viết trả về ở đây...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WEBVIEW NHÚNG GEMINI WEB (DỰ PHÒNG HOẶC KHI NGƯỜI DÙNG BẬT) -->
+                <div id="gemini-wv-container" class="flex-1 w-full bg-slate-900 relative hidden">
                     <webview id="gemini-wv" 
                              src="https://gemini.google.com" 
                              partition="persist:gemini"
