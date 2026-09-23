@@ -68,7 +68,7 @@ async function isChromeDebuggingActive(port = DEFAULT_PORT) {
 /**
  * Khởi chạy Google Chrome thực tế với Remote Debugging Port
  */
-async function launchChromeGemini(port = DEFAULT_PORT) {
+async function launchChromeGemini(port = DEFAULT_PORT, targetUrl = null) {
     const status = await isChromeDebuggingActive(port);
     if (status.active) {
         return { success: true, message: 'Google Chrome đã đang chạy sẵn!', alreadyRunning: true };
@@ -82,6 +82,18 @@ async function launchChromeGemini(port = DEFAULT_PORT) {
         };
     }
 
+    let startUrl = (targetUrl && isValidGeminiUrl(targetUrl)) ? normalizeGeminiUrl(targetUrl) : null;
+    if (!startUrl) {
+        try {
+            const { dbAsync } = require('../db');
+            const row = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_conversation_url'`);
+            if (row && row.value && isValidGeminiUrl(row.value)) {
+                startUrl = normalizeGeminiUrl(row.value);
+            }
+        } catch (e) {}
+    }
+    if (!startUrl) startUrl = 'https://gemini.google.com';
+
     const userDataDir = getChromeUserDataDir();
     const args = [
         `--remote-debugging-port=${port}`,
@@ -89,7 +101,7 @@ async function launchChromeGemini(port = DEFAULT_PORT) {
         '--no-first-run',
         '--no-default-browser-check',
         '--disable-background-networking',
-        'https://gemini.google.com'
+        startUrl
     ];
 
     try {

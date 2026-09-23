@@ -152,7 +152,14 @@ async function processHistoricalZaloMessages(messages, options = {}) {
             );
 
             queuedCount++;
-            await dbAsync.log('info', `[Quét Lịch Sử] Đã nạp bài viết từ [${rawGroupName}] vào hàng đợi (#${queuedCount}) - Trạng thái: ${initialStatus}`);
+            if (rewritten === text) {
+                await dbAsync.log('warn', `[Quét Lịch Sử] Bài viết #${queuedCount} giữ nguyên nội dung gốc (AI chưa kịp biên tập). Bạn có thể bấm "Viết lại AI" trên Bảng tin.`);
+            } else {
+                await dbAsync.log('info', `[Quét Lịch Sử] Đã nạp bài viết từ [${rawGroupName}] vào hàng đợi (#${queuedCount}) - Trạng thái: ${initialStatus}`);
+            }
+
+            // Nghỉ 1.5 giây giữa các tin để Chrome Gemini kịp chuyển đổi mượt mà
+            await new Promise(r => setTimeout(r, 1500));
         } catch (postErr) {
             console.error(`[HistoryScanner] Lỗi lưu bài viết:`, postErr);
             skippedCount++;

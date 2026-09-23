@@ -1,5 +1,5 @@
 const { dbAsync } = require('../db');
-const { isChromeDebuggingActive, sendPromptToChromeGemini } = require('./chromeGemini');
+const { isChromeDebuggingActive, sendPromptToChromeGemini, launchChromeGemini, DEFAULT_PORT } = require('./chromeGemini');
 
 function cleanGeminiOutput(text) {
     if (!text) return '';
@@ -145,8 +145,19 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
     const targetUrl = targetUrlRow?.value?.trim() || null;
     const chromePromptText = isSendRaw ? content.trim() : finalPrompt;
 
-    // 1. Thử dùng Chrome Gemini Web nếu Chrome đang mở (cổng 9222)
-    const chromeStatus = await isChromeDebuggingActive();
+    // 1. Thử dùng Chrome Gemini Web
+    let chromeStatus = await isChromeDebuggingActive();
+
+    // Nếu người dùng đã cài đặt cuộc trò chuyện đã ghim (targetUrl) mà Chrome chưa chạy -> TỰ ĐỘNG KHỞI CHẠY CHROME!
+    if (!chromeStatus.active && targetUrl) {
+        console.log('[Gemini] Đang tự động mở Google Chrome cho cuộc trò chuyện đã ghim:', targetUrl);
+        const launchRes = await launchChromeGemini(DEFAULT_PORT, targetUrl);
+        if (launchRes.success) {
+            chromeStatus = { active: true };
+            await new Promise(r => setTimeout(r, 2500));
+        }
+    }
+
     if (chromeStatus.active) {
         try {
             const chromeRes = await sendPromptToChromeGemini(chromePromptText, undefined, targetUrl);
@@ -161,13 +172,19 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
                 }
             } else {
                 console.warn('[Gemini] Chrome Gemini không hoàn tất:', chromeRes.error);
+                if (targetUrl) {
+                    throw new Error(`Chrome Gemini gặp sự cố: ${chromeRes.error || 'Chưa nhận được phản hồi'}. Vui lòng mở Chrome để kiểm tra.`);
+                }
             }
         } catch (chromeErr) {
             console.warn('[Gemini] Lỗi gửi tin sang Chrome Gemini:', chromeErr.message);
+            if (targetUrl) {
+                throw chromeErr;
+            }
         }
     }
 
-    // 2. Dự phòng sang Gemini API nếu Chrome chưa mở hoặc không phản hồi
+    // 2. Dự phòng sang Gemini API nếu Chrome chưa mở hoặc không phản hồi (và không bắt buộc targetUrl)
     if (!resultTextRaw) {
         const apiKey = keyRow?.value?.trim();
         if (apiKey) {

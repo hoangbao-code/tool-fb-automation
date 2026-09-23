@@ -46,9 +46,11 @@ async function runTests() {
 
     // 5. Kiểm tra thông báo hướng dẫn khi chưa kết nối Chrome & chưa có API Key
     console.log('\n5. Kiểm tra thông báo hướng dẫn khi chưa kết nối:');
-    // Tạm xóa API key để test error message
+    // Tạm xóa API key và targetUrl để test error message khi chưa cấu hình gì
     const savedKey = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_api_key'`);
+    const savedUrl = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_conversation_url'`);
     await dbAsync.run(`UPDATE settings SET value = '' WHERE key = 'gemini_api_key'`);
+    await dbAsync.run(`UPDATE settings SET value = '' WHERE key = 'gemini_conversation_url'`);
 
     try {
         await rewriteWithGemini('Tin BĐS test', 'Người gửi', 'Nhóm Test');
@@ -61,9 +63,12 @@ async function runTests() {
             console.log(`  ✓ Hệ thống thông báo rõ ràng: "${err.message}"`);
         }
     } finally {
-        // Phục hồi lại key ban đầu nếu có
+        // Phục hồi lại dữ liệu ban đầu
         if (savedKey?.value) {
             await dbAsync.run(`UPDATE settings SET value = ? WHERE key = 'gemini_api_key'`, [savedKey.value]);
+        }
+        if (savedUrl?.value) {
+            await dbAsync.run(`UPDATE settings SET value = ? WHERE key = 'gemini_conversation_url'`, [savedUrl.value]);
         }
     }
 

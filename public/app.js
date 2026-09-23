@@ -219,12 +219,13 @@ function switchTab(tabId) {
     if (tabId === 'feed') loadPosts();
     else if (tabId === 'groups') loadFbGroups();
     else if (tabId === 'zalo-groups') loadZaloGroups();
-    else if (tabId === 'ai') loadAiSettings();
+    else if (tabId === 'ai') { loadAiSettings(); checkChromeGeminiUI(true); }
     else if (tabId === 'settings') loadGeneralSettings();
     else if (tabId === 'logs') loadLogs();
 }
 
 async function loadInitialData() {
+    checkChromeGeminiUI(true);
     await Promise.all([
         loadStatus(),
         loadPosts(),
@@ -434,6 +435,34 @@ async function deletePostDirectUI(id) {
         await loadStatus();
     } else {
         showToast(res.error || 'Lỗi khi xóa bài viết', 'error');
+    }
+}
+
+// Yêu cầu AI viết lại bài viết trong bảng tin duyệt
+async function reRewritePostUI(id) {
+    const btn = document.getElementById(`btn-ai-rewrite-${id}`);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin text-amber-400"></i> Đang viết lại...`;
+        if (window.lucide) lucide.createIcons();
+    }
+    showToast(`Đang gửi bài viết #${id} sang Gemini AI để viết lại...`, 'info');
+    try {
+        const res = await window.electronApi.reRewritePost(id);
+        if (res.success && res.rewritten_text) {
+            showToast(`Đã viết lại bài viết #${id} thành công!`, 'success');
+            await loadPosts();
+        } else {
+            showToast(res.error || 'Không thể viết lại bài viết', 'error');
+        }
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Viết lại AI`;
+            if (window.lucide) lucide.createIcons();
+        }
     }
 }
 
