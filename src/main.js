@@ -536,6 +536,10 @@ ipcMain.handle('test-chrome-gemini', async (event, payload) => {
 
         const testPrompt = prompt || 'Cho thuê căn hộ studio 35m2 full nội thất view Landmark 81 Bình Thạnh giá 7.5 triệu/tháng liên hệ 0901234567';
         const res = await sendPromptToChromeGemini(testPrompt, undefined, targetUrl);
+
+        if (res && res.success && res.finalUrl && (res.finalUrl.includes('/app/') || res.finalUrl.includes('/gem/')) && res.finalUrl !== targetUrl) {
+            await dbAsync.run(`UPDATE settings SET value = ? WHERE key = 'gemini_conversation_url'`, [res.finalUrl]);
+        }
         return res;
     } catch (e) {
         return { success: false, error: e.message };

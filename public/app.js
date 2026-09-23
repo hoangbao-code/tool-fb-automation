@@ -602,6 +602,12 @@ async function runInteractiveChromeTestUI() {
             if (resultEl) {
                 resultEl.textContent = res.text;
             }
+            if (res.finalUrl && (res.finalUrl.includes('/app/') || res.finalUrl.includes('/gem/'))) {
+                const urlInput = document.getElementById('cfg-gemini-conversation-url');
+                if (urlInput && urlInput.value !== res.finalUrl) {
+                    urlInput.value = res.finalUrl;
+                }
+            }
             showToast('AI Chrome Gemini đã biên tập xong!', 'success');
         } else {
             if (resultEl) {

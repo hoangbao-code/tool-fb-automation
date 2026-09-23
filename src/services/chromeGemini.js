@@ -117,6 +117,38 @@ async function launchChromeGemini(port = DEFAULT_PORT) {
 }
 
 /**
+ * Chuẩn hóa URL Gemini để đảm bảo có https://
+ */
+function normalizeGeminiUrl(url) {
+    if (!url || typeof url !== 'string') return '';
+    let clean = url.trim();
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+        clean = 'https://' + clean;
+    }
+    return clean;
+}
+
+/**
+ * Kiểm tra xem URL có phải là URL hợp lệ của Gemini Web hay không
+ * Hỗ trợ gemini.google.com, share.gemini.google
+ */
+function isValidGeminiUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    const clean = normalizeGeminiUrl(url);
+    try {
+        const u = new URL(clean);
+        const host = u.hostname.toLowerCase();
+        return (
+            host === 'gemini.google.com' ||
+            host === 'share.gemini.google' ||
+            host.endsWith('.gemini.google.com')
+        );
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
  * Lấy thông tin URL & Tiêu đề của tab Gemini Web đang mở trong Chrome
  */
 async function getActiveGeminiTabInfo(port = DEFAULT_PORT) {
@@ -126,17 +158,29 @@ async function getActiveGeminiTabInfo(port = DEFAULT_PORT) {
         });
         if (!res.ok) return { success: false, error: 'Không thể kết nối Chrome qua cổng ' + port };
         const targets = await res.json();
-        const geminiTab = targets.find(t => 
+        
+        // Lấy tất cả tab Gemini hợp lệ
+        const geminiTabs = targets.filter(t => 
             t.type === 'page' && 
             t.url && 
-            t.url.includes('gemini.google.com') && 
+            isValidGeminiUrl(t.url) && 
             t.webSocketDebuggerUrl
         );
 
-        if (!geminiTab) {
+        if (geminiTabs.length === 0) {
             return { success: false, error: 'Chưa tìm thấy tab Gemini Web trong Chrome. Hãy đảm bảo Chrome đang mở trang gemini.google.com.' };
         }
-        return { success: true, url: geminiTab.url, title: geminiTab.title };
+
+        // Ưu tiên 1: Tab có ID hội thoại cụ thể hoặc link chia sẻ (/app/, /gem/, /share/, share.gemini.google)
+        const specificConvTab = geminiTabs.find(t => 
+            t.url.includes('/app/') || 
+            t.url.includes('/gem/') || 
+            t.url.includes('/share/') || 
+            t.url.includes('share.gemini.google')
+        );
+
+        const chosenTab = specificConvTab || geminiTabs[0];
+        return { success: true, url: chosenTab.url, title: chosenTab.title };
     } catch (e) {
         return { success: false, error: e.message };
     }
@@ -153,34 +197,57 @@ async function getOrOpenGeminiTab(port = DEFAULT_PORT, targetUrl = null) {
         if (!res.ok) return null;
         const targets = await res.json();
 
-        // 1. Tìm tab Gemini hiện có
-        let geminiTab = targets.find(t => 
+        const cleanTarget = isValidGeminiUrl(targetUrl) ? normalizeGeminiUrl(targetUrl) : null;
+
+        // 1. Tìm tất cả tab Gemini
+        const geminiTabs = targets.filter(t => 
             t.type === 'page' && 
             t.url && 
-            t.url.includes('gemini.google.com') && 
+            isValidGeminiUrl(t.url) && 
             t.webSocketDebuggerUrl
         );
 
-        if (geminiTab) {
-            // Nếu có chỉ định targetUrl và URL hiện tại chưa đúng với targetUrl
-            if (targetUrl && targetUrl.trim() && targetUrl.startsWith('https://gemini.google.com')) {
-                const cleanTarget = targetUrl.trim();
-                if (geminiTab.url !== cleanTarget) {
+        if (geminiTabs.length > 0) {
+            let selectedTab = null;
+
+            if (cleanTarget) {
+                // Trích xuất mã ID từ targetUrl (ví dụ hIBLCdq9g7B4 hoặc ID hội thoại)
+                const targetIdMatch = cleanTarget.match(/(?:app|gem|share)\/([a-zA-Z0-9_-]+)/) || cleanTarget.match(/share\.gemini\.google\/([a-zA-Z0-9_-]+)/);
+                const targetId = targetIdMatch ? targetIdMatch[1] : null;
+
+                // Thử tìm tab đã khớp sẵn URL hoặc chứa ID này
+                if (targetId) {
+                    selectedTab = geminiTabs.find(t => t.url.includes(targetId) || t.url === cleanTarget);
+                } else {
+                    selectedTab = geminiTabs.find(t => t.url === cleanTarget);
+                }
+
+                // Nếu chưa có tab nào đang ở đúng trang, dùng tab đầu tiên và navigate tới targetUrl
+                if (!selectedTab) {
+                    selectedTab = geminiTabs[0];
                     try {
-                        await sendCdpCommand(geminiTab.webSocketDebuggerUrl, 'Page.navigate', { url: cleanTarget }, 10000);
-                        await new Promise(r => setTimeout(r, 2500));
+                        await sendCdpCommand(selectedTab.webSocketDebuggerUrl, 'Page.navigate', { url: cleanTarget }, 15000);
+                        // Đợi 3.5 giây cho SPA nạp dữ liệu cuộc trò chuyện
+                        await new Promise(r => setTimeout(r, 3500));
                     } catch (navErr) {
                         console.warn('[ChromeGemini] Lỗi điều hướng đến targetUrl:', navErr.message);
                     }
                 }
+            } else {
+                // Không có targetUrl -> ưu tiên tab có conversation ID cụ thể
+                selectedTab = geminiTabs.find(t => 
+                    t.url.includes('/app/') || 
+                    t.url.includes('/gem/') || 
+                    t.url.includes('/share/') || 
+                    t.url.includes('share.gemini.google')
+                ) || geminiTabs[0];
             }
-            return geminiTab;
+
+            return selectedTab;
         }
 
-        // 2. Nếu chưa có tab Gemini, mở tab mới với targetUrl hoặc trang chủ
-        const initialUrl = (targetUrl && targetUrl.startsWith('https://gemini.google.com')) 
-            ? targetUrl.trim() 
-            : 'https://gemini.google.com';
+        // 2. Nếu chưa có tab Gemini nào, mở tab mới với targetUrl hoặc trang chủ
+        const initialUrl = cleanTarget || 'https://gemini.google.com';
 
         const newTabRes = await fetch(`http://127.0.0.1:${port}/json/new?${encodeURIComponent(initialUrl)}`, {
             method: 'PUT',
@@ -188,8 +255,8 @@ async function getOrOpenGeminiTab(port = DEFAULT_PORT, targetUrl = null) {
         });
         if (newTabRes.ok) {
             const newTab = await newTabRes.json();
-            // Đợi 2.5 giây cho trang nạp sơ bộ
-            await new Promise(r => setTimeout(r, 2500));
+            // Đợi 3 giây cho trang nạp sơ bộ
+            await new Promise(r => setTimeout(r, 3000));
             return newTab;
         }
     } catch (e) {
@@ -268,6 +335,65 @@ const INJECT_SCRIPT = (promptText) => `
 (async function() {
     const prompt = ${JSON.stringify(promptText)};
 
+    // 0. Xử lý khi đang ở trang chia sẻ (Share link: share.gemini.google hoặc /share/)
+    if (window.location.href.includes('/share/') || window.location.hostname.includes('share.gemini.google')) {
+        console.log('[Gemini Web] Phát hiện trang chia sẻ, tìm nút Tiếp tục cuộc trò chuyện...');
+        for (let attempt = 0; attempt < 8; attempt++) {
+            const allButtons = Array.from(document.querySelectorAll('button, a[role="button"]'));
+            const continueBtn = allButtons.find(b => {
+                const t = (b.innerText || b.textContent || '').trim().toLowerCase();
+                return t.includes('tiếp tục cuộc trò chuyện') || 
+                       t.includes('tiếp tục trò chuyện') || 
+                       t.includes('continue this chat') || 
+                       t.includes('continue chat') ||
+                       t === 'tiếp tục' ||
+                       t === 'continue';
+            });
+            if (continueBtn && continueBtn.offsetParent !== null) {
+                console.log('[Gemini Web] Đã bấm nút Tiếp tục để mở cuộc trò chuyện chính thức!');
+                continueBtn.click();
+                await new Promise(r => setTimeout(r, 2500));
+                break;
+            }
+            await new Promise(r => setTimeout(r, 500));
+        }
+    }
+
+    // 0.1 Xử lý khi đang ở trang New Chat (/ hoặc /app) mà không có cuộc trò chuyện cụ thể
+    const curUrl = window.location.href;
+    const isNewChat = curUrl.endsWith('gemini.google.com/') || 
+                      curUrl.endsWith('gemini.google.com') || 
+                      curUrl.endsWith('gemini.google.com/app') || 
+                      curUrl.endsWith('gemini.google.com/app/');
+
+    if (isNewChat) {
+        // Mở sidebar nếu đang đóng
+        const menuBtn = document.querySelector('button[aria-label*="Trình đơn"], button[aria-label*="menu"], button[aria-label*="Main menu"]');
+        if (menuBtn && !document.querySelector('mat-sidenav.mat-drawer-opened, nav')) {
+            menuBtn.click();
+            await new Promise(r => setTimeout(r, 600));
+        }
+
+        // Tìm cuộc trò chuyện đã ghim trong sidebar (Pinned conversations)
+        const pinnedSelectors = [
+            '[data-test-id*="pinned"] a',
+            '.pinned-conversations a',
+            '[aria-label*="Đã ghim"] a',
+            '[aria-label*="Pinned"] a',
+            'mat-nav-list a[href*="/app/"]',
+            'nav a[href*="/app/"]'
+        ];
+        for (const sel of pinnedSelectors) {
+            const el = document.querySelector(sel);
+            if (el && el.offsetParent !== null) {
+                console.log('[Gemini Web] Tự động chọn cuộc trò chuyện đã ghim:', el.innerText || el.href);
+                el.click();
+                await new Promise(r => setTimeout(r, 2000));
+                break;
+            }
+        }
+    }
+
     // 1. Tìm khung nhập tin nhắn
     function findInput() {
         const selectors = [
@@ -333,9 +459,20 @@ const INJECT_SCRIPT = (promptText) => `
         return false;
     }
 
-    const inputEl = findInput();
+    // Đợi ô nhập tin nhắn xuất hiện (tối đa 12 giây)
+    let inputEl = null;
+    const findStart = Date.now();
+    while (Date.now() - findStart < 12000) {
+        inputEl = findInput();
+        if (inputEl) break;
+        await new Promise(r => setTimeout(r, 600));
+    }
+
     if (!inputEl) {
-        return { success: false, error: 'Chưa thấy ô nhập chat Gemini Web. Vui lòng kiểm tra xem bạn đã đăng nhập và đang mở trang chat chưa.' };
+        return { 
+            success: false, 
+            error: 'Chưa thấy ô nhập chat Gemini Web trên Chrome. Vui lòng kiểm tra xem Chrome đã mở cuộc trò chuyện chưa (URL hiện tại: ' + window.location.href + ')' 
+        };
     }
 
     const initialResponseCount = getResponseCount();
@@ -362,13 +499,13 @@ const INJECT_SCRIPT = (promptText) => `
         inputEl.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13 }));
     }
 
-    // Chờ phản hồi bắt đầu sinh và hoàn thành (tối đa 35 giây)
+    // Chờ phản hồi bắt đầu sinh và hoàn thành (tối đa 38 giây)
     const startTime = Date.now();
     let generationStarted = false;
     let lastLength = 0;
     let stableCount = 0;
 
-    while (Date.now() - startTime < 35000) {
+    while (Date.now() - startTime < 38000) {
         await new Promise(r => setTimeout(r, 1000));
         const currentCount = getResponseCount();
         const generating = isAiGenerating();
@@ -384,7 +521,12 @@ const INJECT_SCRIPT = (promptText) => `
                 if (currentText.length === lastLength) {
                     stableCount++;
                     if (stableCount >= 2) {
-                        return { success: true, text: currentText };
+                        return { 
+                            success: true, 
+                            text: currentText,
+                            finalUrl: window.location.href,
+                            title: document.title
+                        };
                     }
                 } else {
                     lastLength = currentText.length;
@@ -396,7 +538,12 @@ const INJECT_SCRIPT = (promptText) => `
 
     const fallbackText = getLatestResponseText();
     if (fallbackText && fallbackText.length > 20) {
-        return { success: true, text: fallbackText };
+        return { 
+            success: true, 
+            text: fallbackText,
+            finalUrl: window.location.href,
+            title: document.title
+        };
     }
 
     return { success: false, error: 'Quá thời gian chờ Gemini trả lời trên Chrome.' };
@@ -435,7 +582,12 @@ async function sendPromptToChromeGemini(promptText, port = DEFAULT_PORT, targetU
         if (evalResult && evalResult.result && evalResult.result.value) {
             const val = evalResult.result.value;
             if (val.success) {
-                return { success: true, text: val.text };
+                return { 
+                    success: true, 
+                    text: val.text,
+                    finalUrl: val.finalUrl,
+                    title: val.title
+                };
             } else {
                 return { success: false, error: val.error || 'Lỗi không xác định từ Gemini DOM.' };
             }
@@ -456,5 +608,7 @@ module.exports = {
     getActiveGeminiTabInfo,
     getOrOpenGeminiTab,
     sendPromptToChromeGemini,
+    normalizeGeminiUrl,
+    isValidGeminiUrl,
     DEFAULT_PORT
 };

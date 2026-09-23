@@ -69,11 +69,22 @@ async function runTests() {
 
     // 6. Kiểm tra cài đặt Cuộc trò chuyện đã ghim & Chế độ gửi nội dung thô
     console.log('\n6. Kiểm tra cấu hình Cuộc trò chuyện đã ghim & Gửi nội dung thô:');
-    const { getActiveGeminiTabInfo } = require('../src/services/chromeGemini');
+    const { getActiveGeminiTabInfo, normalizeGeminiUrl, isValidGeminiUrl } = require('../src/services/chromeGemini');
     assert.strictEqual(typeof getActiveGeminiTabInfo, 'function');
+    assert.strictEqual(typeof normalizeGeminiUrl, 'function');
+    assert.strictEqual(typeof isValidGeminiUrl, 'function');
+
+    // Kiểm tra định dạng URL cuộc trò chuyện Gemini (bao gồm cả link chia sẻ share.gemini.google)
+    assert.strictEqual(isValidGeminiUrl('https://gemini.google.com/app/1a2b3c4d5e'), true);
+    assert.strictEqual(isValidGeminiUrl('https://gemini.google.com/gem/sample_gem_id'), true);
+    assert.strictEqual(isValidGeminiUrl('https://share.gemini.google/hIBLCdq9g7B4'), true);
+    assert.strictEqual(isValidGeminiUrl('share.gemini.google/hIBLCdq9g7B4'), true);
+    assert.strictEqual(isValidGeminiUrl('https://facebook.com/groups/123'), false);
+    assert.strictEqual(normalizeGeminiUrl('share.gemini.google/hIBLCdq9g7B4'), 'https://share.gemini.google/hIBLCdq9g7B4');
+    console.log('  ✓ Nhận diện và chuẩn hóa chính xác tất cả định dạng URL cuộc trò chuyện (kể cả share.gemini.google)!');
 
     // Thử lưu và đọc settings
-    const testUrl = 'https://gemini.google.com/app/1a2b3c4d5e';
+    const testUrl = 'https://share.gemini.google/hIBLCdq9g7B4';
     await dbAsync.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('gemini_conversation_url', ?)`, [testUrl]);
     await dbAsync.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('gemini_send_raw_content', '1')`);
 

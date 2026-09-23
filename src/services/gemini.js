@@ -153,6 +153,12 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
             if (chromeRes.success && chromeRes.text) {
                 resultTextRaw = chromeRes.text;
                 sourceUsed = isSendRaw ? 'Chrome Gemini (Nội dung thô vào hội thoại đã ghim)' : 'Google Chrome Gemini Web';
+
+                // Tự động lưu URL hội thoại chính thức (/app/<id>) nếu trước đó là link share hoặc mới điều hướng
+                if (chromeRes.finalUrl && (chromeRes.finalUrl.includes('/app/') || chromeRes.finalUrl.includes('/gem/')) && chromeRes.finalUrl !== targetUrl) {
+                    dbAsync.run(`UPDATE settings SET value = ? WHERE key = 'gemini_conversation_url'`, [chromeRes.finalUrl])
+                        .catch(e => console.warn('[Gemini] Không thể lưu finalUrl:', e.message));
+                }
             } else {
                 console.warn('[Gemini] Chrome Gemini không hoàn tất:', chromeRes.error);
             }
