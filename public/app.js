@@ -313,6 +313,7 @@ async function loadPosts() {
     }
 }
 
+// Quản lý bộ lọc & Tìm kiếm Bảng Tin
 function setFilter(filterType) {
     state.filter = filterType;
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
@@ -321,104 +322,377 @@ function setFilter(filterType) {
     renderPosts();
 }
 
+function onFeedSearch(val) {
+    state.feedSearch = (val || '').trim().toLowerCase();
+    const clearBtn = document.getElementById('feed-search-clear');
+    if (clearBtn) {
+        if (state.feedSearch) clearBtn.classList.remove('hidden');
+        else clearBtn.classList.add('hidden');
+    }
+    renderPosts();
+}
+
+function clearFeedSearch() {
+    state.feedSearch = '';
+    const input = document.getElementById('feed-search-input');
+    if (input) input.value = '';
+    const clearBtn = document.getElementById('feed-search-clear');
+    if (clearBtn) clearBtn.classList.add('hidden');
+    renderPosts();
+}
+
+// Cập nhật các con số thống kê & badge bộ lọc
+function updateFeedCounters() {
+    const posts = state.posts || [];
+    const total = posts.length;
+    const pending = posts.filter(p => p.status === 'pending').length;
+    const approved = posts.filter(p => p.status === 'approved').length;
+    const posted = posts.filter(p => p.status === 'posted').length;
+
+    // Header stat cards
+    const elTotal = document.getElementById('feed-stat-total');
+    const elPending = document.getElementById('feed-stat-pending');
+    const elApproved = document.getElementById('feed-stat-approved');
+    const elPosted = document.getElementById('feed-stat-posted');
+    if (elTotal) elTotal.innerText = total;
+    if (elPending) elPending.innerText = pending;
+    if (elApproved) elApproved.innerText = approved;
+    if (elPosted) elPosted.innerText = posted;
+
+    // Filter button badges
+    const bTotal = document.getElementById('badge-count-all');
+    const bPending = document.getElementById('badge-count-pending');
+    const bApproved = document.getElementById('badge-count-approved');
+    const bPosted = document.getElementById('badge-count-posted');
+    if (bTotal) bTotal.innerText = total;
+    if (bPending) bPending.innerText = pending;
+    if (bApproved) bApproved.innerText = approved;
+    if (bPosted) bPosted.innerText = posted;
+
+    // Sidebar badge
+    const sbPending = document.getElementById('badge-pending-count');
+    if (sbPending) {
+        sbPending.innerText = pending;
+        if (pending > 0) sbPending.classList.remove('hidden');
+        else sbPending.classList.add('hidden');
+    }
+}
+
+// Hàm render ảnh đính kèm (thumbnails)
+function renderPostImages(imagesData) {
+    if (!imagesData) return '';
+    let imgs = [];
+    try {
+        if (Array.isArray(imagesData)) imgs = imagesData;
+        else if (typeof imagesData === 'string' && imagesData.startsWith('[')) imgs = JSON.parse(imagesData);
+    } catch (e) {}
+
+    if (!Array.isArray(imgs) || imgs.length === 0) return '';
+
+    return `
+        <div class="mt-2.5 pt-2 border-t border-slate-800/80">
+            <span class="text-[10px] uppercase font-bold text-slate-500 mb-1.5 flex items-center gap-1">
+                <i data-lucide="image" class="w-3 h-3 text-blue-400"></i> Ảnh đính kèm (${imgs.length}):
+            </span>
+            <div class="flex flex-wrap gap-2">
+                ${imgs.slice(0, 4).map((src, idx) => `
+                    <div class="relative group/img w-14 h-14 rounded-lg overflow-hidden bg-slate-950 border border-slate-800 shadow-sm cursor-pointer" onclick="window.open('${escapeHtml(src)}', '_blank')">
+                        <img src="${escapeHtml(src)}" class="w-full h-full object-cover group-hover/img:scale-110 transition-all duration-200" alt="Ảnh ${idx + 1}" />
+                    </div>
+                `).join('')}
+                ${imgs.length > 4 ? `
+                    <div class="w-14 h-14 rounded-lg bg-slate-800/80 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-300">
+                        +${imgs.length - 4}
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+// Sao chép nội dung bài viết
+async function copyPostTextUI(id, type) {
+    const post = (state.posts || []).find(p => p.id === id);
+    if (!post) return;
+    const text = type === 'original' ? post.original_text : (post.rewritten_text || post.original_text);
+    if (!text) {
+        showToast('Không có nội dung để sao chép', 'warning');
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(text);
+        showToast(`Đã sao chép nội dung bài #${id}!`, 'success');
+    } catch (e) {
+        showToast('Lỗi sao chép: ' + e.message, 'error');
+    }
+}
+
+// Duyệt 1 bài viết sang trạng thái approved
+async function approvePostDirect(id) {
+    try {
+        const res = await window.electronApi.approvePost(id);
+        if (res.success) {
+            showToast(`Đã duyệt bài viết #${id}! Bài sẽ được worker đăng tự động.`, 'success');
+            await loadPosts();
+            await loadStatus();
+        } else {
+            showToast(res.error || 'Lỗi khi duyệt bài', 'error');
+        }
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
+    }
+}
+
+// Duyệt tất cả bài đang chờ duyệt
+async function approveAllPendingUI() {
+    const pendingCount = (state.posts || []).filter(p => p.status === 'pending').length;
+    if (pendingCount === 0) {
+        showToast('Hiện không có bài viết nào đang chờ duyệt', 'info');
+        return;
+    }
+    if (!confirm(`Bạn có chắc muốn DUYỆT TẤT CẢ ${pendingCount} bài viết đang chờ không?\nCác bài này sẽ chuyển sang trạng thái "Đã duyệt" để hệ thống tự động đăng lên Facebook theo lịch.`)) {
+        return;
+    }
+    try {
+        const res = await window.electronApi.approveAllPendingPosts();
+        if (res.success) {
+            showToast(`Đã duyệt thành công toàn bộ ${pendingCount} bài viết chờ!`, 'success');
+            await loadPosts();
+            await loadStatus();
+        } else {
+            showToast(res.error || 'Lỗi khi duyệt bài hàng loạt', 'error');
+        }
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
+    }
+}
+
+// RENDER TOÀN BỘ DANH SÁCH BÀI VIẾT (GIAO DIỆN HIỆN ĐẠI MỚI)
 function renderPosts() {
+    updateFeedCounters();
     const container = document.getElementById('feed-posts-container');
-    let filtered = state.posts;
+    if (!container) return;
+
+    let filtered = state.posts || [];
+
+    // Lọc theo trạng thái
     if (state.filter !== 'all') {
         filtered = filtered.filter(p => p.status === state.filter);
     }
 
+    // Lọc theo từ khóa tìm kiếm
+    if (state.feedSearch) {
+        const q = state.feedSearch;
+        filtered = filtered.filter(p =>
+            (p.original_text && p.original_text.toLowerCase().includes(q)) ||
+            (p.rewritten_text && p.rewritten_text.toLowerCase().includes(q)) ||
+            (p.group_name && p.group_name.toLowerCase().includes(q)) ||
+            (p.sender && p.sender.toLowerCase().includes(q)) ||
+            String(p.id).includes(q)
+        );
+    }
+
     if (filtered.length === 0) {
         container.innerHTML = `
-            <div class="py-16 text-center text-slate-500 bg-slate-950/40 rounded-xl border border-dashed border-slate-800 space-y-2">
-                <i data-lucide="inbox" class="w-8 h-8 mx-auto text-slate-600"></i>
-                <p class="text-xs font-semibold">Chưa có bài viết nào trong danh mục này.</p>
-                <p class="text-[11px] text-slate-600">Khi có tin nhắn mới từ nhóm Zalo theo dõi, bài viết sẽ tự động xuất hiện tại đây.</p>
+            <div class="py-20 text-center bg-gradient-to-b from-slate-950/60 to-slate-900/40 rounded-2xl border border-dashed border-slate-800 space-y-3 shadow-inner">
+                <div class="w-14 h-14 mx-auto rounded-2xl bg-slate-800/80 flex items-center justify-center text-slate-500 shadow-md">
+                    <i data-lucide="inbox" class="w-7 h-7 text-slate-400"></i>
+                </div>
+                <div class="space-y-1">
+                    <p class="text-sm font-bold text-white">Chưa có bài viết nào trong danh mục này</p>
+                    <p class="text-xs text-slate-400 max-w-sm mx-auto">
+                        Khi có tin nhắn mới từ Zalo hoặc sau khi quét lịch sử, các bài viết sẽ tự động xuất hiện tại đây để bạn xem và duyệt.
+                    </p>
+                </div>
+                ${state.feedSearch ? `
+                    <button onclick="clearFeedSearch()" class="mt-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 transition-all">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i> Xóa bộ lọc tìm kiếm
+                    </button>
+                ` : ''}
             </div>
         `;
-        lucide.createIcons();
+        if (window.lucide) lucide.createIcons();
         return;
     }
 
-    container.innerHTML = filtered.map(p => `
-        <div class="p-5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-4 shadow-sm hover:border-slate-700 transition-all">
-            <!-- Header bài viết -->
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2.5">
-                    <span class="font-extrabold text-xs text-blue-400">#${p.id}</span>
-                    <span class="text-xs font-bold text-slate-200 bg-slate-800 px-2.5 py-0.5 rounded-md border border-slate-700">
-                        ${escapeHtml(p.group_name || 'Nhóm Zalo')}
-                    </span>
-                    <span class="status-badge status-${p.status}">
-                        ${getStatusLabel(p.status)}
-                    </span>
-                </div>
-                <div class="text-[11px] text-slate-500 font-mono">${formatDate(p.created_at)}</div>
-            </div>
+    container.innerHTML = filtered.map(p => {
+        // Kiểm tra xem bài có đang bị fallback nội dung thô không
+        const isRawFallback = (!p.rewritten_text || p.rewritten_text.trim() === (p.original_text || '').trim());
 
-            <!-- Khung so sánh nội dung: Zalo Gốc -> AI Viết Lại -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                <div class="p-3 bg-slate-900/90 rounded-lg border border-slate-800/80 space-y-1">
-                    <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                        <i data-lucide="message-square" class="w-3 h-3 text-blue-400"></i> Tin nhắn Zalo gốc:
-                    </div>
-                    <div class="text-xs text-slate-400 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto font-sans">
-                        ${escapeHtml(p.original_text || '(Không có nội dung)')}
-                    </div>
-                </div>
+        // Đường viền trái & màu sắc theo trạng thái
+        let borderClass = 'border-l-4 border-l-amber-500 border-slate-800/90 hover:border-amber-500/40';
+        let statusBadge = `
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Chờ bạn duyệt
+            </span>
+        `;
 
-                <div class="p-3.5 bg-blue-950/20 rounded-lg border border-blue-900/40 space-y-1">
-                    <div class="text-[10px] font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1">
-                        <i data-lucide="sparkles" class="w-3 h-3 text-amber-400"></i> Nội dung AI đã biên tập:
-                    </div>
-                    <div class="text-xs text-slate-100 whitespace-pre-wrap leading-relaxed font-sans">
-                        ${escapeHtml(p.rewritten_text || p.original_text || '')}
-                    </div>
-                </div>
-            </div>
+        if (p.status === 'approved') {
+            borderClass = 'border-l-4 border-l-emerald-500 border-slate-800/90 hover:border-emerald-500/40';
+            statusBadge = `
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Đã duyệt (Sẵn sàng đăng)
+                </span>
+            `;
+        } else if (p.status === 'posted') {
+            borderClass = 'border-l-4 border-l-blue-500 border-slate-800/90 hover:border-blue-500/40';
+            statusBadge = `
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                    <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-blue-400"></i> Đã đăng thành công
+                </span>
+            `;
+        } else if (p.status === 'failed') {
+            borderClass = 'border-l-4 border-l-rose-500 border-slate-800/90 hover:border-rose-500/40';
+            statusBadge = `
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                    <i data-lucide="alert-circle" class="w-3.5 h-3.5 text-rose-400"></i> Lỗi đăng
+                </span>
+            `;
+        }
 
-            <!-- Footer bài viết: Nhóm đích & Nút hành động -->
-            <div class="flex items-center justify-between pt-2 border-t border-slate-800/80 text-xs">
-                <div class="text-slate-400 text-[11px]">
-                    Đích đăng: <b class="text-slate-200">${escapeHtml(p.target_fb_group || 'Các nhóm Facebook đã chọn')}</b>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button onclick="reRewritePostUI(${p.id})" id="btn-ai-rewrite-${p.id}" class="px-2.5 py-1.5 bg-amber-950/70 hover:bg-amber-900/90 text-amber-300 border border-amber-800/60 font-semibold rounded-lg flex items-center gap-1 transition-all text-xs" title="Yêu cầu Gemini AI viết lại bài này">
-                        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Viết lại AI
-                    </button>
-                    <button onclick="openEditModal(${p.id})" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg flex items-center gap-1 transition-all text-xs">
-                        <i data-lucide="edit-2" class="w-3.5 h-3.5 text-blue-400"></i> Sửa bài
-                    </button>
-                    <button onclick="deletePostDirectUI(${p.id})" class="px-2.5 py-1.5 bg-rose-950/70 hover:bg-rose-900/90 text-rose-300 border border-rose-800/60 font-semibold rounded-lg flex items-center gap-1 transition-all text-xs" title="Xóa bài viết này khỏi hàng đợi">
-                        <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-400"></i> Xóa
-                    </button>
-                    ${p.status !== 'posted' ? `
-                        <button onclick="publishPostDirect(${p.id})" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition-all text-xs">
-                            <i data-lucide="send" class="w-3.5 h-3.5"></i> Duyệt & Đăng Luôn
-                        </button>
-                    ` : `
-                        <span class="text-emerald-400 font-semibold flex items-center gap-1 text-[11px] px-2 py-1 bg-emerald-950/50 rounded-lg border border-emerald-900/40">
-                            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Đã đăng
+        return `
+            <div class="group bg-gradient-to-br from-slate-950/90 to-slate-900/80 border ${borderClass} rounded-2xl p-5 space-y-4 shadow-lg hover:shadow-2xl transition-all duration-200">
+                <!-- Header bài viết -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700/80 text-xs font-mono font-extrabold text-blue-400 shadow-inner">
+                            #${p.id}
                         </span>
-                    `}
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-500/10 border border-blue-500/25 text-xs font-bold text-blue-300">
+                            <i data-lucide="message-square" class="w-3.5 h-3.5 text-blue-400"></i>
+                            ${escapeHtml(p.group_name || 'Nhóm Zalo')}
+                        </span>
+                        ${p.sender ? `
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800/70 border border-slate-700/50 text-[11px] font-medium text-slate-300">
+                                <i data-lucide="user" class="w-3 h-3 text-slate-400"></i>
+                                ${escapeHtml(p.sender)}
+                            </span>
+                        ` : ''}
+                        ${statusBadge}
+                    </div>
+
+                    <div class="text-[11px] text-slate-400 font-mono flex items-center gap-1.5 shrink-0">
+                        <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-500"></i>
+                        <span>${formatDate(p.created_at)}</span>
+                    </div>
+                </div>
+
+                <!-- So sánh song song: Tin Zalo Gốc -> Bản Biên Tập AI -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <!-- Khung Trái: Tin Zalo Gốc -->
+                    <div class="flex flex-col bg-slate-900/90 rounded-xl border border-slate-800 p-4 space-y-2.5 shadow-sm">
+                        <div class="flex items-center justify-between pb-2 border-b border-slate-800/80">
+                            <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                <i data-lucide="message-square-text" class="w-3.5 h-3.5 text-blue-400"></i> Tin Nhắn Zalo Gốc
+                            </span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] text-slate-500 font-mono">${(p.original_text || '').length} ký tự</span>
+                                <button onclick="copyPostTextUI(${p.id}, 'original')" class="text-[11px] text-slate-400 hover:text-white px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 transition-all flex items-center gap-1 font-medium" title="Sao chép tin nhắn gốc">
+                                    <i data-lucide="copy" class="w-3 h-3"></i> Sao chép
+                                </button>
+                            </div>
+                        </div>
+                        <div class="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto font-sans pr-1">
+                            ${escapeHtml(p.original_text || '(Không có nội dung)')}
+                        </div>
+                        ${renderPostImages(p.images)}
+                    </div>
+
+                    <!-- Khung Phải: Bài Viết AI Gemini Biên Tập -->
+                    <div class="flex flex-col bg-gradient-to-br from-indigo-950/25 to-slate-900/90 rounded-xl border border-indigo-500/20 p-4 space-y-2.5 relative shadow-sm">
+                        <div class="flex items-center justify-between pb-2 border-b border-indigo-500/20">
+                            <div class="flex items-center gap-2">
+                                <span class="text-[11px] font-extrabold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
+                                    <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> AI Gemini Biên Tập
+                                </span>
+                                ${isRawFallback ? `
+                                    <span class="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded-md font-bold border border-amber-500/30">Nội dung thô</span>
+                                ` : `
+                                    <span class="text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-md font-bold border border-emerald-500/30">Chuẩn mẫu</span>
+                                `}
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] text-slate-400 font-mono">${(p.rewritten_text || '').length} ký tự</span>
+                                <button onclick="copyPostTextUI(${p.id}, 'rewritten')" class="text-[11px] text-indigo-200 hover:text-white px-2.5 py-0.5 rounded-lg bg-indigo-900/70 hover:bg-indigo-800 transition-all flex items-center gap-1 font-bold border border-indigo-700/60 shadow-sm" title="Sao chép bài viết hoàn chỉnh">
+                                    <i data-lucide="copy" class="w-3 h-3 text-amber-300"></i> Copy Bài Viết
+                                </button>
+                            </div>
+                        </div>
+
+                        ${isRawFallback ? `
+                            <div class="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start gap-2">
+                                <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400 shrink-0 mt-0.5"></i>
+                                <div class="flex-1 text-[11px] leading-relaxed">
+                                    Bài viết đang giữ nguyên văn tin thô (chưa qua mẫu Gemini). Hãy bấm <b>"Viết Lại AI"</b> bên dưới để áp dụng mẫu đăng bài của bạn.
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        <div class="text-xs text-slate-100 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto font-sans pr-1">
+                            ${escapeHtml(p.rewritten_text || p.original_text || '')}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer bài viết: Nhóm Facebook đích & Các nút thao tác -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800/80 text-xs">
+                    <div class="flex items-center gap-1.5 text-slate-400 text-xs">
+                        <i data-lucide="send" class="w-3.5 h-3.5 text-indigo-400 shrink-0"></i>
+                        <span>Đích đăng:</span>
+                        <span class="text-slate-200 font-semibold px-2.5 py-0.5 rounded-lg bg-slate-900 border border-slate-800 truncate max-w-sm">
+                            ${escapeHtml(p.target_fb_group || 'Tất cả nhóm Facebook đã chọn')}
+                        </span>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="reRewritePostUI(${p.id})" id="btn-ai-rewrite-${p.id}" class="px-3.5 py-1.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-md shadow-amber-900/30 hover:scale-[1.02] transition-all text-xs" title="Gửi tin nhắn này sang Chrome Gemini để viết lại theo đúng mẫu bạn ghim">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-200"></i> Viết Lại AI
+                        </button>
+                        <button onclick="openEditModal(${p.id})" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold rounded-xl flex items-center gap-1.5 transition-all text-xs" title="Chỉnh sửa nội dung bài viết trước khi đăng">
+                            <i data-lucide="edit-3" class="w-3.5 h-3.5 text-blue-400"></i> Sửa Bài
+                        </button>
+                        <button onclick="deletePostDirectUI(${p.id})" class="px-2.5 py-1.5 bg-slate-900 hover:bg-rose-950/80 hover:text-rose-300 hover:border-rose-800/80 text-slate-400 border border-slate-800 font-semibold rounded-xl flex items-center gap-1 transition-all text-xs" title="Xóa bài viết này khỏi hàng đợi">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-400"></i> Xóa
+                        </button>
+                        ${p.status === 'pending' ? `
+                            <button onclick="approvePostDirect(${p.id})" class="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-sm hover:scale-[1.02] transition-all text-xs" title="Duyệt bài để worker tự động đăng theo khung giờ vàng">
+                                <i data-lucide="check" class="w-3.5 h-3.5"></i> Duyệt Bài
+                            </button>
+                            <button onclick="publishPostDirect(${p.id})" class="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-md shadow-blue-900/30 hover:scale-[1.02] transition-all text-xs" title="Đăng bài ngay lập tức lên Facebook">
+                                <i data-lucide="send" class="w-3.5 h-3.5"></i> Đăng Luôn
+                            </button>
+                        ` : p.status === 'approved' ? `
+                            <button onclick="publishPostDirect(${p.id})" class="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-md shadow-blue-900/30 hover:scale-[1.02] transition-all text-xs" title="Đăng bài ngay lập tức không cần chờ lịch">
+                                <i data-lucide="send" class="w-3.5 h-3.5"></i> Đăng Ngay
+                            </button>
+                        ` : `
+                            <button onclick="publishPostDirect(${p.id})" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold rounded-xl flex items-center gap-1.5 transition-all text-xs" title="Đăng lại bài viết này lên Facebook">
+                                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-blue-400"></i> Đăng Lại
+                            </button>
+                        `}
+                    </div>
                 </div>
             </div>
-        </div>
-    `).join('');
-    lucide.createIcons();
+        `;
+    }).join('');
+
+    if (window.lucide) lucide.createIcons();
 }
 
 function refreshPosts() {
     loadPosts();
-    showToast('Đã làm mới hàng đợi!', 'info');
+    showToast('Đã làm mới hàng đợi bài viết!', 'info');
 }
 
 // Xóa tất cả bài viết trong bảng tin (Không chạm vào danh sách nhóm Zalo & FB)
 async function clearAllPostsUI() {
     const filterDesc = state.filter === 'all' ? 'tất cả bài viết' : `các bài viết thuộc trạng thái [${getStatusLabel(state.filter)}]`;
+    if (!confirm(`Bạn có chắc muốn XÓA ${filterDesc.toUpperCase()} trong bảng tin không?\n(Danh sách nhóm Zalo và nhóm Facebook được bảo toàn nguyên vẹn 100%)`)) {
+        return;
+    }
     const res = await window.electronApi.clearAllPosts(state.filter);
     if (res.success) {
-        showToast(`Đã xóa sạch ${filterDesc} trong bảng tin! (Giữ nguyên toàn bộ nhóm Zalo & Facebook)`, 'success');
+        showToast(`Đã xóa sạch ${filterDesc}! (Bảo toàn nhóm Zalo & FB)`, 'success');
         await loadPosts();
         await loadStatus();
     } else {
@@ -426,7 +700,7 @@ async function clearAllPostsUI() {
     }
 }
 
-// Xóa 1 bài viết trực tiếp không cần popup xác nhận phiền phức
+// Xóa 1 bài viết trực tiếp
 async function deletePostDirectUI(id) {
     const res = await window.electronApi.deletePost(id);
     if (res.success) {
@@ -446,11 +720,11 @@ async function reRewritePostUI(id) {
         btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin text-amber-400"></i> Đang viết lại...`;
         if (window.lucide) lucide.createIcons();
     }
-    showToast(`Đang gửi bài viết #${id} sang Gemini AI để viết lại...`, 'info');
+    showToast(`Đang gửi bài viết #${id} sang Chrome Gemini để viết lại...`, 'info');
     try {
         const res = await window.electronApi.reRewritePost(id);
         if (res.success && res.rewritten_text) {
-            showToast(`Đã viết lại bài viết #${id} thành công!`, 'success');
+            showToast(`Đã viết lại bài viết #${id} theo mẫu ghim thành công!`, 'success');
             await loadPosts();
         } else {
             showToast(res.error || 'Không thể viết lại bài viết', 'error');
@@ -460,7 +734,7 @@ async function reRewritePostUI(id) {
     } finally {
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = `<i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Viết lại AI`;
+            btn.innerHTML = `<i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-200"></i> Viết Lại AI`;
             if (window.lucide) lucide.createIcons();
         }
     }

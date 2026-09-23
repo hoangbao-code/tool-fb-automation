@@ -413,7 +413,12 @@ ipcMain.handle('toggle-all-fb-groups', async (event, isActive) => {
 // 5. Bài viết & Hàng đợi
 ipcMain.handle('get-posts', async () => {
     try {
-        const posts = await dbAsync.all(`SELECT * FROM posts ORDER BY id DESC LIMIT 100`);
+        const posts = await dbAsync.all(`
+            SELECT p.*, m.sender, m.images 
+            FROM posts p 
+            LEFT JOIN messages m ON p.message_id = m.id 
+            ORDER BY p.id DESC LIMIT 150
+        `);
         return { success: true, posts };
     } catch (e) {
         return { success: false, error: e.message };
@@ -426,6 +431,26 @@ ipcMain.handle('update-post', async (event, { id, text, status }) => {
             `UPDATE posts SET rewritten_text = COALESCE(?, rewritten_text), status = COALESCE(?, status) WHERE id = ?`,
             [text, status, id]
         );
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('approve-post', async (event, id) => {
+    try {
+        await dbAsync.run(`UPDATE posts SET status = 'approved' WHERE id = ?`, [id]);
+        await dbAsync.log('info', `Đã duyệt bài viết #${id} sang trạng thái sẵn sàng đăng.`);
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('approve-all-pending-posts', async () => {
+    try {
+        await dbAsync.run(`UPDATE posts SET status = 'approved' WHERE status = 'pending'`);
+        await dbAsync.log('info', 'Đã duyệt tất cả các bài viết chờ sang trạng thái sẵn sàng đăng.');
         return { success: true };
     } catch (e) {
         return { success: false, error: e.message };

@@ -139,27 +139,102 @@
 
             <!-- TAB 1: BẢNG TIN & HÀNG ĐỢI (FEED & REVIEW) -->
             <section id="tab-feed" class="tab-pane active tab-block h-full overflow-y-auto p-6 space-y-5">
-                <!-- Bộ lọc & Thao tác -->
-                <div class="flex items-center justify-between bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
-                    <div class="flex items-center gap-2 text-xs">
-                        <span class="text-slate-400 font-medium">Bộ lọc bài viết:</span>
-                        <div class="flex gap-1.5 bg-slate-900 p-1 rounded-lg border border-slate-800" id="filter-buttons">
-                            <button onclick="setFilter('all')" class="filter-btn active" id="filter-btn-all">Tất cả</button>
-                            <button onclick="setFilter('pending')" class="filter-btn" id="filter-btn-pending">Chờ bạn duyệt</button>
-                            <button onclick="setFilter('approved')" class="filter-btn" id="filter-btn-approved">Đã duyệt (Chờ đăng)</button>
-                            <button onclick="setFilter('posted')" class="filter-btn" id="filter-btn-posted">Đã đăng thành công</button>
+                <!-- 1. Thẻ tóm tắt thống kê hàng đợi (Metric Cards) -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+                    <div class="bg-gradient-to-br from-slate-900/90 to-slate-950 p-4 rounded-2xl border border-slate-800 flex items-center justify-between shadow-md">
+                        <div class="space-y-1">
+                            <span class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Tổng Bài Viết</span>
+                            <div class="text-2xl font-extrabold text-white font-mono" id="feed-stat-total">0</div>
                         </div>
-                    <div class="flex items-center gap-2.5">
-                        <button onclick="refreshPosts()" class="text-xs text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 font-semibold px-2 py-1 transition-all">
-                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Cập nhật hàng đợi
-                        </button>
-                        <button onclick="clearAllPostsUI()" class="bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800/70 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm" title="Xóa toàn bộ bài viết trong bảng tin (Không ảnh hưởng đến danh sách nhóm Zalo & FB)">
-                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Xóa Tất Cả Bài
-                        </button>
+                        <span class="w-10 h-10 rounded-xl bg-slate-800/80 flex items-center justify-center text-slate-300 border border-slate-700/60 shadow-inner">
+                            <i data-lucide="layers" class="w-5 h-5 text-blue-400"></i>
+                        </span>
+                    </div>
+
+                    <div class="bg-gradient-to-br from-amber-950/30 to-slate-950 p-4 rounded-2xl border border-amber-500/30 flex items-center justify-between shadow-md">
+                        <div class="space-y-1">
+                            <span class="text-[11px] text-amber-300/80 font-semibold uppercase tracking-wider">Chờ Bạn Duyệt</span>
+                            <div class="text-2xl font-extrabold text-amber-400 font-mono" id="feed-stat-pending">0</div>
+                        </div>
+                        <span class="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-300 border border-amber-500/30 shadow-inner">
+                            <i data-lucide="clock" class="w-5 h-5 text-amber-400"></i>
+                        </span>
+                    </div>
+
+                    <div class="bg-gradient-to-br from-emerald-950/30 to-slate-950 p-4 rounded-2xl border border-emerald-500/30 flex items-center justify-between shadow-md">
+                        <div class="space-y-1">
+                            <span class="text-[11px] text-emerald-300/80 font-semibold uppercase tracking-wider">Đã Duyệt (Chờ Đăng)</span>
+                            <div class="text-2xl font-extrabold text-emerald-400 font-mono" id="feed-stat-approved">0</div>
+                        </div>
+                        <span class="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-300 border border-emerald-500/30 shadow-inner">
+                            <i data-lucide="calendar-check" class="w-5 h-5 text-emerald-400"></i>
+                        </span>
+                    </div>
+
+                    <div class="bg-gradient-to-br from-blue-950/30 to-slate-950 p-4 rounded-2xl border border-blue-500/30 flex items-center justify-between shadow-md">
+                        <div class="space-y-1">
+                            <span class="text-[11px] text-blue-300/80 font-semibold uppercase tracking-wider">Đã Đăng FB</span>
+                            <div class="text-2xl font-extrabold text-blue-400 font-mono" id="feed-stat-posted">0</div>
+                        </div>
+                        <span class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-300 border border-blue-500/30 shadow-inner">
+                            <i data-lucide="check-circle-2" class="w-5 h-5 text-blue-400"></i>
+                        </span>
                     </div>
                 </div>
 
-                <!-- Danh sách bài đăng -->
+                <!-- 2. Thanh điều khiển: Bộ lọc, Tìm kiếm & Nút tác vụ hàng loạt -->
+                <div class="bg-gradient-to-r from-slate-950 to-slate-900/90 p-4 rounded-2xl border border-slate-800 shadow-md">
+                    <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+                        <!-- Bộ lọc theo trạng thái dạng Tabs Hiện Đại -->
+                        <div class="flex flex-wrap items-center gap-1.5 p-1 bg-slate-900 rounded-xl border border-slate-800" id="filter-buttons">
+                            <button onclick="setFilter('all')" class="filter-btn active flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all" id="filter-btn-all">
+                                <span>Tất cả</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono" id="badge-count-all">0</span>
+                            </button>
+                            <button onclick="setFilter('pending')" class="filter-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all" id="filter-btn-pending">
+                                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                                <span>Chờ duyệt</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-300 font-mono" id="badge-count-pending">0</span>
+                            </button>
+                            <button onclick="setFilter('approved')" class="filter-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all" id="filter-btn-approved">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                <span>Đã duyệt</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 font-mono" id="badge-count-approved">0</span>
+                            </button>
+                            <button onclick="setFilter('posted')" class="filter-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all" id="filter-btn-posted">
+                                <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+                                <span>Đã đăng</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-950/80 text-blue-300 font-mono" id="badge-count-posted">0</span>
+                            </button>
+                        </div>
+
+                        <!-- Ô tìm kiếm bài viết trực tiếp -->
+                        <div class="relative flex-1 max-w-md">
+                            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                            <input type="text" id="feed-search-input" oninput="onFeedSearch(this.value)" 
+                                   class="w-full bg-slate-900 border border-slate-700/80 rounded-xl pl-9 pr-8 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
+                                   placeholder="Tìm kiếm nội dung, khu vực, người gửi, nhóm...">
+                            <button onclick="clearFeedSearch()" id="feed-search-clear" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-all">
+                                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+
+                        <!-- Các nút tác vụ nhanh -->
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button onclick="approveAllPendingUI()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-emerald-900/30 hover:scale-[1.02] transition-all" title="Duyệt tất cả bài chờ sang trạng thái sẵn sàng đăng tự động">
+                                <i data-lucide="check-check" class="w-4 h-4"></i> Duyệt Tất Cả Chờ
+                            </button>
+                            <button onclick="refreshPosts()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all" title="Làm mới hàng đợi">
+                                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Làm Mới
+                            </button>
+                            <button onclick="clearAllPostsUI()" class="bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/70 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm" title="Xóa toàn bộ bài viết trong bảng tin (Không ảnh hưởng đến danh sách nhóm Zalo & FB)">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Xóa Hết
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Danh sách bài đăng -->
                 <div id="feed-posts-container" class="space-y-4">
                     <!-- Dynamic Posts Rendered Here -->
                 </div>

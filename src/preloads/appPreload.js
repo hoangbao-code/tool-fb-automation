@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld('electronApi', {
     // 5. Hàng đợi bài viết & Đăng bài
     getPosts: () => ipcRenderer.invoke('get-posts'),
     updatePost: (id, text, status) => ipcRenderer.invoke('update-post', { id, text, status }),
+    approvePost: (id) => ipcRenderer.invoke('approve-post', id),
+    approveAllPendingPosts: () => ipcRenderer.invoke('approve-all-pending-posts'),
     publishPost: (id) => ipcRenderer.invoke('publish-post', id),
     deletePost: (id) => ipcRenderer.invoke('delete-post', id),
     clearAllPosts: (statusFilter) => ipcRenderer.invoke('clear-all-posts', statusFilter),
