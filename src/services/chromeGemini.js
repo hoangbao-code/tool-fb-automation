@@ -517,7 +517,7 @@ const INJECT_SCRIPT = (promptText) => `
     let lastLength = 0;
     let stableCount = 0;
 
-    while (Date.now() - startTime < 38000) {
+    while (Date.now() - startTime < 65000) {
         await new Promise(r => setTimeout(r, 1000));
         const currentCount = getResponseCount();
         const generating = isAiGenerating();
@@ -558,7 +558,7 @@ const INJECT_SCRIPT = (promptText) => `
         };
     }
 
-    return { success: false, error: 'Quá thời gian chờ Gemini trả lời trên Chrome.' };
+    return { success: false, error: 'Quá thời gian chờ Gemini trả lời trên Chrome (đã đợi hơn 65 giây).' };
 })();
 `;
 
@@ -589,7 +589,7 @@ async function sendPromptToChromeGemini(promptText, port = DEFAULT_PORT, targetU
             expression: INJECT_SCRIPT(promptText),
             awaitPromise: true,
             returnByValue: true
-        }, 45000);
+        }, 75000);
 
         if (evalResult && evalResult.result && evalResult.result.value) {
             const val = evalResult.result.value;

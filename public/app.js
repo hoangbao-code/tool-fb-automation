@@ -170,6 +170,22 @@ function setupEventListeners() {
         loadFbGroups();
     });
 
+    window.electronApi.on('fb-publish-step', (stepData) => {
+        const fbWv = document.getElementById('fb-wv');
+        if (fbWv && stepData.groupUrl) {
+            fbWv.loadURL(stepData.groupUrl);
+            setTimeout(() => {
+                try {
+                    fbWv.send('publish-to-fb', {
+                        postId: stepData.postId,
+                        content: stepData.content,
+                        groups: [{ name: stepData.groupName, url: stepData.groupUrl, content: stepData.content }]
+                    });
+                } catch (e) {}
+            }, 3000);
+        }
+    });
+
     window.electronApi.on('new-log-entry', (log) => {
         appendLogEntry(log);
     });
@@ -2517,64 +2533,12 @@ async function openAddFbGroupModal() {
 }
 
 // 6. Cấu hình AI Gemini
-function setPromptPreset(type) {
-    const promptInput = document.getElementById('ai-prompt-input');
-    if (type === 'web_bds') {
-        promptInput.value = `Bạn là một chuyên viên content marketing bất động sản cho thuê tại TP.HCM. Nhiệm vụ của bạn là nhận thông tin thô của phòng/căn hộ và viết lại thành bài đăng Facebook Marketplace chuyên nghiệp, hấp dẫn.
-
-Quy tắc trình bày:
-1. Tiêu đề: Giật tít nổi bật bằng icon và chữ in hoa (nhấn mạnh loại phòng, ưu điểm chính, trạng thái vào ở).
-2. Vị trí (Location): Nêu địa chỉ kèm các mốc nhận diện nổi tiếng lân cận (công viên, trường học, bệnh viện, trục đường lớn) và các quận kết nối nhanh.
-3. Thông tin phòng & Tiện ích: Liệt kê rõ số phòng/tầng, giờ giấc tự do, chỗ để xe, an ninh, thang máy (nếu có).
-4. Nội thất: Nêu bật "Full nội thất - xách vali vào ở", khu bếp, máy giặt...
-5. Thông tin liên hệ: Luôn chốt bằng số điện thoại: 0354084364 (zalo - sdt) hoặc WhatsApp / Zalo / Phone đối với bản tiếng Anh.
-6. Tone giọng: Chuyên nghiệp, gọn gàng, dùng icon trực quan, không dùng từ ngữ rườm rà.
-
----
-Dữ liệu đầu vào:
-[Dán thông tin phòng thô vào đây]`;
-        showToast('Đã nạp mẫu Prompt BĐS chuẩn Gemini Web!', 'info');
-    } else if (type === 'viral') {
-        promptInput.value = `Bạn là một chuyên gia sáng tạo nội dung bán hàng trên Facebook. Hãy viết lại bài đăng sau để thu hút người mua/thuê ngay lập tức:
-- Giật tít bắt mắt với icon phù hợp.
-- Giữ nguyên các thông tin thực tế quan trọng: giá, địa chỉ, diện tích, tiện nghi, số điện thoại.
-- Trình bày dạng danh sách gạch đầu dòng ngắn gọn, dễ đọc lướt trên điện thoại.
-- Kêu gọi hành động (CTA) khẩn trương và lịch sự.
-- KHÔNG viết lời chào mở đầu hay kết thúc nhảm nhí, chỉ xuất bài đăng hoàn chỉnh.
-
-Dữ liệu đầu vào:
-{CONTENT}`;
-        showToast('Đã nạp mẫu Prompt Viral!', 'info');
-    }
-}
-
 async function loadAiSettings() {
     try {
         const res = await window.electronApi.getSettings();
         if (res.success) {
             state.settings = res.settings;
-            if (res.settings.gemini_api_key) {
-                const keyEl = document.getElementById('ai-key-input');
-                if (keyEl) keyEl.value = res.settings.gemini_api_key;
-            }
-            const savedModel = res.settings.gemini_model;
-            const validModels = ['gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-3.5-flash'];
-            const selectEl = document.getElementById('ai-model-select');
-            if (selectEl) {
-                selectEl.value = (validModels.includes(savedModel) ? savedModel : 'gemini-3.7-flash');
-            }
-            const promptEl = document.getElementById('ai-prompt-input');
-            if (promptEl) {
-                promptEl.value = res.settings.ai_prompt_template || '';
-            }
-            const spinCheck = document.getElementById('ai-spin-enabled');
-            if (spinCheck) spinCheck.checked = res.settings.ai_spin_enabled === '1';
-            const sigInput = document.getElementById('ai-signature-input');
-            if (sigInput) sigInput.value = res.settings.custom_signature || '';
-            const tagInput = document.getElementById('ai-hashtags-input');
-            if (tagInput) tagInput.value = res.settings.custom_hashtags || '';
-
-            // Cấu hình Cuộc trò chuyện đã ghim & Gửi nội dung thô
+            // Cấu hình Cuộc trò chuyện đã ghim & Gửi nội dung thô cho Chrome Gemini Web
             const urlInput = document.getElementById('cfg-gemini-conversation-url');
             if (urlInput) urlInput.value = res.settings.gemini_conversation_url || '';
             const rawCheck = document.getElementById('cfg-gemini-send-raw-content');
@@ -2582,55 +2546,6 @@ async function loadAiSettings() {
         }
     } catch (e) {
         console.error('Error loadAiSettings:', e);
-    }
-}
-
-async function saveAiConfig() {
-    const key = document.getElementById('ai-key-input').value.trim();
-    const model = document.getElementById('ai-model-select').value;
-    const prompt = document.getElementById('ai-prompt-input').value.trim();
-    const spinEnabled = document.getElementById('ai-spin-enabled')?.checked ? '1' : '0';
-    const signature = document.getElementById('ai-signature-input')?.value || '';
-    const hashtags = document.getElementById('ai-hashtags-input')?.value || '';
-
-    await window.electronApi.saveSettings({
-        gemini_api_key: key,
-        gemini_model: model,
-        ai_prompt_template: prompt,
-        ai_spin_enabled: spinEnabled,
-        custom_signature: signature,
-        custom_hashtags: hashtags
-    });
-    showToast('Đã lưu cấu hình Google Gemini AI!', 'success');
-}
-
-async function testAiPrompt() {
-    const key = document.getElementById('ai-key-input').value.trim();
-    const model = document.getElementById('ai-model-select').value;
-    const prompt = document.getElementById('ai-prompt-input').value.trim();
-
-    if (!key) {
-        showToast('Vui lòng nhập API Key trước khi thử nghiệm!', 'error');
-        return;
-    }
-
-    showToast('Đang gọi AI Gemini viết thử...', 'info');
-    const res = await window.electronApi.testAi(key, prompt, model);
-    const box = document.getElementById('ai-test-preview-box');
-    const out = document.getElementById('ai-test-output-text');
-    const status = document.getElementById('ai-test-status-text');
-
-    box.classList.remove('hidden');
-    if (res.success) {
-        status.innerText = '✓ Thành công';
-        status.className = 'text-emerald-400 font-semibold';
-        out.innerText = res.result;
-        showToast('Thử nghiệm AI thành công!', 'success');
-    } else {
-        status.innerText = '✗ Thất bại';
-        status.className = 'text-rose-400 font-semibold';
-        out.innerText = res.error;
-        showToast(res.error, 'error');
     }
 }
 

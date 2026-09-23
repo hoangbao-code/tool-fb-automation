@@ -66,7 +66,22 @@ async function handleScannedGroups(groupsList) {
 }
 
 /**
+ * Xáo trộn ngẫu nhiên danh sách (Fisher-Yates Shuffle)
+ * Đảm bảo mỗi lần đăng có thứ tự các nhóm lộn xộn hoàn toàn khác nhau
+ */
+function shuffleArray(arr) {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+}
+
+/**
  * Xuất bản bài viết lên các nhóm Facebook đã kích hoạt
+ * - Tự động xáo trộn thứ tự nhóm (lộn xộn) để tránh thuật toán bot Facebook
+ * - Đăng rải rác từng nhóm một với khoảng nghỉ ngẫu nhiên (Jitter) để chống spam và tránh bị ngâm bài
  */
 async function publishPost(postId) {
     const post = await dbAsync.get(`SELECT * FROM posts WHERE id = ?`, [postId]);
@@ -77,16 +92,21 @@ async function publishPost(postId) {
         throw new Error('Chưa có nhóm Facebook nào được chọn. Hãy vào tab Nhóm FB để tích chọn ít nhất 1 nhóm.');
     }
 
+    // 1. XÁO TRỘN LỘN XỘN NGẪU NHIÊN THỨ TỰ CÁC NHÓM (Fisher-Yates Shuffle)
+    const shuffledGroups = shuffleArray(activeFbGroups);
+
     const spinRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'ai_spin_enabled'`);
-    const isSpinEnabled = spinRow?.value === '1';
+    const isSpinEnabled = (spinRow?.value !== '0');
 
-    await dbAsync.log('info', `Bắt đầu xuất bản bài viết #${postId} lên ${activeFbGroups.length} nhóm Facebook (Spin content: ${isSpinEnabled ? 'BẬT' : 'TẮT'})...`);
+    const baseText = post.rewritten_text || post.original_text;
 
-    // Gửi lệnh đăng bài trực tiếp vào Facebook Webview thông qua preload script
+    await dbAsync.run(`UPDATE posts SET status = 'publishing' WHERE id = ?`, [postId]);
+    await dbAsync.log('info', `[Facebook] Bắt đầu đăng bài #${postId} rải rác lộn xộn vào ${shuffledGroups.length} nhóm (Xáo trộn ngẫu nhiên & Spin content: ${isSpinEnabled ? 'BẬT' : 'TẮT'})...`);
+
+    // Gửi payload ban đầu vào FB Webview nếu có
     if (fbWebviewRef) {
         try {
-            const baseText = post.rewritten_text || post.original_text;
-            const payloadGroups = activeFbGroups.map((group, idx) => ({
+            const payloadGroups = shuffledGroups.map((group, idx) => ({
                 id: group.id,
                 name: group.name,
                 url: group.url,
@@ -103,15 +123,55 @@ async function publishPost(postId) {
         }
     }
 
+    // 2. TIẾN HÀNH ĐĂNG RẢI RÁC LẦN LƯỢT VÀO TỪNG NHÓM VỚI KHOẢNG NGHỈ NGẪU NHIÊN (JITTER DELAY)
+    // Tránh việc cùng 1 lúc bắn dồn dập vào nhiều nhóm gây spam và bị admin ngâm bài
+    const delayMinRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'delay_min_seconds'`);
+    const delayMaxRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'delay_max_seconds'`);
+    const baseMin = Math.max(15, parseInt(delayMinRow?.value || '45', 10));
+    const baseMax = Math.max(baseMin, parseInt(delayMaxRow?.value || '90', 10));
+
+    for (let i = 0; i < shuffledGroups.length; i++) {
+        // Kiểm tra Dừng Khẩn Cấp
+        const stopRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'emergency_stop'`);
+        if (stopRow?.value === '1') {
+            await dbAsync.log('warn', `[Facebook] Đã dừng khẩn cấp quá trình đăng bài #${postId} tại nhóm ${i + 1}/${shuffledGroups.length}.`);
+            await dbAsync.run(`UPDATE posts SET status = 'pending' WHERE id = ?`, [postId]);
+            return { stopped: true };
+        }
+
+        const group = shuffledGroups[i];
+        const groupContent = isSpinEnabled ? spinPostForGroup(baseText, group.name, i) : baseText;
+
+        await dbAsync.log('info', `[Facebook] Đang đăng rải rác (#${i + 1}/${shuffledGroups.length}): Nhóm [${group.name}] (Thứ tự xáo trộn ngẫu nhiên)...`);
+
+        if (eventBroadcaster) {
+            eventBroadcaster('fb-publish-step', {
+                postId: post.id,
+                groupName: group.name,
+                groupUrl: group.url,
+                content: groupContent,
+                step: i + 1,
+                total: shuffledGroups.length
+            });
+        }
+
+        // Nghỉ giãn cách rải rác giữa các nhóm (trừ nhóm cuối cùng)
+        if (i < shuffledGroups.length - 1) {
+            const jitterDelay = Math.floor(Math.random() * (baseMax - baseMin + 1)) + baseMin;
+            await dbAsync.log('info', `[Facebook] Giãn cách ngẫu nhiên ${jitterDelay}s trước khi đăng nhóm tiếp theo để chống spam & ngâm bài...`);
+            await new Promise(r => setTimeout(r, jitterDelay * 1000));
+        }
+    }
+
     await dbAsync.run(
         `UPDATE posts SET status = 'posted', posted_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [postId]
     );
 
     if (eventBroadcaster) {
-        eventBroadcaster('post-published', { id: postId, status: 'posted', groupCount: activeFbGroups.length });
+        eventBroadcaster('post-published', { id: postId, status: 'posted', groupCount: shuffledGroups.length });
     }
-    await dbAsync.log('info', `Đã xuất bản thành công bài đăng #${postId}.`);
+    await dbAsync.log('info', `✓ Đã hoàn tất đăng bài #${postId} rải rác lộn xộn lên ${shuffledGroups.length} nhóm an toàn!`);
     return { success: true };
 }
 

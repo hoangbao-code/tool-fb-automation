@@ -109,99 +109,61 @@ async function callGeminiApi(apiKey, requestedModel, prompt) {
 }
 
 /**
- * Gọi Google Gemini API viết lại nội dung bài đăng
+/**
+ * Gửi nội dung tin nhắn phòng thô trực tiếp vào Google Chrome Gemini Web
+ * Chờ AI trên Chrome hoàn tất biên tập, làm sạch và trả về bài viết đã viết lại.
+ * Tuyệt đối không bọc prompt template hay nạp tin thô khi AI chưa phản hồi.
  */
 async function rewriteWithGemini(content, sender = '', groupName = '', overridePrompt = null) {
-    const keyRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_api_key'`);
-    const modelRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_model'`);
-    const promptRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'ai_prompt_template'`);
-    const modeRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_mode'`);
-
-    let template = overridePrompt || promptRow?.value || 'Hãy viết lại bài đăng sau để đăng lên Facebook:\n{CONTENT}';
-
-    let finalPrompt = template;
-    const placeholderRegex = /\[Dán.*?\]|\{CONTENT\}/gi;
-    if (placeholderRegex.test(finalPrompt)) {
-        finalPrompt = finalPrompt.replace(placeholderRegex, content.trim());
-    } else {
-        finalPrompt = `${finalPrompt}\n\nNội dung cần viết lại:\n${content.trim()}`;
-    }
-    finalPrompt = finalPrompt.replace(/{SENDER}/g, sender || 'Thành viên');
-    finalPrompt = finalPrompt.replace(/{GROUP}/g, groupName || 'Nhóm Zalo');
-
-    // Thêm quy tắc ràng buộc để AI xuất chuẩn 100% không nói nhảm
-    if (!finalPrompt.includes('CHỈ XUẤT DUY NHẤT')) {
-        finalPrompt += `\n\n[QUY TẮC BẮT BUỘC: CHỈ XUẤT DUY NHẤT BÀI ĐĂNG FACEBOOK HOÀN CHỈNH. TUYỆT ĐỐI KHÔNG CÓ CÂU CHÀO MỞ ĐẦU (KHÔNG "Tuyệt vời", "Dưới đây là", "Chào bạn"), KHÔNG GIẢI THÍCH HAY BÌNH LUẬN GÌ THÊM].`;
+    if (!content || !content.trim()) {
+        throw new Error('Nội dung tin nhắn trống, không thể gửi sang Gemini AI.');
     }
 
-    let resultTextRaw = '';
-    let sourceUsed = '';
+    const rawText = content.trim();
 
-    // Lấy cấu hình chế độ gửi tin thô & URL cuộc trò chuyện đã ghim
-    const sendRawRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_send_raw_content'`);
+    // Lấy cấu hình URL cuộc trò chuyện đã ghim từ settings
     const targetUrlRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_conversation_url'`);
-
-    const isSendRaw = (sendRawRow?.value !== '0'); // Mặc định = 1: chỉ gửi nội dung thô cho hội thoại đã ghim
     const targetUrl = targetUrlRow?.value?.trim() || null;
-    const chromePromptText = isSendRaw ? content.trim() : finalPrompt;
 
-    // 1. Thử dùng Chrome Gemini Web
     let chromeStatus = await isChromeDebuggingActive();
 
-    // Nếu người dùng đã cài đặt cuộc trò chuyện đã ghim (targetUrl) mà Chrome chưa chạy -> TỰ ĐỘNG KHỞI CHẠY CHROME!
-    if (!chromeStatus.active && targetUrl) {
-        console.log('[Gemini] Đang tự động mở Google Chrome cho cuộc trò chuyện đã ghim:', targetUrl);
+    // Nếu Chrome chưa chạy -> TỰ ĐỘNG KHỞI CHẠY GOOGLE CHROME với cuộc trò chuyện đã ghim!
+    if (!chromeStatus.active) {
+        console.log('[Gemini Web] Chrome chưa chạy, đang tự động khởi chạy Chrome...');
+        await dbAsync.log('info', `[Gemini Web] Đang tự động mở Google Chrome để biên tập tin từ [${groupName || 'Zalo'}]...`);
         const launchRes = await launchChromeGemini(DEFAULT_PORT, targetUrl);
         if (launchRes.success) {
             chromeStatus = { active: true };
-            await new Promise(r => setTimeout(r, 2500));
-        }
-    }
-
-    if (chromeStatus.active) {
-        try {
-            const chromeRes = await sendPromptToChromeGemini(chromePromptText, undefined, targetUrl);
-            if (chromeRes.success && chromeRes.text) {
-                resultTextRaw = chromeRes.text;
-                sourceUsed = isSendRaw ? 'Chrome Gemini (Nội dung thô vào hội thoại đã ghim)' : 'Google Chrome Gemini Web';
-
-                // Tự động lưu URL hội thoại chính thức (/app/<id>) nếu trước đó là link share hoặc mới điều hướng
-                if (chromeRes.finalUrl && (chromeRes.finalUrl.includes('/app/') || chromeRes.finalUrl.includes('/gem/')) && chromeRes.finalUrl !== targetUrl) {
-                    dbAsync.run(`UPDATE settings SET value = ? WHERE key = 'gemini_conversation_url'`, [chromeRes.finalUrl])
-                        .catch(e => console.warn('[Gemini] Không thể lưu finalUrl:', e.message));
-                }
-            } else {
-                console.warn('[Gemini] Chrome Gemini không hoàn tất:', chromeRes.error);
-                if (targetUrl) {
-                    throw new Error(`Chrome Gemini gặp sự cố: ${chromeRes.error || 'Chưa nhận được phản hồi'}. Vui lòng mở Chrome để kiểm tra.`);
-                }
-            }
-        } catch (chromeErr) {
-            console.warn('[Gemini] Lỗi gửi tin sang Chrome Gemini:', chromeErr.message);
-            if (targetUrl) {
-                throw chromeErr;
-            }
-        }
-    }
-
-    // 2. Dự phòng sang Gemini API nếu Chrome chưa mở hoặc không phản hồi (và không bắt buộc targetUrl)
-    if (!resultTextRaw) {
-        const apiKey = keyRow?.value?.trim();
-        if (apiKey) {
-            const model = modelRow?.value?.trim() || 'gemini-3.7-flash';
-            const { text, modelUsed } = await callGeminiApi(apiKey, model, finalPrompt);
-            resultTextRaw = text;
-            sourceUsed = `Gemini API (${modelUsed})`;
-        } else if (!chromeStatus.active) {
-            throw new Error('Chưa kết nối Google Chrome Gemini và chưa cài đặt API Key. Vui lòng bấm "Mở Google Chrome Gemini" tại tab AI.');
+            // Chờ Chrome nạp trang và ổn định
+            await new Promise(r => setTimeout(r, 4000));
         } else {
-            throw new Error('Không thể lấy bài viết từ Gemini Web trên Google Chrome. Hãy đảm bảo bạn đã mở sẵn trang chat gemini.google.com trong Chrome.');
+            throw new Error(`Không thể khởi chạy Google Chrome: ${launchRes.message}. Vui lòng kiểm tra xem Chrome đã được cài đặt chưa.`);
         }
+    }
+
+    let resultTextRaw = '';
+
+    // Gửi thẳng nội dung thô vào Gemini Web (không bọc prompt rườm rà)
+    console.log(`[Gemini Web] Đang gửi nội dung thô (${rawText.length} ký tự) vào Gemini Web...`);
+    const chromeRes = await sendPromptToChromeGemini(rawText, DEFAULT_PORT, targetUrl);
+
+    if (chromeRes.success && chromeRes.text) {
+        resultTextRaw = chromeRes.text;
+
+        // Tự động lưu URL hội thoại chính thức (/app/<id>) nếu người dùng bắt đầu từ link share
+        if (chromeRes.finalUrl && (chromeRes.finalUrl.includes('/app/') || chromeRes.finalUrl.includes('/gem/')) && chromeRes.finalUrl !== targetUrl) {
+            dbAsync.run(`UPDATE settings SET value = ? WHERE key = 'gemini_conversation_url'`, [chromeRes.finalUrl])
+                .catch(e => console.warn('[Gemini Web] Không thể lưu finalUrl:', e.message));
+        }
+    } else {
+        const errorMsg = chromeRes.error || 'Gemini Web không trả về phản hồi bài viết.';
+        console.warn('[Gemini Web] Lỗi:', errorMsg);
+        throw new Error(`Google Chrome Gemini: ${errorMsg}`);
     }
 
     let resultText = cleanGeminiOutput(resultTextRaw);
 
-    // 3. Tự động chèn thông tin liên hệ (chữ ký) nếu có và chưa có trong bài
+    // Tự động chèn thông tin liên hệ (chữ ký) nếu có và chưa có trong bài
     const sigRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'custom_signature'`);
     if (sigRow?.value && sigRow.value.trim()) {
         const sig = sigRow.value.trim();
@@ -212,7 +174,7 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
         }
     }
 
-    // 4. Tự động chèn dàn Hashtags cá nhân nếu có và chưa có trong bài
+    // Tự động chèn dàn Hashtags cá nhân nếu có và chưa có trong bài
     const tagRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'custom_hashtags'`);
     if (tagRow?.value && tagRow.value.trim()) {
         const customTags = tagRow.value.trim();
@@ -221,7 +183,7 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
         }
     }
 
-    await dbAsync.log('info', `AI [${sourceUsed}] đã viết lại bài cho nhóm [${groupName}] thành công.`);
+    await dbAsync.log('info', `Gemini Web đã biên tập xong bài viết cho [${groupName || 'Zalo'}] (${resultText.length} ký tự).`);
     return resultText.trim();
 }
 

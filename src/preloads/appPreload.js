@@ -75,6 +75,7 @@ contextBridge.exposeInMainWorld('electronApi', {
             'new-post-ready',
             'post-published',
             'fb-groups-updated',
+            'fb-publish-step',
             'new-log-entry',
             'status-updated'
         ];

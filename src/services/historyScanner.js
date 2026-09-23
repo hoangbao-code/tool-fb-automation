@@ -133,35 +133,32 @@ async function processHistoricalZaloMessages(messages, options = {}) {
             [rawGroupName, sender, text, JSON.stringify(msg.images || [])]
         );
 
-        // 5. Gửi sang AI Gemini để biên tập lại thành bài đăng Facebook
+        // 5. Gửi sang AI Gemini Web để biên tập lại thành bài đăng Facebook hoàn chỉnh
+        // Quy tắc: Chỉ khi lấy được bài viết biên tập từ Gemini Web thì MỚI đưa vào bảng tin posts!
         try {
-            let rewritten = '';
-            try {
-                rewritten = await rewriteWithGemini(text, sender, rawGroupName);
-            } catch (aiErr) {
-                console.warn(`[HistoryScanner] Lỗi gọi Gemini: ${aiErr.message}. Sử dụng nội dung gốc.`);
-                rewritten = text;
+            await dbAsync.log('info', `[Quét Lịch Sử] Đang gửi bài viết (${text.length} ký tự) từ [${rawGroupName}] sang Gemini Web...`);
+
+            const rewritten = await rewriteWithGemini(text, sender, rawGroupName);
+
+            if (!rewritten || rewritten.trim().length === 0) {
+                throw new Error('Gemini Web trả về kết quả rỗng.');
             }
 
             // 6. Nạp vào hàng đợi bài viết (posts)
-            // Trạng thái: 'approved' (để worker tự động đăng dần) hoặc 'pending' (chờ duyệt tay)
             const initialStatus = isAuto ? 'approved' : 'pending';
-            await dbAsync.run(
+            const postInsertRes = await dbAsync.run(
                 `INSERT INTO posts (message_id, group_name, original_text, rewritten_text, target_fb_group, status) VALUES (?, ?, ?, ?, ?, ?)`,
                 [msgResult.id, rawGroupName, text, rewritten, targetFbStr, initialStatus]
             );
 
             queuedCount++;
-            if (rewritten === text) {
-                await dbAsync.log('warn', `[Quét Lịch Sử] Bài viết #${queuedCount} giữ nguyên nội dung gốc (AI chưa kịp biên tập). Bạn có thể bấm "Viết lại AI" trên Bảng tin.`);
-            } else {
-                await dbAsync.log('info', `[Quét Lịch Sử] Đã nạp bài viết từ [${rawGroupName}] vào hàng đợi (#${queuedCount}) - Trạng thái: ${initialStatus}`);
-            }
+            await dbAsync.log('info', `[Quét Lịch Sử] ✓ AI đã biên tập xong bài #${queuedCount} cho nhóm [${rawGroupName}]. Đã đưa vào Bảng Tin (ID: #${postInsertRes.id}).`);
 
-            // Nghỉ 1.5 giây giữa các tin để Chrome Gemini kịp chuyển đổi mượt mà
-            await new Promise(r => setTimeout(r, 1500));
-        } catch (postErr) {
-            console.error(`[HistoryScanner] Lỗi lưu bài viết:`, postErr);
+            // Nghỉ an toàn 3.5 giây giữa các tin để Chrome Gemini xử lý mượt mà, không bị nghẽn lệnh
+            await new Promise(r => setTimeout(r, 3500));
+        } catch (aiErr) {
+            console.warn(`[HistoryScanner] Bỏ qua bài viết vì AI chưa hoàn tất: ${aiErr.message}`);
+            await dbAsync.log('warn', `[Quét Lịch Sử] Bỏ qua tin từ [${rawGroupName}] (Lý do: ${aiErr.message}). Không nạp tin thô vào bảng tin.`);
             skippedCount++;
         }
     }
