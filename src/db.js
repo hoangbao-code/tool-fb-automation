@@ -98,7 +98,9 @@ db.serialize(() => {
             { start: "08:00", end: "09:30" },
             { start: "11:30", end: "13:00" },
             { start: "19:30", end: "21:30" }
-        ])]
+        ])],
+        ['gemini_conversation_url', ''],
+        ['gemini_send_raw_content', '1']
     ];
 
     defaultSettings.forEach(([key, val]) => {

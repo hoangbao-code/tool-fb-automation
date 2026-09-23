@@ -67,6 +67,24 @@ async function runTests() {
         }
     }
 
+    // 6. Kiểm tra cài đặt Cuộc trò chuyện đã ghim & Chế độ gửi nội dung thô
+    console.log('\n6. Kiểm tra cấu hình Cuộc trò chuyện đã ghim & Gửi nội dung thô:');
+    const { getActiveGeminiTabInfo } = require('../src/services/chromeGemini');
+    assert.strictEqual(typeof getActiveGeminiTabInfo, 'function');
+
+    // Thử lưu và đọc settings
+    const testUrl = 'https://gemini.google.com/app/1a2b3c4d5e';
+    await dbAsync.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('gemini_conversation_url', ?)`, [testUrl]);
+    await dbAsync.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('gemini_send_raw_content', '1')`);
+
+    const readUrl = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_conversation_url'`);
+    const readRaw = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_send_raw_content'`);
+
+    assert.strictEqual(readUrl.value, testUrl);
+    assert.strictEqual(readRaw.value, '1');
+    console.log(`  ✓ Cấu hình Cuộc trò chuyện đã ghim (${readUrl.value}) lưu & đọc chính xác 100%!`);
+    console.log(`  ✓ Chế độ "Chỉ gửi nội dung thô" (${readRaw.value}) kích hoạt thành công!`);
+
     console.log('\n========================================================');
     console.log('🎉 TẤT CẢ KIỂM THỬ CHROME GEMINI ĐÃ ĐẠT 100%!');
     console.log('========================================================\n');

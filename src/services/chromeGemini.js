@@ -117,9 +117,35 @@ async function launchChromeGemini(port = DEFAULT_PORT) {
 }
 
 /**
- * Tìm hoặc tạo Tab Gemini Web trong Chrome
+ * Lấy thông tin URL & Tiêu đề của tab Gemini Web đang mở trong Chrome
  */
-async function getOrOpenGeminiTab(port = DEFAULT_PORT) {
+async function getActiveGeminiTabInfo(port = DEFAULT_PORT) {
+    try {
+        const res = await fetch(`http://127.0.0.1:${port}/json`, {
+            signal: AbortSignal.timeout(2000)
+        });
+        if (!res.ok) return { success: false, error: 'Không thể kết nối Chrome qua cổng ' + port };
+        const targets = await res.json();
+        const geminiTab = targets.find(t => 
+            t.type === 'page' && 
+            t.url && 
+            t.url.includes('gemini.google.com') && 
+            t.webSocketDebuggerUrl
+        );
+
+        if (!geminiTab) {
+            return { success: false, error: 'Chưa tìm thấy tab Gemini Web trong Chrome. Hãy đảm bảo Chrome đang mở trang gemini.google.com.' };
+        }
+        return { success: true, url: geminiTab.url, title: geminiTab.title };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Tìm hoặc tạo Tab Gemini Web trong Chrome (hỗ trợ điều hướng đến cuộc trò chuyện chỉ định)
+ */
+async function getOrOpenGeminiTab(port = DEFAULT_PORT, targetUrl = null) {
     try {
         const res = await fetch(`http://127.0.0.1:${port}/json`, {
             signal: AbortSignal.timeout(2000)
@@ -127,7 +153,7 @@ async function getOrOpenGeminiTab(port = DEFAULT_PORT) {
         if (!res.ok) return null;
         const targets = await res.json();
 
-        // Ưu tiên tìm tab đang mở URL gemini.google.com
+        // 1. Tìm tab Gemini hiện có
         let geminiTab = targets.find(t => 
             t.type === 'page' && 
             t.url && 
@@ -136,11 +162,27 @@ async function getOrOpenGeminiTab(port = DEFAULT_PORT) {
         );
 
         if (geminiTab) {
+            // Nếu có chỉ định targetUrl và URL hiện tại chưa đúng với targetUrl
+            if (targetUrl && targetUrl.trim() && targetUrl.startsWith('https://gemini.google.com')) {
+                const cleanTarget = targetUrl.trim();
+                if (geminiTab.url !== cleanTarget) {
+                    try {
+                        await sendCdpCommand(geminiTab.webSocketDebuggerUrl, 'Page.navigate', { url: cleanTarget }, 10000);
+                        await new Promise(r => setTimeout(r, 2500));
+                    } catch (navErr) {
+                        console.warn('[ChromeGemini] Lỗi điều hướng đến targetUrl:', navErr.message);
+                    }
+                }
+            }
             return geminiTab;
         }
 
-        // Nếu chưa có tab Gemini, mở một tab mới
-        const newTabRes = await fetch(`http://127.0.0.1:${port}/json/new?https://gemini.google.com`, {
+        // 2. Nếu chưa có tab Gemini, mở tab mới với targetUrl hoặc trang chủ
+        const initialUrl = (targetUrl && targetUrl.startsWith('https://gemini.google.com')) 
+            ? targetUrl.trim() 
+            : 'https://gemini.google.com';
+
+        const newTabRes = await fetch(`http://127.0.0.1:${port}/json/new?${encodeURIComponent(initialUrl)}`, {
             method: 'PUT',
             signal: AbortSignal.timeout(3000)
         });
@@ -363,8 +405,11 @@ const INJECT_SCRIPT = (promptText) => `
 
 /**
  * Gửi tin nhắn qua Chrome Gemini và nhận kết quả
+ * @param {string} promptText - Nội dung tin nhắn cần gửi
+ * @param {number} port - Cổng remote debugging (mặc định 9222)
+ * @param {string} targetUrl - URL cuộc trò chuyện đã ghim / Gem (tùy chọn)
  */
-async function sendPromptToChromeGemini(promptText, port = DEFAULT_PORT) {
+async function sendPromptToChromeGemini(promptText, port = DEFAULT_PORT, targetUrl = null) {
     const status = await isChromeDebuggingActive(port);
     if (!status.active) {
         // Thử tự động mở Chrome nếu chưa mở
@@ -375,7 +420,7 @@ async function sendPromptToChromeGemini(promptText, port = DEFAULT_PORT) {
         await new Promise(r => setTimeout(r, 3000));
     }
 
-    const geminiTab = await getOrOpenGeminiTab(port);
+    const geminiTab = await getOrOpenGeminiTab(port, targetUrl);
     if (!geminiTab || !geminiTab.webSocketDebuggerUrl) {
         return { success: false, error: 'Không tìm thấy tab Gemini Web trong Google Chrome. Hãy đảm bảo Chrome đang mở trang gemini.google.com.' };
     }
@@ -385,7 +430,7 @@ async function sendPromptToChromeGemini(promptText, port = DEFAULT_PORT) {
             expression: INJECT_SCRIPT(promptText),
             awaitPromise: true,
             returnByValue: true
-        }, 40000);
+        }, 45000);
 
         if (evalResult && evalResult.result && evalResult.result.value) {
             const val = evalResult.result.value;
@@ -408,6 +453,7 @@ module.exports = {
     getChromeUserDataDir,
     isChromeDebuggingActive,
     launchChromeGemini,
+    getActiveGeminiTabInfo,
     getOrOpenGeminiTab,
     sendPromptToChromeGemini,
     DEFAULT_PORT

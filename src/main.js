@@ -15,6 +15,7 @@ const { processHistoricalZaloMessages } = require('./services/historyScanner');
 const {
     launchChromeGemini,
     isChromeDebuggingActive,
+    getActiveGeminiTabInfo,
     sendPromptToChromeGemini
 } = require('./services/chromeGemini');
 
@@ -508,10 +509,33 @@ ipcMain.handle('check-chrome-gemini', async () => {
     }
 });
 
-ipcMain.handle('test-chrome-gemini', async (event, prompt) => {
+ipcMain.handle('get-active-gemini-url', async () => {
     try {
-        const testPrompt = prompt || 'Viết lại tin BĐS ngắn gọn 3 dòng kèm hashtag: Cho thuê căn hộ studio 35m2 full nội thất view Landmark 81 Bình Thạnh giá 7.5 triệu/tháng liên hệ 0901234567';
-        const res = await sendPromptToChromeGemini(testPrompt);
+        const res = await getActiveGeminiTabInfo();
+        return res;
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('test-chrome-gemini', async (event, payload) => {
+    try {
+        let prompt = '';
+        let targetUrl = null;
+        if (typeof payload === 'string') {
+            prompt = payload;
+        } else if (payload && typeof payload === 'object') {
+            prompt = payload.prompt;
+            targetUrl = payload.targetUrl;
+        }
+
+        if (!targetUrl) {
+            const urlRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_conversation_url'`);
+            targetUrl = urlRow?.value?.trim() || null;
+        }
+
+        const testPrompt = prompt || 'Cho thuê căn hộ studio 35m2 full nội thất view Landmark 81 Bình Thạnh giá 7.5 triệu/tháng liên hệ 0901234567';
+        const res = await sendPromptToChromeGemini(testPrompt, undefined, targetUrl);
         return res;
     } catch (e) {
         return { success: false, error: e.message };

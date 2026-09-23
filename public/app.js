@@ -542,6 +542,39 @@ async function testChromeGeminiUI() {
     }
 }
 
+async function captureActiveChromeGeminiUrlUI() {
+    showToast('Đang kết nối Chrome để lấy link cuộc trò chuyện...', 'info');
+    try {
+        const res = await window.electronApi.getActiveGeminiUrl();
+        if (res.success && res.url) {
+            const urlInput = document.getElementById('cfg-gemini-conversation-url');
+            if (urlInput) urlInput.value = res.url;
+            await savePinnedChatConfigUI();
+            showToast(`Đã lưu cuộc trò chuyện: "${res.title || res.url}"!`, 'success');
+        } else {
+            showToast(res.error || 'Chưa tìm thấy cuộc trò chuyện nào trong Chrome', 'error');
+            alert('⚠️ ' + (res.error || 'Vui lòng mở Google Chrome, bấm vào cuộc trò chuyện đã ghim của bạn rồi bấm nút này lại!'));
+        }
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
+    }
+}
+
+async function savePinnedChatConfigUI() {
+    const url = document.getElementById('cfg-gemini-conversation-url')?.value?.trim() || '';
+    const isRaw = document.getElementById('cfg-gemini-send-raw-content')?.checked ? '1' : '0';
+
+    await window.electronApi.saveSettings({
+        gemini_conversation_url: url,
+        gemini_send_raw_content: isRaw
+    });
+    if (state.settings) {
+        state.settings.gemini_conversation_url = url;
+        state.settings.gemini_send_raw_content = isRaw;
+    }
+    showToast('Đã lưu cấu hình cuộc trò chuyện đã ghim!', 'success');
+}
+
 async function runInteractiveChromeTestUI() {
     const inputEl = document.getElementById('chrome-test-input');
     const resultEl = document.getElementById('chrome-test-result');
@@ -553,16 +586,18 @@ async function runInteractiveChromeTestUI() {
         return;
     }
 
+    const targetUrl = document.getElementById('cfg-gemini-conversation-url')?.value?.trim() || null;
+
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Đang gửi vào Chrome & đợi AI trả lời...`;
     }
     if (resultEl) {
-        resultEl.innerHTML = `<span class="text-amber-400 italic">Đang tương tác với Google Chrome Gemini... Vui lòng đợi trong giây lát...</span>`;
+        resultEl.innerHTML = `<span class="text-amber-400 italic">Đang gửi nội dung sang Chrome Gemini... Vui lòng đợi trong giây lát...</span>`;
     }
 
     try {
-        const res = await window.electronApi.testChromeGemini(content);
+        const res = await window.electronApi.testChromeGemini({ prompt: content, targetUrl });
         if (res.success && res.text) {
             if (resultEl) {
                 resultEl.textContent = res.text;
@@ -2190,6 +2225,12 @@ async function loadAiSettings() {
             if (sigInput) sigInput.value = res.settings.custom_signature || '';
             const tagInput = document.getElementById('ai-hashtags-input');
             if (tagInput) tagInput.value = res.settings.custom_hashtags || '';
+
+            // Cấu hình Cuộc trò chuyện đã ghim & Gửi nội dung thô
+            const urlInput = document.getElementById('cfg-gemini-conversation-url');
+            if (urlInput) urlInput.value = res.settings.gemini_conversation_url || '';
+            const rawCheck = document.getElementById('cfg-gemini-send-raw-content');
+            if (rawCheck) rawCheck.checked = (res.settings.gemini_send_raw_content !== '0');
         }
     } catch (e) {
         console.error('Error loadAiSettings:', e);

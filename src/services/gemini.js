@@ -137,14 +137,22 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
     let resultTextRaw = '';
     let sourceUsed = '';
 
+    // Lấy cấu hình chế độ gửi tin thô & URL cuộc trò chuyện đã ghim
+    const sendRawRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_send_raw_content'`);
+    const targetUrlRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_conversation_url'`);
+
+    const isSendRaw = (sendRawRow?.value !== '0'); // Mặc định = 1: chỉ gửi nội dung thô cho hội thoại đã ghim
+    const targetUrl = targetUrlRow?.value?.trim() || null;
+    const chromePromptText = isSendRaw ? content.trim() : finalPrompt;
+
     // 1. Thử dùng Chrome Gemini Web nếu Chrome đang mở (cổng 9222)
     const chromeStatus = await isChromeDebuggingActive();
     if (chromeStatus.active) {
         try {
-            const chromeRes = await sendPromptToChromeGemini(finalPrompt);
+            const chromeRes = await sendPromptToChromeGemini(chromePromptText, undefined, targetUrl);
             if (chromeRes.success && chromeRes.text) {
                 resultTextRaw = chromeRes.text;
-                sourceUsed = 'Google Chrome Gemini Web';
+                sourceUsed = isSendRaw ? 'Chrome Gemini (Nội dung thô vào hội thoại đã ghim)' : 'Google Chrome Gemini Web';
             } else {
                 console.warn('[Gemini] Chrome Gemini không hoàn tất:', chromeRes.error);
             }

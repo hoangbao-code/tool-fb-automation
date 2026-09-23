@@ -54,7 +54,8 @@ contextBridge.exposeInMainWorld('electronApi', {
     testAi: (apiKey, promptTemplate, model) => ipcRenderer.invoke('test-ai', { apiKey, promptTemplate, model }),
     launchChromeGemini: () => ipcRenderer.invoke('launch-chrome-gemini'),
     checkChromeGemini: () => ipcRenderer.invoke('check-chrome-gemini'),
-    testChromeGemini: (prompt) => ipcRenderer.invoke('test-chrome-gemini', prompt),
+    getActiveGeminiUrl: () => ipcRenderer.invoke('get-active-gemini-url'),
+    testChromeGemini: (payload) => ipcRenderer.invoke('test-chrome-gemini', payload),
 
     // 7. Nhật ký
     getLogs: () => ipcRenderer.invoke('get-logs'),

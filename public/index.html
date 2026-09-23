@@ -424,6 +424,57 @@
                         </div>
                     </div>
 
+                    <!-- Card Cấu hình Cuộc Trò Chuyện Đã Ghim (Mẫu Đăng Bài) -->
+                    <div class="bg-gradient-to-br from-slate-950 to-slate-900 border border-amber-500/40 rounded-2xl p-6 shadow-md space-y-4">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                    <i data-lucide="pin" class="w-4 h-4"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                                        Cuộc Trò Chuyện / Gem Đã Ghim (Mẫu Đăng Bài Của Bạn)
+                                        <span class="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">Theo Yêu Cầu</span>
+                                    </h3>
+                                    <p class="text-[11px] text-slate-400 mt-0.5">Dùng đúng cuộc trò chuyện đã ghim để áp dụng mẫu đăng bài và văn phong bạn đã huấn luyện sẵn.</p>
+                                </div>
+                            </div>
+                            <button onclick="captureActiveChromeGeminiUrlUI()" class="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-2 shadow transition-all shrink-0">
+                                <i data-lucide="crosshair" class="w-3.5 h-3.5 text-amber-200"></i> Lấy Cuộc Trò Chuyện Đang Mở Trong Chrome
+                            </button>
+                        </div>
+
+                        <div class="space-y-3 pt-3 border-t border-slate-800">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 mb-1.5">Đường dẫn cuộc trò chuyện đã ghim (URL):</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="text" id="cfg-gemini-conversation-url" 
+                                           class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono" 
+                                           placeholder="Ví dụ: https://gemini.google.com/app/xxxxxxxxxxxx (Để trống sẽ tự động dùng cuộc trò chuyện đang mở trên Chrome)">
+                                    <button onclick="savePinnedChatConfigUI()" class="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0">
+                                        Lưu Link
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between p-3.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                                <div class="space-y-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs font-bold text-white">Chế độ: Chỉ gửi nội dung tin nhắn thô vào chat</span>
+                                        <span class="text-[10px] bg-emerald-500/20 text-emerald-400 font-bold px-2 py-0.5 rounded border border-emerald-500/30">Khuyên dùng</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-400">
+                                        Khi bật, hệ thống sẽ gửi <b>nguyên xi nội dung tin Zalo</b> vào cuộc trò chuyện mà không kèm thêm bất kỳ câu lệnh hay mẫu lặp lại nào, để cuộc trò chuyện tự áp dụng mẫu bài bạn đã dạy.
+                                    </p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer ml-4 shrink-0">
+                                    <input type="checkbox" id="cfg-gemini-send-raw-content" class="sr-only peer" checked onchange="savePinnedChatConfigUI()">
+                                    <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Khu vực thử nghiệm trực tiếp -->
                     <div class="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
                         <div class="flex items-center justify-between">
