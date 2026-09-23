@@ -57,6 +57,19 @@ function setupWebviews() {
             }
         });
 
+        // Lắng nghe sự kiện từ Webview Gemini Web
+        const geminiWv = document.getElementById('gemini-wv');
+        if (geminiWv) {
+            geminiWv.addEventListener('dom-ready', () => {
+                updateGeminiStatusUI('Sẵn sàng tự động gửi tin', 'ready');
+            });
+            geminiWv.addEventListener('did-fail-load', (e) => {
+                if (e.errorCode !== -3) {
+                    updateGeminiStatusUI('Mất kết nối mạng', 'error');
+                }
+            });
+        }
+
         // Định kỳ đọc tên nhóm Zalo đang mở & tự động bắt tin mới bằng executeJavaScript
         setInterval(async () => {
             try {
@@ -186,7 +199,7 @@ function switchTab(tabId) {
         fb: { title: 'FACEBOOK TRỰC TIẾP', sub: 'Tự động quét nhóm đã tham gia và xuất bản bài viết' },
         groups: { title: 'QUẢN LÝ NHÓM FACEBOOK', sub: 'Tích chọn các nhóm mục tiêu để đăng bài' },
         'zalo-groups': { title: 'QUẢN LÝ NHÓM ZALO', sub: 'Tích chọn các nhóm Zalo cần tự động gom tin' },
-        ai: { title: 'CẤU HÌNH AI GEMINI', sub: 'Thiết lập Prompt biên tập nội dung bài đăng' },
+        ai: { title: 'GEMINI WEB TRỰC TIẾP', sub: 'Tự động gửi tin vào cuộc trò chuyện & trích xuất bài đăng' },
         settings: { title: 'CÀI ĐẶT HỆ THỐNG', sub: 'Cấu hình thời gian giãn cách chống spam và tự động hóa' },
         logs: { title: 'NHẬT KÝ HOẠT ĐỘNG', sub: 'Theo dõi tiến trình hệ thống theo thời gian thực' }
     };
@@ -418,34 +431,277 @@ async function deletePostDirectUI(id) {
     }
 }
 
-// Viết lại 1 bài bằng AI Gemini trực tiếp từ giao diện
+// ==========================================
+// TÍNH NĂNG GEMINI WEB TRỰC TIẾP (WEBVIEW)
+// ==========================================
+
+function updateGeminiStatusUI(text, status = 'ready') {
+    const el = document.getElementById('gemini-status-indicator');
+    if (!el) return;
+    if (status === 'busy') {
+        el.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-spin"></span> ${escapeHtml(text)}`;
+        el.className = 'text-amber-300 text-xs flex items-center gap-1.5 font-medium';
+    } else if (status === 'error') {
+        el.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> ${escapeHtml(text)}`;
+        el.className = 'text-rose-400 text-xs flex items-center gap-1.5 font-medium';
+    } else {
+        el.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ${escapeHtml(text)}`;
+        el.className = 'text-emerald-400 text-xs flex items-center gap-1.5 font-medium';
+    }
+}
+
+function reloadGeminiWebview() {
+    const wv = document.getElementById('gemini-wv');
+    if (wv) {
+        wv.reload();
+        showToast('Đang tải lại Gemini Web...', 'info');
+    }
+}
+
+function loadGeminiHome() {
+    const wv = document.getElementById('gemini-wv');
+    if (wv) {
+        wv.loadURL('https://gemini.google.com');
+        showToast('Đang chuyển về trang chủ Gemini Web...', 'info');
+    }
+}
+
+function openAiApiSettingsModal() {
+    const modal = document.getElementById('ai-config-modal');
+    if (modal) modal.classList.remove('hidden');
+    loadAiSettings();
+}
+
+function closeAiApiSettingsModal() {
+    const modal = document.getElementById('ai-config-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * Tự động gửi tin thô vào cuộc trò chuyện Gemini Web đang mở,
+ * chờ AI sinh bài xong và trích xuất nội dung bài đăng Facebook.
+ */
+async function rewriteWithGeminiWeb(rawContent) {
+    const wv = document.getElementById('gemini-wv');
+    if (!wv) throw new Error('Không tìm thấy khung Gemini Web');
+
+    updateGeminiStatusUI('Đang kiểm tra cuộc trò chuyện...', 'busy');
+
+    // 1. Kiểm tra trạng thái đăng nhập & ô nhập liệu trên Gemini Web
+    const checkState = await wv.executeJavaScript(`
+        (function() {
+            var url = window.location.href;
+            if (url.indexOf('accounts.google.com') !== -1) {
+                return { ok: false, reason: 'Chưa đăng nhập tài khoản Google trên Gemini Web' };
+            }
+            var selectors = [
+                'rich-textarea p',
+                'rich-textarea div[contenteditable="true"]',
+                'div[contenteditable="true"][role="textbox"]',
+                'div[contenteditable="true"]',
+                'textarea[aria-label*="prompt"]',
+                '[data-placeholder]'
+            ];
+            var found = false;
+            for (var i = 0; i < selectors.length; i++) {
+                if (document.querySelector(selectors[i])) { found = true; break; }
+            }
+            return { ok: found, reason: found ? '' : 'Không tìm thấy ô nhập chat Gemini Web' };
+        })();
+    `);
+
+    if (!checkState.ok) {
+        updateGeminiStatusUI(checkState.reason, 'error');
+        throw new Error(checkState.reason);
+    }
+
+    // 2. Đếm số lượng phản hồi hiện có để nhận biết phản hồi mới sau khi gửi
+    const initialResponsesCount = await wv.executeJavaScript(`
+        (function() {
+            var els = document.querySelectorAll('message-content, .model-response-text, .response-container-content, [class*="response-content"]');
+            return els.length;
+        })();
+    `);
+
+    updateGeminiStatusUI('Đang dán tin nhắn vào Gemini Web...', 'busy');
+
+    // 3. Tiêm nội dung tin nhắn và bấm Gửi
+    const injectSuccess = await wv.executeJavaScript(`
+        (function() {
+            var text = ${JSON.stringify(rawContent)};
+            var selectors = [
+                'rich-textarea p',
+                'rich-textarea div[contenteditable="true"]',
+                'div[contenteditable="true"][role="textbox"]',
+                'div[contenteditable="true"]',
+                'textarea[aria-label*="prompt"]',
+                '[data-placeholder]'
+            ];
+            var el = null;
+            for (var i = 0; i < selectors.length; i++) {
+                var candidate = document.querySelector(selectors[i]);
+                if (candidate) { el = candidate; break; }
+            }
+            if (!el) return false;
+
+            el.focus();
+            try {
+                document.execCommand('selectAll', false, null);
+                document.execCommand('insertText', false, text);
+            } catch (err) {
+                el.innerText = text;
+            }
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+
+            // Kích hoạt nút gửi
+            setTimeout(function() {
+                var sendBtn = document.querySelector('button[aria-label*="Gửi"], button[aria-label*="Send"], button.send-button, .send-button-container button');
+                if (sendBtn && !sendBtn.disabled) {
+                    sendBtn.click();
+                } else {
+                    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                }
+            }, 300);
+
+            return true;
+        })();
+    `);
+
+    if (!injectSuccess) {
+        updateGeminiStatusUI('Không thể dán tin nhắn vào chat', 'error');
+        throw new Error('Không thể đưa tin nhắn vào khung chat Gemini');
+    }
+
+    updateGeminiStatusUI('Gemini đang suy nghĩ & sinh bài...', 'busy');
+
+    // 4. Lắng nghe và đợi Gemini Web sinh văn bản hoàn tất (tối đa 40 giây)
+    let lastSeenText = '';
+    let stableIterations = 0;
+    let finalResult = '';
+
+    for (let round = 0; round < 25; round++) {
+        await new Promise(r => setTimeout(r, 1600));
+
+        const pollData = await wv.executeJavaScript(`
+            (function() {
+                var stopBtn = document.querySelector('button[aria-label*="Dừng"], button[aria-label*="Stop"], button.stop-button, [aria-label*="dừng"]');
+                var isGenerating = !!stopBtn;
+
+                var els = document.querySelectorAll('message-content, .model-response-text, .response-container-content, [class*="response-content"]');
+                var latestText = '';
+                if (els.length > 0) {
+                    var lastEl = els[els.length - 1];
+                    latestText = (lastEl.innerText || lastEl.textContent || '').trim();
+                }
+
+                return {
+                    count: els.length,
+                    isGenerating: isGenerating,
+                    text: latestText
+                };
+            })();
+        `);
+
+        if (pollData.text && (pollData.count > initialResponsesCount || pollData.text.length > 50)) {
+            if (pollData.text === lastSeenText && !pollData.isGenerating) {
+                stableIterations++;
+                if (stableIterations >= 2) {
+                    finalResult = pollData.text;
+                    break;
+                }
+            } else {
+                lastSeenText = pollData.text;
+                stableIterations = 0;
+            }
+        }
+    }
+
+    if (!finalResult) {
+        finalResult = lastSeenText;
+    }
+
+    if (!finalResult || finalResult.length < 30) {
+        updateGeminiStatusUI('Không nhận được phản hồi từ Gemini Web', 'error');
+        throw new Error('Gemini Web chưa phản hồi hoặc phản hồi quá ngắn');
+    }
+
+    updateGeminiStatusUI('Đã nhận bài viết thành công!', 'ready');
+
+    // Bổ sung chữ ký nếu chưa có
+    if (state.settings?.custom_signature && !finalResult.includes(state.settings.custom_signature)) {
+        finalResult += '\n\n' + state.settings.custom_signature;
+    }
+    if (state.settings?.custom_hashtags && !finalResult.includes(state.settings.custom_hashtags)) {
+        finalResult += '\n\n' + state.settings.custom_hashtags;
+    }
+
+    return finalResult;
+}
+
+// Thử nghiệm gửi tin nhắn mẫu vào Gemini Web
+async function testGeminiWebChatUI() {
+    switchTab('ai');
+    showToast('Đang gửi tin thử nghiệm vào Gemini Web...', 'info');
+    const sample = 'Bán gấp căn hộ 2PN 70m2 chung cư Sunrise City, Q7. Giá 3.8 tỷ có thương lượng. Full nội thất cao cấp, view Landmark 81. LH: 0354084364 (Chính chủ)';
+    try {
+        const res = await rewriteWithGeminiWeb(sample);
+        if (res) {
+            showToast('Gemini Web đã phản hồi thành công!', 'success');
+        }
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
+// Viết lại 1 bài bằng AI Gemini trực tiếp từ giao diện (Ưu tiên Gemini Web -> Tự động dự phòng API)
 async function reRewritePostUI(id) {
     const btn = document.getElementById(`btn-ai-rewrite-${id}`);
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin text-amber-400"></i> Đang viết...`;
     }
-    showToast(`Đang dùng Gemini AI viết lại bài #${id}...`, 'info');
-    try {
-        const res = await window.electronApi.reRewritePost(id);
-        if (res.success) {
-            showToast(`AI đã viết lại bài #${id} thành công!`, 'success');
-            await loadPosts();
-        } else {
-            showToast(res.error || 'Lỗi khi AI viết lại bài', 'error');
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = `<i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Viết lại AI`;
-                lucide.createIcons();
+
+    const post = state.posts.find(p => p.id === id);
+    const content = post?.original_text || post?.rewritten_text || '';
+    let newText = '';
+
+    // 1. Thử qua Gemini Webview trước (nếu người dùng đang mở hoặc đã đăng nhập)
+    const geminiWv = document.getElementById('gemini-wv');
+    if (geminiWv) {
+        try {
+            showToast(`Đang đưa bài #${id} vào Gemini Web để viết lại...`, 'info');
+            newText = await rewriteWithGeminiWeb(content);
+            if (newText) {
+                await window.electronApi.updatePost(id, newText, post?.status || 'pending');
+                showToast(`Gemini Web đã biên tập xong bài #${id}!`, 'success');
             }
+        } catch (webErr) {
+            console.warn('Gemini Webview chưa sẵn sàng, chuyển sang API dự phòng:', webErr.message);
         }
-    } catch (e) {
-        showToast(e.message, 'error');
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = `<i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Viết lại AI`;
-            lucide.createIcons();
+    }
+
+    // 2. Nếu Gemini Webview chưa phản hồi, tự động dùng Gemini API dự phòng
+    if (!newText) {
+        showToast(`Đang dùng Gemini API dự phòng viết lại bài #${id}...`, 'info');
+        try {
+            const res = await window.electronApi.reRewritePost(id);
+            if (res.success) {
+                newText = res.rewritten_text;
+                showToast(`AI API đã viết lại bài #${id} thành công!`, 'success');
+            } else {
+                showToast(res.error || 'Lỗi khi AI viết lại bài', 'error');
+            }
+        } catch (e) {
+            showToast(e.message, 'error');
         }
+    }
+
+    await loadPosts();
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Viết lại AI`;
+        lucide.createIcons();
     }
 }
 

@@ -121,6 +121,9 @@ function createWindow() {
     const fbSession = session.fromPartition('persist:fb');
     fbSession.setUserAgent(desktopUA);
 
+    const geminiSession = session.fromPartition('persist:gemini');
+    geminiSession.setUserAgent(desktopUA);
+
     // Kênh phát sự kiện từ Backend sang UI
     const broadcast = (channel, data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
