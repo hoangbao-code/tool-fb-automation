@@ -92,6 +92,7 @@ async function runHistoryScannerTests() {
     await dbAsync.run(`DELETE FROM posts WHERE group_name = ?`, [testGroupName]);
     await dbAsync.run(`DELETE FROM messages WHERE group_name = ?`, [testGroupName]);
     await dbAsync.run(`DELETE FROM zalo_groups WHERE name = ?`, [testGroupName]);
+    await dbAsync.run(`DELETE FROM logs WHERE message LIKE ?`, [`%${testGroupName}%`]);
 
     console.log('\n========================================================');
     console.log('✅ TẤT CẢ TEST QUÉT LỊCH SỬ TIN NHẮN (7 NGÀY) ĐÃ VƯỢT QUA 100%!');
