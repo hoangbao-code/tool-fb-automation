@@ -43,6 +43,31 @@ db.serialize(() => {
         )
     `);
 
+    // 3.1 Cụm Nhóm Facebook (Group Clusters)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS fb_clusters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            description TEXT DEFAULT '',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    // 3.2 Bảng ánh xạ Nhóm thuộc Cụm (Many-to-Many)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS fb_cluster_groups (
+            cluster_id INTEGER NOT NULL,
+            group_id INTEGER NOT NULL,
+            PRIMARY KEY (cluster_id, group_id),
+            FOREIGN KEY (cluster_id) REFERENCES fb_clusters(id) ON DELETE CASCADE,
+            FOREIGN KEY (group_id) REFERENCES fb_groups(id) ON DELETE CASCADE
+        )
+    `);
+
+    // Tự động nâng cấp cột bảng posts nếu thiếu
+    db.run(`ALTER TABLE posts ADD COLUMN target_cluster_id INTEGER`, () => {});
+    db.run(`ALTER TABLE posts ADD COLUMN images TEXT`, () => {});
+
     // 4. Tin nhắn Zalo đã bắt được
     db.run(`
         CREATE TABLE IF NOT EXISTS messages (
@@ -141,16 +166,73 @@ const dbAsync = {
             console.error('Log error:', e);
         }
     },
+    // QUẢN LÝ CỤM NHÓM FACEBOOK (GROUP CLUSTERS)
+    getClusters: async () => {
+        return await dbAsync.all(`
+            SELECT c.*, COUNT(cg.group_id) as group_count
+            FROM fb_clusters c
+            LEFT JOIN fb_cluster_groups cg ON c.id = cg.cluster_id
+            GROUP BY c.id
+            ORDER BY c.name ASC
+        `);
+    },
+    getClusterDetails: async (clusterId) => {
+        const cluster = await dbAsync.get(`SELECT * FROM fb_clusters WHERE id = ?`, [clusterId]);
+        if (!cluster) return null;
+        const groups = await dbAsync.all(`
+            SELECT g.* FROM fb_groups g
+            JOIN fb_cluster_groups cg ON g.id = cg.group_id
+            WHERE cg.cluster_id = ?
+            ORDER BY g.name ASC
+        `, [clusterId]);
+        return { ...cluster, groups, group_ids: (groups || []).map(g => g.id) };
+    },
+    saveCluster: async ({ id, name, description = '', groupIds = [], group_ids = [] }) => {
+        let clusterId = id;
+        const finalGroupIds = (Array.isArray(groupIds) && groupIds.length > 0) ? groupIds : (Array.isArray(group_ids) ? group_ids : []);
+        if (clusterId) {
+            await dbAsync.run(`UPDATE fb_clusters SET name = ?, description = ? WHERE id = ?`, [name.trim(), description.trim(), clusterId]);
+        } else {
+            const res = await dbAsync.run(`INSERT INTO fb_clusters (name, description) VALUES (?, ?)`, [name.trim(), description.trim()]);
+            clusterId = res.id;
+        }
+        await dbAsync.run(`DELETE FROM fb_cluster_groups WHERE cluster_id = ?`, [clusterId]);
+        if (finalGroupIds.length > 0) {
+            for (const gid of finalGroupIds) {
+                await dbAsync.run(`INSERT OR IGNORE INTO fb_cluster_groups (cluster_id, group_id) VALUES (?, ?)`, [clusterId, gid]);
+            }
+        }
+        return { id: clusterId, name, description, groupCount: finalGroupIds.length, group_ids: finalGroupIds };
+    },
+    deleteCluster: async (clusterId) => {
+        await dbAsync.run(`DELETE FROM fb_cluster_groups WHERE cluster_id = ?`, [clusterId]);
+        await dbAsync.run(`DELETE FROM fb_clusters WHERE id = ?`, [clusterId]);
+        return { success: true };
+    },
+    getGroupsForCluster: async (clusterId) => {
+        if (!clusterId || clusterId === 'all' || clusterId === 0) {
+            return await dbAsync.all(`SELECT * FROM fb_groups WHERE is_active = 1`);
+        }
+        return await dbAsync.all(`
+            SELECT g.* FROM fb_groups g
+            JOIN fb_cluster_groups cg ON g.id = cg.group_id
+            WHERE cg.cluster_id = ? AND g.is_active = 1
+        `, [clusterId]);
+    },
     exportBackup: async () => {
         const settings = await dbAsync.all(`SELECT * FROM settings`);
         const fbGroups = await dbAsync.all(`SELECT name, url, member_count, is_active FROM fb_groups`);
         const zaloGroups = await dbAsync.all(`SELECT name, is_monitored FROM zalo_groups`);
+        const fbClusters = await dbAsync.all(`SELECT * FROM fb_clusters`);
+        const fbClusterGroups = await dbAsync.all(`SELECT * FROM fb_cluster_groups`);
         return {
-            version: '2.1.0',
+            version: '2.2.0',
             exported_at: new Date().toISOString(),
             settings,
             fbGroups,
-            zaloGroups
+            zaloGroups,
+            fbClusters,
+            fbClusterGroups
         };
     },
     importBackup: async (backup) => {
@@ -194,6 +276,30 @@ const dbAsync = {
                             is_monitored = excluded.is_monitored
                     `, [zg.name, zg.is_monitored !== undefined ? zg.is_monitored : 1]);
                     importedZaloGroups++;
+                }
+            }
+        }
+
+        if (Array.isArray(backup.fbClusters)) {
+            for (const c of backup.fbClusters) {
+                if (c.name) {
+                    await dbAsync.run(`
+                        INSERT INTO fb_clusters (id, name, description)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(name) DO UPDATE SET
+                            description = excluded.description
+                    `, [c.id || null, c.name, c.description || '']);
+                }
+            }
+        }
+
+        if (Array.isArray(backup.fbClusterGroups)) {
+            for (const cg of backup.fbClusterGroups) {
+                if (cg.cluster_id && cg.group_id) {
+                    await dbAsync.run(`
+                        INSERT OR IGNORE INTO fb_cluster_groups (cluster_id, group_id)
+                        VALUES (?, ?)
+                    `, [cg.cluster_id, cg.group_id]);
                 }
             }
         }

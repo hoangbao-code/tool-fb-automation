@@ -83,25 +83,37 @@ function shuffleArray(arr) {
  * - Tự động xáo trộn thứ tự nhóm (lộn xộn) để tránh thuật toán bot Facebook
  * - Đăng rải rác từng nhóm một với khoảng nghỉ ngẫu nhiên (Jitter) để chống spam và tránh bị ngâm bài
  */
-async function publishPost(postId) {
+async function publishPost(postId, clusterId = null) {
     const post = await dbAsync.get(`SELECT * FROM posts WHERE id = ?`, [postId]);
     if (!post) throw new Error('Không tìm thấy bài viết ID: ' + postId);
 
-    const activeFbGroups = await dbAsync.all(`SELECT * FROM fb_groups WHERE is_active = 1`);
-    if (activeFbGroups.length === 0) {
-        throw new Error('Chưa có nhóm Facebook nào được chọn. Hãy vào tab Nhóm FB để tích chọn ít nhất 1 nhóm.');
+    const actualClusterId = clusterId || post.target_cluster_id;
+    let targetGroups = [];
+    let clusterLabel = '';
+
+    if (actualClusterId && actualClusterId !== 'all') {
+        const cluster = await dbAsync.get(`SELECT name FROM fb_clusters WHERE id = ?`, [actualClusterId]);
+        clusterLabel = cluster ? `Cụm [${cluster.name}]` : `Cụm #${actualClusterId}`;
+        targetGroups = await dbAsync.getGroupsForCluster(actualClusterId);
+    } else {
+        clusterLabel = 'Tất cả nhóm đã chọn';
+        targetGroups = await dbAsync.all(`SELECT * FROM fb_groups WHERE is_active = 1`);
+    }
+
+    if (targetGroups.length === 0) {
+        throw new Error(`Không tìm thấy nhóm Facebook nào khả dụng trong ${clusterLabel}. Hãy kiểm tra lại nhóm đã bật.`);
     }
 
     // 1. XÁO TRỘN LỘN XỘN NGẪU NHIÊN THỨ TỰ CÁC NHÓM (Fisher-Yates Shuffle)
-    const shuffledGroups = shuffleArray(activeFbGroups);
+    const shuffledGroups = shuffleArray(targetGroups);
 
     const spinRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'ai_spin_enabled'`);
     const isSpinEnabled = (spinRow?.value !== '0');
 
     const baseText = post.rewritten_text || post.original_text;
 
-    await dbAsync.run(`UPDATE posts SET status = 'publishing' WHERE id = ?`, [postId]);
-    await dbAsync.log('info', `[Facebook] Bắt đầu đăng bài #${postId} rải rác lộn xộn vào ${shuffledGroups.length} nhóm (Xáo trộn ngẫu nhiên & Spin content: ${isSpinEnabled ? 'BẬT' : 'TẮT'})...`);
+    await dbAsync.run(`UPDATE posts SET status = 'publishing', target_fb_group = ? WHERE id = ?`, [clusterLabel, postId]);
+    await dbAsync.log('info', `[Facebook] Bắt đầu đăng bài #${postId} rải rác lộn xộn vào ${shuffledGroups.length} nhóm (${clusterLabel} - Xáo trộn ngẫu nhiên & Spin content: ${isSpinEnabled ? 'BẬT' : 'TẮT'})...`);
 
     // Gửi payload ban đầu vào FB Webview nếu có
     if (fbWebviewRef) {

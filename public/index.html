@@ -342,17 +342,23 @@
                         <p class="text-xs text-slate-400">Tích chọn các nhóm bạn muốn hệ thống tự động đăng bài viết sau khi AI biên tập.</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
-                        <input type="text" id="fb-group-search" oninput="filterFbGroupsTable()" placeholder="Tìm kiếm tên nhóm..." class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-44">
-                        <button onclick="toggleAllFbGroupsUI(true)" class="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all" title="Bật tất cả nhóm FB">
+                        <select id="fb-cluster-filter" onchange="filterFbGroupsTable()" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-emerald-400 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="">-- Tất Cả Cụm Nhóm --</option>
+                        </select>
+                        <input type="text" id="fb-group-search" oninput="filterFbGroupsTable()" placeholder="Tìm kiếm tên nhóm..." class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-36">
+                        <button onclick="toggleAllFbGroupsUI(true)" class="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-2 py-1.5 rounded-lg text-xs font-semibold transition-all" title="Bật tất cả nhóm FB">
                             Chọn Tất Cả
                         </button>
-                        <button onclick="toggleAllFbGroupsUI(false)" class="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all" title="Tắt tất cả nhóm FB">
+                        <button onclick="toggleAllFbGroupsUI(false)" class="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-2 py-1.5 rounded-lg text-xs font-semibold transition-all" title="Tắt tất cả nhóm FB">
                             Bỏ Chọn
                         </button>
-                        <button onclick="triggerFbGroupScan()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Tự động quét danh sách nhóm từ Facebook">
-                            <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét Nhóm Facebook
+                        <button onclick="openClusterModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all ring-1 ring-emerald-400/50" title="Quản lý và phân cụm nhóm Facebook">
+                            <i data-lucide="layers" class="w-3.5 h-3.5"></i> Cụm Nhóm (<span id="cluster-count-badge">0</span>)
                         </button>
-                        <button onclick="openAddFbGroupModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                        <button onclick="triggerFbGroupScan()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Tự động quét danh sách nhóm từ Facebook">
+                            <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét Nhóm FB
+                        </button>
+                        <button onclick="openAddFbGroupModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
                             <i data-lucide="plus" class="w-3.5 h-3.5"></i> Thêm Thủ Công
                         </button>
                     </div>
@@ -365,6 +371,7 @@
                             <tr>
                                 <th class="p-3.5 w-12 text-center">Bật</th>
                                 <th class="p-3.5">Tên Nhóm</th>
+                                <th class="p-3.5 w-36">Cụm Nhóm</th>
                                 <th class="p-3.5">Đường Dẫn (URL)</th>
                                 <th class="p-3.5 text-right w-24">Thao tác</th>
                             </tr>
@@ -1248,6 +1255,82 @@
                         <i data-lucide="play" class="w-3.5 h-3.5"></i> Bắt Đầu Quét & Nạp
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL QUẢN LÝ CỤM NHÓM FACEBOOK (GROUP CLUSTERS) -->
+    <div id="modal-cluster-manager" class="hidden fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-white text-base flex items-center gap-2">
+                    <i data-lucide="layers" class="w-5 h-5 text-emerald-400"></i>
+                    Quản Lý Cụm Nhóm Facebook (Group Clusters)
+                </h3>
+                <button onclick="closeClusterModal()" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="flex items-center justify-between gap-2">
+                <p class="text-xs text-slate-400">
+                    Gom các nhóm Facebook theo khu vực hoặc mục tiêu đăng bài để khi duyệt trên Discord hoặc Desktop có thể chọn đăng đúng cụm.
+                </p>
+                <button onclick="showCreateClusterForm()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm whitespace-nowrap">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i> Tạo Cụm Mới
+                </button>
+            </div>
+
+            <!-- Form tạo / sửa cụm nhóm (ẩn mặc định) -->
+            <div id="cluster-edit-form" class="hidden bg-slate-950/80 border border-emerald-500/40 p-4 rounded-xl space-y-3">
+                <div class="flex items-center justify-between">
+                    <h4 id="cluster-form-title" class="font-bold text-white text-xs text-emerald-400">Tạo Cụm Nhóm Mới</h4>
+                    <button onclick="hideClusterForm()" class="text-slate-500 hover:text-white text-xs">Đóng Form</button>
+                </div>
+                <input type="hidden" id="cluster-form-id" value="">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-semibold mb-1">Tên Cụm (VD: Cụm Bình Thạnh, Cụm Gò Vấp...):</label>
+                        <input type="text" id="cluster-form-name" placeholder="Nhập tên cụm..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-semibold mb-1">Mô tả / Ghi chú (tùy chọn):</label>
+                        <input type="text" id="cluster-form-desc" placeholder="Ghi chú về cụm..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-[11px] text-slate-400 font-semibold">Tích chọn các nhóm FB thuộc Cụm này:</label>
+                        <div class="flex gap-2 text-[11px]">
+                            <button type="button" onclick="selectAllClusterGroups(true)" class="text-emerald-400 hover:underline">Chọn hết</button>
+                            <span class="text-slate-600">|</span>
+                            <button type="button" onclick="selectAllClusterGroups(false)" class="text-slate-400 hover:underline">Bỏ chọn</button>
+                        </div>
+                    </div>
+                    <div id="cluster-groups-picker" class="max-h-48 overflow-y-auto bg-slate-900 border border-slate-800 rounded-lg p-2.5 space-y-1.5 text-xs divide-y divide-slate-800/40">
+                        <!-- Dynamic group checkboxes -->
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-1">
+                    <button type="button" onclick="hideClusterForm()" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700">Hủy</button>
+                    <button type="button" onclick="saveClusterAction()" class="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1.5 shadow-md">
+                        <i data-lucide="check" class="w-3.5 h-3.5"></i> Lưu Cụm Nhóm
+                    </button>
+                </div>
+            </div>
+
+            <!-- Danh sách các cụm nhóm hiện có -->
+            <div class="flex-1 overflow-y-auto space-y-2 pr-1" id="clusters-list-container">
+                <!-- Dynamic clusters list cards -->
+            </div>
+
+            <div class="flex items-center justify-between pt-3 border-t border-slate-800 text-xs text-slate-500">
+                <span>Mỗi bài viết khi gửi từ Discord sẽ cho phép chọn 1 Cụm để đăng</span>
+                <button onclick="closeClusterModal()" class="px-4 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700">
+                    Đóng
+                </button>
             </div>
         </div>
     </div>

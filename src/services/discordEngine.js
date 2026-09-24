@@ -1,4 +1,15 @@
-const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
+const { 
+    Client, 
+    GatewayIntentBits, 
+    ActionRowBuilder, 
+    ButtonBuilder, 
+    ButtonStyle, 
+    EmbedBuilder,
+    StringSelectMenuBuilder,
+    StringSelectMenuOptionBuilder
+} = require('discord.js');
 const { dbAsync } = require('../db');
 const { rewriteWithGemini } = require('./gemini');
 const { publishPost } = require('./fbEngine');
@@ -7,6 +18,16 @@ const { isChromeDebuggingActive } = require('./chromeGemini');
 let discordClient = null;
 let currentConfig = null;
 let eventBroadcaster = null;
+
+// Thư mục lưu trữ ảnh cục bộ từ Discord
+const imagesDir = path.join(__dirname, '..', '..', 'data', 'images');
+if (!fs.existsSync(imagesDir)) {
+    try {
+        fs.mkdirSync(imagesDir, { recursive: true });
+    } catch (e) {
+        console.error('[DiscordEngine] Không thể tạo thư mục lưu ảnh:', e.message);
+    }
+}
 
 // Quản lý bộ đệm tin nhắn (Debounce 60 giây) cho từng kênh
 const channelBuffers = new Map();
@@ -33,13 +54,51 @@ function extractImageUrls(message) {
 }
 
 /**
+ * Tải file ảnh từ Discord và lưu trữ vĩnh viễn trên máy tính cục bộ
+ * Tránh lỗi link CDN của Discord bị hết hạn sau 24h
+ */
+async function downloadAndSaveDiscordImages(imageUrls, postId) {
+    if (!Array.isArray(imageUrls) || imageUrls.length === 0) return [];
+    if (!fs.existsSync(imagesDir)) {
+        try { fs.mkdirSync(imagesDir, { recursive: true }); } catch (e) {}
+    }
+    const savedPaths = [];
+    for (let i = 0; i < imageUrls.length; i++) {
+        const url = imageUrls[i];
+        try {
+            const urlObj = new URL(url);
+            const pathname = urlObj.pathname;
+            const extMatch = pathname.match(/\.(png|jpe?g|webp|gif|bmp)/i);
+            const ext = extMatch ? extMatch[1].toLowerCase() : 'jpg';
+            const filename = `post_${postId || Date.now()}_img_${i + 1}_${Date.now()}.${ext}`;
+            const targetPath = path.join(imagesDir, filename);
+
+            const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+            if (res.ok) {
+                const arrayBuffer = await res.arrayBuffer();
+                fs.writeFileSync(targetPath, Buffer.from(arrayBuffer));
+                savedPaths.push(targetPath);
+                console.log(`[DiscordEngine] Đã tải & lưu trữ ảnh cục bộ: ${targetPath}`);
+            } else {
+                console.warn(`[DiscordEngine] Không thể tải ảnh (HTTP ${res.status}): ${url}`);
+                savedPaths.push(url);
+            }
+        } catch (err) {
+            console.error(`[DiscordEngine] Lỗi tải ảnh ${url}:`, err.message);
+            savedPaths.push(url);
+        }
+    }
+    return savedPaths;
+}
+
+/**
  * Tạo giao diện nút bấm duyệt bài cho Discord
  */
 function createApprovalButtons(postId, disabled = false) {
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`discord_approve_${postId}`)
-            .setLabel('✅ Duyệt & Đăng FB')
+            .setCustomId(`discord_choose_cluster_${postId}`)
+            .setLabel('✅ Duyệt Theo Cụm')
             .setStyle(ButtonStyle.Success)
             .setDisabled(disabled),
         new ButtonBuilder()
@@ -84,12 +143,15 @@ async function processDiscordBuffer(channelId) {
         console.warn('[Discord] Không thể gửi status message:', e.message);
     }
 
+    // Tải toàn bộ ảnh từ Discord và lưu trữ cục bộ trên ổ cứng (tránh lỗi link hết hạn)
+    const localImages = await downloadAndSaveDiscordImages(uniqueImages, Date.now());
+
     // 1. Lưu tin nhắn gốc vào bảng messages
     let msgRecord = null;
     try {
         msgRecord = await dbAsync.run(
             `INSERT INTO messages (group_name, sender, content, images) VALUES (?, ?, ?, ?)`,
-            [`Discord: #${channel.name || 'channel'}`, userTag || username, combinedText, JSON.stringify(uniqueImages)]
+            [`Discord: #${channel.name || 'channel'}`, userTag || username, combinedText, JSON.stringify(localImages)]
         );
     } catch (e) {
         console.error('[Discord] Lỗi lưu messages vào SQLite:', e);
@@ -114,8 +176,8 @@ async function processDiscordBuffer(channelId) {
     let postRecord = null;
     try {
         postRecord = await dbAsync.run(
-            `INSERT INTO posts (message_id, group_name, original_text, rewritten_text, target_fb_group, status) VALUES (?, ?, ?, ?, ?, ?)`,
-            [msgRecord?.id || null, `Discord: #${channel.name || 'channel'}`, combinedText, rewritten, targetFbStr, 'pending']
+            `INSERT INTO posts (message_id, group_name, original_text, rewritten_text, target_fb_group, status, images) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [msgRecord?.id || null, `Discord: #${channel.name || 'channel'}`, combinedText, rewritten, targetFbStr, 'pending', JSON.stringify(localImages)]
         );
     } catch (e) {
         console.error('[Discord] Lỗi lưu posts vào SQLite:', e);
@@ -315,38 +377,204 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
         });
 
         // Xử lý khi người dùng bấm nút trên Discord (Duyệt, Viết lại, Hủy)
+        // Xử lý khi người dùng tương tác trên Discord (Select Menu chọn cụm, Nút bấm Duyệt/ACP, Viết lại, Hủy)
         client.on('interactionCreate', async (interaction) => {
-            if (!interaction.isButton()) return;
-
-            const customId = interaction.customId;
-
-            // 1. Bấm NÚT DUYỆT & ĐĂNG BÀI
-            if (customId.startsWith('discord_approve_')) {
-                const postId = parseInt(customId.replace('discord_approve_', ''), 10);
+            // A. XỬ LÝ CHỌN CỤM TỪ SELECT MENU
+            if (interaction.isStringSelectMenu() && interaction.customId.startsWith('discord_select_cluster_')) {
+                const postId = parseInt(interaction.customId.replace('discord_select_cluster_', ''), 10);
+                const selectedVal = interaction.values[0];
                 await interaction.deferUpdate();
 
-                await dbAsync.log('info', `[Discord] Bạn đã bấm [Duyệt & Đăng bài #${postId}] trực tiếp từ Discord!`);
+                let clusterName = '';
+                let groups = [];
+                let clusterId = 'all';
 
-                // Vô hiệu hóa nút và thông báo đang đăng
+                if (selectedVal === 'cluster_all') {
+                    clusterName = 'Toàn bộ nhóm đang bật';
+                    groups = await dbAsync.all(`SELECT name, url FROM fb_groups WHERE is_active = 1`);
+                } else {
+                    clusterId = parseInt(selectedVal.replace('cluster_', ''), 10);
+                    const clusterDetails = await dbAsync.getClusterDetails(clusterId);
+                    clusterName = clusterDetails?.name || `Cụm #${clusterId}`;
+                    groups = clusterDetails?.groups || [];
+                }
+
+                if (groups.length === 0) {
+                    const backRow = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`discord_choose_cluster_${postId}`)
+                            .setLabel('🔙 Chọn Cụm Khác')
+                            .setStyle(ButtonStyle.Secondary),
+                        new ButtonBuilder()
+                            .setCustomId(`discord_reject_${postId}`)
+                            .setLabel('❌ Hủy bài')
+                            .setStyle(ButtonStyle.Danger)
+                    );
+                    await interaction.editReply({
+                        content: `⚠️ **Cụm [${clusterName}] hiện chưa có nhóm Facebook nào được gán!**\nVui lòng vào Tool Desktop gán nhóm cho cụm này, hoặc chọn cụm khác:`,
+                        components: [backRow]
+                    });
+                    return;
+                }
+
+                // Hiển thị danh sách nhóm trong cụm và nút [Xác Nhận Đăng (ACP)]
+                const groupListStr = groups.slice(0, 10).map((g, idx) => `${idx + 1}. **${g.name}**`).join('\n');
+                const extraStr = groups.length > 10 ? `\n... và ${groups.length - 10} nhóm khác nữa.` : '';
+
+                const confirmEmbed = new EmbedBuilder()
+                    .setColor(0x2ecc71)
+                    .setTitle(`🎯 XÁC NHẬN ĐĂNG BÀI #${postId} THEO CỤM`)
+                    .setDescription(`Bạn đã chọn đăng bài vào:\n📍 **Cụm:** **${clusterName}**\n👥 **Tổng cộng:** **${groups.length} nhóm**\n\n📋 **Danh sách nhóm:**\n${groupListStr}${extraStr}`)
+                    .setFooter({ text: 'Kiểm tra kỹ các nhóm trên. Bấm [Xác Nhận Đăng (ACP)] để bắt đầu đăng ngay!' });
+
+                const confirmButtons = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`discord_acp_${postId}_${clusterId}`)
+                        .setLabel('🚀 Xác Nhận Đăng (ACP)')
+                        .setStyle(ButtonStyle.Success),
+                    new ButtonBuilder()
+                        .setCustomId(`discord_choose_cluster_${postId}`)
+                        .setLabel('🔙 Chọn Cụm Khác')
+                        .setStyle(ButtonStyle.Secondary),
+                    new ButtonBuilder()
+                        .setCustomId(`discord_reject_${postId}`)
+                        .setLabel('❌ Hủy bỏ')
+                        .setStyle(ButtonStyle.Danger)
+                );
+
                 await interaction.editReply({
-                    content: `🚀 **ĐÃ DUYỆT BÀI #${postId}!**\nTool đang tiến hành đăng rải rác lộn xộn lên các nhóm Facebook đã chọn...`,
-                    components: [createApprovalButtons(postId, true)]
+                    content: `👉 **Đã chọn cụm thành công! Vui lòng xác nhận (ACP) để đăng bài:**`,
+                    embeds: [confirmEmbed],
+                    components: [confirmButtons]
+                });
+                return;
+            }
+
+            if (!interaction.isButton()) return;
+            const customId = interaction.customId;
+
+            // B1. Bấm NÚT DUYỆT THEO CỤM (hoặc DUYỆT & ĐĂNG FB)
+            if (customId.startsWith('discord_choose_cluster_') || customId.startsWith('discord_approve_')) {
+                const idPart = customId.replace('discord_choose_cluster_', '').replace('discord_approve_', '');
+                const postId = parseInt(idPart, 10);
+                await interaction.deferUpdate();
+
+                const clusters = await dbAsync.getClusters();
+                const activeFbGroups = await dbAsync.all(`SELECT name FROM fb_groups WHERE is_active = 1`);
+
+                if (clusters.length === 0) {
+                    // Chưa có cụm nào -> hỏi người dùng đăng tất cả nhóm luôn
+                    const confirmRow = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`discord_acp_${postId}_all`)
+                            .setLabel(`🚀 Xác Nhận Đăng Tất Cả (${activeFbGroups.length} nhóm) [ACP]`)
+                            .setStyle(ButtonStyle.Success),
+                        new ButtonBuilder()
+                            .setCustomId(`discord_cancel_select_${postId}`)
+                            .setLabel('🔙 Quay lại')
+                            .setStyle(ButtonStyle.Secondary),
+                        new ButtonBuilder()
+                            .setCustomId(`discord_reject_${postId}`)
+                            .setLabel('❌ Hủy bỏ')
+                            .setStyle(ButtonStyle.Danger)
+                    );
+
+                    await interaction.editReply({
+                        content: `⚠️ **Chưa có Cụm Nhóm nào được tạo trong Tool Desktop!**\nBạn có thể vào tab "Quản Lý Nhóm FB" trên Tool để tạo cụm nhóm, hoặc bấm xác nhận đăng lên toàn bộ nhóm bên dưới:`,
+                        components: [confirmRow]
+                    });
+                    return;
+                }
+
+                // Có cụm nhóm -> hiển thị Select Menu để người dùng chọn cụm
+                const options = clusters.map(c => 
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel(`Cụm: ${c.name}`.slice(0, 100))
+                        .setDescription(`${c.group_count} nhóm Facebook`.slice(0, 100))
+                        .setValue(`cluster_${c.id}`)
+                        .setEmoji('📍')
+                );
+
+                // Thêm tùy chọn Tất cả nhóm đang bật
+                options.push(
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel(`Toàn bộ nhóm đang bật`)
+                        .setDescription(`${activeFbGroups.length} nhóm Facebook đã kích hoạt`.slice(0, 100))
+                        .setValue(`cluster_all`)
+                        .setEmoji('🌐')
+                );
+
+                const selectMenu = new StringSelectMenuBuilder()
+                    .setCustomId(`discord_select_cluster_${postId}`)
+                    .setPlaceholder('🎯 Chọn Cụm Nhóm Facebook bạn muốn đăng...')
+                    .addOptions(options);
+
+                const menuRow = new ActionRowBuilder().addComponents(selectMenu);
+                const cancelRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`discord_cancel_select_${postId}`)
+                        .setLabel('🔙 Quay lại')
+                        .setStyle(ButtonStyle.Secondary),
+                    new ButtonBuilder()
+                        .setCustomId(`discord_reject_${postId}`)
+                        .setLabel('❌ Hủy bỏ')
+                        .setStyle(ButtonStyle.Danger)
+                );
+
+                await interaction.editReply({
+                    content: `🎯 **Vui lòng chọn Cụm Nhóm Facebook để đăng bài #${postId}:**\n*(Sau khi chọn cụm, bạn sẽ được xem tóm tắt các nhóm trước khi bấm Xác Nhận ACP)*`,
+                    components: [menuRow, cancelRow]
+                });
+                return;
+            }
+
+            // B2. Bấm NÚT QUAY LẠI TỪ BƯỚC CHỌN CỤM
+            if (customId.startsWith('discord_cancel_select_')) {
+                const postId = parseInt(customId.replace('discord_cancel_select_', ''), 10);
+                await interaction.deferUpdate();
+                await interaction.editReply({
+                    content: `✨ **Bài viết #${postId} đã sẵn sàng!** Vui lòng kiểm tra và bấm nút bên dưới:`,
+                    components: [createApprovalButtons(postId, false)]
+                });
+                return;
+            }
+
+            // B3. Bấm NÚT XÁC NHẬN ĐĂNG (ACP)
+            if (customId.startsWith('discord_acp_')) {
+                // customId format: discord_acp_${postId}_${clusterId}
+                const parts = customId.split('_');
+                const postId = parseInt(parts[2], 10);
+                const clusterId = parts[3]; // 'all' or number
+                await interaction.deferUpdate();
+
+                let clusterLabel = 'Tất cả nhóm';
+                if (clusterId !== 'all') {
+                    const c = await dbAsync.get(`SELECT name FROM fb_clusters WHERE id = ?`, [clusterId]);
+                    if (c) clusterLabel = c.name;
+                }
+
+                await dbAsync.log('info', `[Discord] Bạn đã xác nhận (ACP) đăng bài #${postId} vào Cụm [${clusterLabel}]!`);
+
+                // Vô hiệu hóa nút và thông báo đang tiến hành đăng
+                await interaction.editReply({
+                    content: `🚀 **ĐÃ XÁC NHẬN (ACP) BÀI #${postId}!**\nTool đang tiến hành đăng rải rác lộn xộn vào **Cụm [${clusterLabel}]**...`,
+                    components: []
                 });
 
                 // Cập nhật trạng thái post
-                await dbAsync.run(`UPDATE posts SET status = 'approved' WHERE id = ?`, [postId]);
+                await dbAsync.run(`UPDATE posts SET status = 'approved', target_cluster_id = ? WHERE id = ?`, [clusterId === 'all' ? null : clusterId, postId]);
 
                 // Bắt đầu đăng bài
                 try {
-                    const result = await publishPost(postId);
+                    const result = await publishPost(postId, clusterId);
                     if (result?.success) {
                         await interaction.followUp({
-                            content: `🎉 **ĐĂNG BÀI #${postId} THÀNH CÔNG!** Đã hoàn tất đăng bài lên toàn bộ các nhóm Facebook an toàn!`,
+                            content: `🎉 **ĐĂNG BÀI #${postId} THÀNH CÔNG!** Đã hoàn tất đăng bài vào Cụm **[${clusterLabel}]** an toàn!`,
                             ephemeral: false
                         });
                     }
                 } catch (pubErr) {
-                    await dbAsync.log('error', `[Discord] Lỗi khi đăng bài #${postId} lên Facebook: ${pubErr.message}`);
+                    await dbAsync.log('error', `[Discord] Lỗi khi đăng bài #${postId} vào Cụm [${clusterLabel}]: ${pubErr.message}`);
                     await interaction.followUp({
                         content: `⚠️ **Gặp lỗi khi đăng bài #${postId}:** ${pubErr.message}`,
                         ephemeral: false

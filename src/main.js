@@ -439,13 +439,53 @@ ipcMain.handle('toggle-all-fb-groups', async (event, isActive) => {
     }
 });
 
+// 4.1 Quản Lý Cụm Nhóm Facebook (Group Clusters)
+ipcMain.handle('get-clusters', async () => {
+    try {
+        const clusters = await dbAsync.getClusters();
+        return { success: true, clusters };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('get-cluster-details', async (event, clusterId) => {
+    try {
+        const cluster = await dbAsync.getClusterDetails(clusterId);
+        return { success: true, cluster };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('save-cluster', async (event, data) => {
+    try {
+        const result = await dbAsync.saveCluster(data);
+        await dbAsync.log('info', `Đã lưu Cụm Nhóm [${data.name}] thành công (${data.groupIds?.length || 0} nhóm).`);
+        return { success: true, result };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('delete-cluster', async (event, clusterId) => {
+    try {
+        await dbAsync.deleteCluster(clusterId);
+        await dbAsync.log('info', `Đã xóa Cụm Nhóm ID: ${clusterId}.`);
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
 // 5. Bài viết & Hàng đợi
 ipcMain.handle('get-posts', async () => {
     try {
         const posts = await dbAsync.all(`
-            SELECT p.*, m.sender, m.images 
+            SELECT p.*, m.sender, COALESCE(p.images, m.images) as images, c.name as cluster_name 
             FROM posts p 
             LEFT JOIN messages m ON p.message_id = m.id 
+            LEFT JOIN fb_clusters c ON p.target_cluster_id = c.id
             ORDER BY p.id DESC LIMIT 150
         `);
         return { success: true, posts };
@@ -466,10 +506,16 @@ ipcMain.handle('update-post', async (event, { id, text, status }) => {
     }
 });
 
-ipcMain.handle('approve-post', async (event, id) => {
+ipcMain.handle('approve-post', async (event, data) => {
     try {
-        await dbAsync.run(`UPDATE posts SET status = 'approved' WHERE id = ?`, [id]);
-        await dbAsync.log('info', `Đã duyệt bài viết #${id} sang trạng thái sẵn sàng đăng.`);
+        const id = (typeof data === 'object') ? data.id : data;
+        const clusterId = (typeof data === 'object') ? data.clusterId : null;
+        if (clusterId && clusterId !== 'all') {
+            await dbAsync.run(`UPDATE posts SET status = 'approved', target_cluster_id = ? WHERE id = ?`, [clusterId, id]);
+        } else {
+            await dbAsync.run(`UPDATE posts SET status = 'approved' WHERE id = ?`, [id]);
+        }
+        await dbAsync.log('info', `Đã duyệt bài viết #${id} sang trạng thái sẵn sàng đăng${clusterId ? ` (Cụm ID: ${clusterId})` : ''}.`);
         return { success: true };
     } catch (e) {
         return { success: false, error: e.message };
@@ -486,9 +532,11 @@ ipcMain.handle('approve-all-pending-posts', async () => {
     }
 });
 
-ipcMain.handle('publish-post', async (event, id) => {
+ipcMain.handle('publish-post', async (event, data) => {
     try {
-        const result = await publishPost(id);
+        const id = (typeof data === 'object') ? data.id : data;
+        const clusterId = (typeof data === 'object') ? data.clusterId : null;
+        const result = await publishPost(id, clusterId);
         return { success: true, result };
     } catch (e) {
         return { success: false, error: e.message };

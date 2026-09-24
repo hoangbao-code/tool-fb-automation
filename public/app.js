@@ -452,12 +452,23 @@ async function copyPostTextUI(id, type) {
     }
 }
 
-// Duyệt 1 bài viết sang trạng thái approved
+// Duyệt 1 bài viết sang trạng thái approved (hỗ trợ chọn Cụm nhóm)
 async function approvePostDirect(id) {
+    let chosenClusterId = null;
+    if (state.clusters && state.clusters.length > 0) {
+        const clusterOptions = state.clusters.map((c, i) => `${i + 1}. ${c.name} (${c.group_count || 0} nhóm)`).join('\n');
+        const input = prompt(`Chọn Cụm Nhóm Facebook bạn muốn duyệt cho bài #${id}:\n\n${clusterOptions}\n\nNhập số thứ tự cụm (hoặc bấm OK / để trống để đăng tất cả nhóm đã bật):`);
+        if (input === null) return; // Người dùng bấm Hủy
+        const idx = parseInt(input?.trim(), 10) - 1;
+        if (!isNaN(idx) && idx >= 0 && idx < state.clusters.length) {
+            chosenClusterId = state.clusters[idx].id;
+        }
+    }
+
     try {
-        const res = await window.electronApi.approvePost(id);
+        const res = await window.electronApi.approvePost({ id, clusterId: chosenClusterId });
         if (res.success) {
-            showToast(`Đã duyệt bài viết #${id}! Bài sẽ được worker đăng tự động.`, 'success');
+            showToast(`Đã duyệt bài viết #${id}! Bài sẽ được đăng vào cụm nhóm đã chọn.`, 'success');
             await loadPosts();
             await loadStatus();
         } else {
@@ -665,7 +676,7 @@ function renderPosts() {
                         <i data-lucide="send" class="w-3.5 h-3.5 text-indigo-400 shrink-0"></i>
                         <span>Đích đăng:</span>
                         <span class="text-slate-200 font-semibold px-2.5 py-0.5 rounded-lg bg-slate-900 border border-slate-800 truncate max-w-sm">
-                            ${escapeHtml(p.target_fb_group || 'Tất cả nhóm Facebook đã chọn')}
+                            ${p.cluster_name ? `📍 Cụm: <b>${escapeHtml(p.cluster_name)}</b>` : escapeHtml(p.target_fb_group || 'Tất cả nhóm Facebook đã chọn')}
                         </span>
                     </div>
 
@@ -2433,12 +2444,48 @@ function reloadFbWebview() {
     if (wv) wv.reload();
 }
 
-// 5. Quản Lý Nhóm Facebook (Groups)
+// 5. Quản Lý Nhóm Facebook & Cụm Nhóm (Groups & Clusters)
+async function loadClusters() {
+    try {
+        const res = await window.electronApi.getClusters();
+        if (res.success) {
+            state.clusters = res.clusters || [];
+            
+            // Xây dựng map: groupId -> mảng các cụm mà nhóm thuộc về
+            state.groupClustersMap = {};
+            for (const c of state.clusters) {
+                const details = await window.electronApi.getClusterDetails(c.id);
+                if (details?.success && details.cluster?.groups) {
+                    for (const g of details.cluster.groups) {
+                        if (!state.groupClustersMap[g.id]) state.groupClustersMap[g.id] = [];
+                        state.groupClustersMap[g.id].push(c);
+                    }
+                }
+            }
+
+            // Cập nhật số lượng trên nút Cụm Nhóm
+            const badge = document.getElementById('cluster-count-badge');
+            if (badge) badge.textContent = state.clusters.length;
+
+            // Cập nhật dropdown bộ lọc Cụm
+            const filterSelect = document.getElementById('fb-cluster-filter');
+            if (filterSelect) {
+                const currentVal = filterSelect.value;
+                filterSelect.innerHTML = '<option value="">-- Tất Cả Cụm Nhóm --</option>' +
+                    state.clusters.map(c => `<option value="${c.id}" ${currentVal == c.id ? 'selected' : ''}>📍 ${escapeHtml(c.name)} (${c.group_count || 0})</option>`).join('');
+            }
+        }
+    } catch (e) {
+        console.error('Error loadClusters:', e);
+    }
+}
+
 async function loadFbGroups() {
     try {
         const res = await window.electronApi.getFbGroups();
         if (res.success) {
             state.fbGroups = res.groups;
+            await loadClusters();
             renderFbGroupsTable();
         }
     } catch (e) {
@@ -2448,7 +2495,19 @@ async function loadFbGroups() {
 
 function renderFbGroupsTable(filterText = '') {
     const tbody = document.getElementById('fb-groups-table-body');
-    let list = state.fbGroups;
+    let list = state.fbGroups || [];
+
+    // 1. Lọc theo Cụm Nhóm nếu có chọn trong dropdown
+    const clusterFilterId = document.getElementById('fb-cluster-filter')?.value;
+    if (clusterFilterId) {
+        const numId = parseInt(clusterFilterId, 10);
+        list = list.filter(g => {
+            const assigned = state.groupClustersMap?.[g.id] || [];
+            return assigned.some(c => c.id === numId);
+        });
+    }
+
+    // 2. Lọc theo ô tìm kiếm
     if (filterText) {
         list = list.filter(g => g.name.toLowerCase().includes(filterText.toLowerCase()));
     }
@@ -2456,8 +2515,8 @@ function renderFbGroupsTable(filterText = '') {
     if (list.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="4" class="p-8 text-center text-slate-500 text-xs">
-                    <div class="mb-3">Chưa có nhóm Facebook nào trong danh sách.</div>
+                <td colspan="5" class="p-8 text-center text-slate-500 text-xs">
+                    <div class="mb-3">Không tìm thấy nhóm Facebook nào phù hợp với bộ lọc hiện tại.</div>
                     <button onclick="triggerFbGroupScan()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-2 shadow-sm transition-all">
                         <i data-lucide="scan" class="w-4 h-4"></i> Bấm Vào Đây Để Quét Nhóm Facebook Ngay
                     </button>
@@ -2468,13 +2527,22 @@ function renderFbGroupsTable(filterText = '') {
         return;
     }
 
-    tbody.innerHTML = list.map(g => `
+    tbody.innerHTML = list.map(g => {
+        const clusters = state.groupClustersMap?.[g.id] || [];
+        const clustersBadgeHtml = clusters.length > 0 
+            ? clusters.map(c => `<span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-800 mr-1 mb-1">📍 ${escapeHtml(c.name)}</span>`).join('')
+            : `<span class="text-slate-600 text-[11px] italic">Chưa gán cụm</span>`;
+
+        return `
         <tr class="hover:bg-slate-900/50 transition-colors">
             <td class="p-3.5 text-center">
                 <input type="checkbox" ${g.is_active ? 'checked' : ''} onchange="toggleFbGroupStatus(${g.id})" class="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700 cursor-pointer">
             </td>
             <td class="p-3.5 font-bold text-white">
                 ${escapeHtml(g.name)}
+            </td>
+            <td class="p-3.5">
+                ${clustersBadgeHtml}
             </td>
             <td class="p-3.5 font-mono text-[11px] text-slate-400">
                 <a href="#" onclick="openFbUrl('${escapeHtml(g.url)}')" class="hover:text-blue-400 hover:underline truncate max-w-xs block">${escapeHtml(g.url)}</a>
@@ -2485,7 +2553,8 @@ function renderFbGroupsTable(filterText = '') {
                 </button>
             </td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
     lucide.createIcons();
 }
 
@@ -2515,6 +2584,183 @@ async function deleteFbGroupRow(id) {
         loadFbGroups();
     } catch (e) {
         console.error('Error deleteFbGroupRow:', e);
+    }
+}
+
+// ==========================================
+// MODAL QUẢN LÝ CỤM NHÓM FACEBOOK (GROUP CLUSTERS)
+// ==========================================
+async function openClusterModal() {
+    const modal = document.getElementById('modal-cluster-manager');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    hideClusterForm();
+    await loadClusters();
+    renderClustersList();
+    if (window.lucide) lucide.createIcons();
+}
+
+function closeClusterModal() {
+    const modal = document.getElementById('modal-cluster-manager');
+    if (modal) modal.classList.add('hidden');
+    hideClusterForm();
+}
+
+function renderClustersList() {
+    const container = document.getElementById('clusters-list-container');
+    if (!container) return;
+    const clusters = state.clusters || [];
+
+    if (clusters.length === 0) {
+        container.innerHTML = `
+            <div class="p-8 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-xl">
+                <i data-lucide="layers" class="w-8 h-8 mx-auto mb-2 text-slate-600 opacity-60"></i>
+                <div class="font-semibold text-slate-400 mb-1">Chưa có Cụm Nhóm nào được tạo</div>
+                <p class="text-slate-500 text-[11px] mb-3">Tạo cụm nhóm (VD: Cụm Bình Thạnh, Cụm Gò Vấp...) để dễ dàng duyệt và đăng bài mục tiêu.</p>
+                <button onclick="showCreateClusterForm()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 shadow-sm">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i> Bấm Vào Đây Để Tạo Cụm Đầu Tiên
+                </button>
+            </div>
+        `;
+        if (window.lucide) lucide.createIcons();
+        return;
+    }
+
+    container.innerHTML = clusters.map(c => `
+        <div class="bg-slate-950/70 border border-slate-800 hover:border-slate-700 p-3.5 rounded-xl flex items-center justify-between gap-3 transition-colors">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                    <h4 class="font-bold text-white text-xs truncate">📍 ${escapeHtml(c.name)}</h4>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
+                        ${c.group_count || 0} nhóm
+                    </span>
+                </div>
+                ${c.description ? `<p class="text-[11px] text-slate-400 mt-1 truncate pl-4.5">${escapeHtml(c.description)}</p>` : ''}
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+                <button onclick="showCreateClusterForm(${c.id})" class="px-2.5 py-1 text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all" title="Chỉnh sửa tên và nhóm trong cụm">
+                    <i data-lucide="edit-3" class="w-3 h-3"></i> Sửa
+                </button>
+                <button onclick="deleteClusterAction(${c.id})" class="px-2.5 py-1 text-rose-400 hover:text-rose-300 bg-rose-950/60 hover:bg-rose-900 border border-rose-800/50 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all" title="Xóa cụm này">
+                    <i data-lucide="trash-2" class="w-3 h-3"></i> Xóa
+                </button>
+            </div>
+        </div>
+    `).join('');
+    if (window.lucide) lucide.createIcons();
+}
+
+async function showCreateClusterForm(clusterId = null) {
+    const form = document.getElementById('cluster-edit-form');
+    if (!form) return;
+    form.classList.remove('hidden');
+
+    const formTitle = document.getElementById('cluster-form-title');
+    const formId = document.getElementById('cluster-form-id');
+    const formName = document.getElementById('cluster-form-name');
+    const formDesc = document.getElementById('cluster-form-desc');
+    const picker = document.getElementById('cluster-groups-picker');
+
+    let assignedGroupIds = new Set();
+    if (clusterId) {
+        formTitle.textContent = 'Chỉnh Sửa Cụm Nhóm';
+        formId.value = clusterId;
+        const details = await window.electronApi.getClusterDetails(clusterId);
+        if (details?.success && details.cluster) {
+            formName.value = details.cluster.name || '';
+            formDesc.value = details.cluster.description || '';
+            if (details.cluster.groups) {
+                details.cluster.groups.forEach(g => assignedGroupIds.add(g.id));
+            }
+        }
+    } else {
+        formTitle.textContent = 'Tạo Cụm Nhóm Mới';
+        formId.value = '';
+        formName.value = '';
+        formDesc.value = '';
+    }
+
+    // Hiển thị danh sách toàn bộ nhóm Facebook kèm checkbox
+    const groups = state.fbGroups || [];
+    if (groups.length === 0) {
+        picker.innerHTML = '<div class="text-slate-500 text-center py-3">Chưa có nhóm Facebook nào trong danh sách. Hãy quét nhóm trước.</div>';
+    } else {
+        picker.innerHTML = groups.map(g => `
+            <label class="flex items-center gap-2 p-1 rounded hover:bg-slate-800/60 cursor-pointer">
+                <input type="checkbox" value="${g.id}" ${assignedGroupIds.has(g.id) ? 'checked' : ''} class="cluster-group-cb w-3.5 h-3.5 rounded text-emerald-600 bg-slate-950 border-slate-700 cursor-pointer">
+                <span class="text-white text-xs truncate flex-1">${escapeHtml(g.name)}</span>
+                <span class="text-[10px] text-slate-500 font-mono">${g.is_active ? '🟢 Bật' : '⚪ Tắt'}</span>
+            </label>
+        `).join('');
+    }
+
+    if (window.lucide) lucide.createIcons();
+    formName.focus();
+}
+
+function hideClusterForm() {
+    const form = document.getElementById('cluster-edit-form');
+    if (form) form.classList.add('hidden');
+}
+
+function selectAllClusterGroups(select) {
+    document.querySelectorAll('.cluster-group-cb').forEach(cb => {
+        cb.checked = select;
+    });
+}
+
+async function saveClusterAction() {
+    const id = document.getElementById('cluster-form-id')?.value;
+    const name = document.getElementById('cluster-form-name')?.value?.trim();
+    const description = document.getElementById('cluster-form-desc')?.value?.trim() || '';
+
+    if (!name) {
+        showToast('Vui lòng nhập tên Cụm Nhóm!', 'warning');
+        return;
+    }
+
+    const selectedGroupIds = Array.from(document.querySelectorAll('.cluster-group-cb:checked'))
+        .map(cb => parseInt(cb.value, 10));
+
+    try {
+        const res = await window.electronApi.saveCluster({
+            id: id ? parseInt(id, 10) : null,
+            name,
+            description,
+            groupIds: selectedGroupIds
+        });
+
+        if (res.success) {
+            showToast(`Đã lưu Cụm [${name}] (${selectedGroupIds.length} nhóm)!`, 'success');
+            hideClusterForm();
+            await loadClusters();
+            renderClustersList();
+            renderFbGroupsTable();
+        } else {
+            showToast(res.error || 'Lỗi khi lưu cụm nhóm', 'error');
+        }
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
+    }
+}
+
+async function deleteClusterAction(clusterId) {
+    const confirmed = confirm('Bạn có chắc chắn muốn xóa Cụm Nhóm này? (Các nhóm Facebook trong cụm sẽ không bị xóa)');
+    if (!confirmed) return;
+
+    try {
+        const res = await window.electronApi.deleteCluster(clusterId);
+        if (res.success) {
+            showToast('Đã xóa Cụm Nhóm!', 'info');
+            await loadClusters();
+            renderClustersList();
+            renderFbGroupsTable();
+        } else {
+            showToast(res.error || 'Lỗi khi xóa cụm', 'error');
+        }
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
     }
 }
 
@@ -2689,14 +2935,28 @@ async function publishDirectFromModal() {
 }
 
 async function publishPostDirect(id) {
-    showToast('Đang tiến hành xuất bản bài viết...', 'info');
-    const res = await window.electronApi.publishPost(id);
+    let chosenClusterId = null;
+    const post = (state.posts || []).find(p => p.id === id);
+    if (post?.target_cluster_id) {
+        chosenClusterId = post.target_cluster_id;
+    } else if (state.clusters && state.clusters.length > 0) {
+        const clusterOptions = state.clusters.map((c, i) => `${i + 1}. ${c.name} (${c.group_count || 0} nhóm)`).join('\n');
+        const input = prompt(`Đăng bài #${id} vào Cụm Nhóm Facebook nào?\n\n${clusterOptions}\n\nNhập số thứ tự cụm (hoặc để trống/bấm OK để đăng tất cả nhóm đã bật):`);
+        if (input === null) return; // Người dùng bấm Hủy
+        const idx = parseInt(input?.trim(), 10) - 1;
+        if (!isNaN(idx) && idx >= 0 && idx < state.clusters.length) {
+            chosenClusterId = state.clusters[idx].id;
+        }
+    }
+
+    showToast('Đang tiến hành xuất bản bài viết rải rác lộn xộn...', 'info');
+    const res = await window.electronApi.publishPost({ id, clusterId: chosenClusterId });
     if (res.success) {
-        showToast('Đã đăng bài lên Facebook thành công!', 'success');
+        showToast(`Đã xuất bản bài viết #${id} thành công!`, 'success');
         loadPosts();
         loadStatus();
     } else {
-        showToast(res.error, 'error');
+        showToast(res.error || 'Lỗi khi đăng bài', 'error');
     }
 }
 

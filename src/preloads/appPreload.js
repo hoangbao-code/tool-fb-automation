@@ -42,12 +42,18 @@ contextBridge.exposeInMainWorld('electronApi', {
     toggleFbGroup: (id) => ipcRenderer.invoke('toggle-fb-group', id),
     toggleAllFbGroups: (isActive) => ipcRenderer.invoke('toggle-all-fb-groups', isActive),
 
+    // 4.1 Cụm Nhóm Facebook (Group Clusters)
+    getClusters: () => ipcRenderer.invoke('get-clusters'),
+    getClusterDetails: (clusterId) => ipcRenderer.invoke('get-cluster-details', clusterId),
+    saveCluster: (data) => ipcRenderer.invoke('save-cluster', data),
+    deleteCluster: (clusterId) => ipcRenderer.invoke('delete-cluster', clusterId),
+
     // 5. Hàng đợi bài viết & Đăng bài
     getPosts: () => ipcRenderer.invoke('get-posts'),
     updatePost: (id, text, status) => ipcRenderer.invoke('update-post', { id, text, status }),
-    approvePost: (id) => ipcRenderer.invoke('approve-post', id),
+    approvePost: (idOrData) => ipcRenderer.invoke('approve-post', idOrData),
     approveAllPendingPosts: () => ipcRenderer.invoke('approve-all-pending-posts'),
-    publishPost: (id) => ipcRenderer.invoke('publish-post', id),
+    publishPost: (idOrData) => ipcRenderer.invoke('publish-post', idOrData),
     deletePost: (id) => ipcRenderer.invoke('delete-post', id),
     clearAllPosts: (statusFilter) => ipcRenderer.invoke('clear-all-posts', statusFilter),
     reRewritePost: (id) => ipcRenderer.invoke('re-rewrite-post', id),
