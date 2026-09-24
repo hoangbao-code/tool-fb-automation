@@ -234,15 +234,22 @@ async function getOrOpenGeminiTab(port = DEFAULT_PORT, targetUrl = null) {
                     selectedTab = geminiTabs.find(t => t.url === cleanTarget);
                 }
 
-                // Nếu chưa có tab nào đang ở đúng trang, dùng tab đầu tiên và navigate tới targetUrl
+                // Nếu chưa có tab nào đang ở đúng trang:
                 if (!selectedTab) {
-                    selectedTab = geminiTabs[0];
-                    try {
-                        await sendCdpCommand(selectedTab.webSocketDebuggerUrl, 'Page.navigate', { url: cleanTarget }, 15000);
-                        // Đợi 3.5 giây cho SPA nạp dữ liệu cuộc trò chuyện
-                        await new Promise(r => setTimeout(r, 3500));
-                    } catch (navErr) {
-                        console.warn('[ChromeGemini] Lỗi điều hướng đến targetUrl:', navErr.message);
+                    // Nếu targetUrl là link share (share.gemini.google hoặc /share/), nhưng trình duyệt ĐÃ CÓ tab cuộc trò chuyện (/app/ hoặc /gem/), hãy giữ tab này, không điều hướng lùi về share!
+                    const isShareTarget = cleanTarget.includes('share.gemini.google') || cleanTarget.includes('/share/');
+                    const existingAppTab = geminiTabs.find(t => t.url.includes('/app/') || t.url.includes('/gem/'));
+                    if (isShareTarget && existingAppTab) {
+                        selectedTab = existingAppTab;
+                    } else {
+                        selectedTab = geminiTabs[0];
+                        try {
+                            await sendCdpCommand(selectedTab.webSocketDebuggerUrl, 'Page.navigate', { url: cleanTarget }, 15000);
+                            // Đợi 3.5 giây cho SPA nạp dữ liệu cuộc trò chuyện
+                            await new Promise(r => setTimeout(r, 3500));
+                        } catch (navErr) {
+                            console.warn('[ChromeGemini] Lỗi điều hướng đến targetUrl:', navErr.message);
+                        }
                     }
                 }
             } else {
@@ -345,7 +352,8 @@ function sendCdpCommand(wsUrl, method, params = {}, timeoutMs = 15000) {
  */
 const INJECT_SCRIPT = (promptText) => `
 (async function() {
-    const prompt = ${JSON.stringify(promptText)};
+    try {
+        const prompt = ${JSON.stringify(promptText)};
 
     // 0. Xử lý khi đang ở trang chia sẻ (Share link: share.gemini.google hoặc /share/)
     if (window.location.href.includes('/share/') || window.location.hostname.includes('share.gemini.google')) {
@@ -519,7 +527,7 @@ const INJECT_SCRIPT = (promptText) => `
         if (inputEl.tagName === 'TEXTAREA' || inputEl.tagName === 'INPUT') {
             inputEl.value = prompt;
         } else {
-            inputEl.innerHTML = '<p>' + prompt.replace(/\n/g, '<br>') + '</p>';
+            inputEl.innerHTML = '<p>' + prompt.split('\\n').join('<br>') + '</p>';
         }
     }
     inputEl.dispatchEvent(new Event('input', { bubbles: true }));
@@ -590,12 +598,18 @@ const INJECT_SCRIPT = (promptText) => `
         };
     }
 
-    return { 
-        success: false, 
-        error: generationStarted 
-            ? 'AI vẫn đang gõ hoặc chưa hoàn tất bài viết.' 
-            : 'Gemini chưa gửi được tin hoặc chưa phản hồi bài mới.' 
-    };
+        return { 
+            success: false, 
+            error: generationStarted 
+                ? 'AI vẫn đang gõ hoặc chưa hoàn tất bài viết.' 
+                : 'Gemini chưa gửi được tin hoặc chưa phản hồi bài mới.' 
+        };
+    } catch (err) {
+        return {
+            success: false,
+            error: 'Lỗi DOM trong trình duyệt: ' + (err.stack || err.message)
+        };
+    }
 })();
 `;
 
@@ -627,6 +641,12 @@ async function sendPromptToChromeGemini(promptText, port = DEFAULT_PORT, targetU
             awaitPromise: true,
             returnByValue: true
         }, 75000);
+
+        if (evalResult?.exceptionDetails) {
+            const errDesc = evalResult.exceptionDetails.exception?.description || evalResult.exceptionDetails.text || 'Lỗi thực thi trong Chrome';
+            console.error('[ChromeGemini] Lỗi CDP Exception:', errDesc);
+            return { success: false, error: errDesc };
+        }
 
         if (evalResult && evalResult.result && evalResult.result.value) {
             const val = evalResult.result.value;
