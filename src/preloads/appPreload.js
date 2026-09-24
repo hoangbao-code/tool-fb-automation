@@ -80,6 +80,8 @@ contextBridge.exposeInMainWorld('electronApi', {
     exportBackup: () => ipcRenderer.invoke('export-backup'),
     importBackup: (backupData) => ipcRenderer.invoke('import-backup', backupData),
     showNotification: (title, body) => ipcRenderer.invoke('show-notification', { title, body }),
+    selectDirectory: (defaultPath) => ipcRenderer.invoke('select-directory', defaultPath),
+    openDirectory: (dirPath) => ipcRenderer.invoke('open-directory', dirPath),
 
     // 9. Lắng nghe các sự kiện hệ thống thời gian thực
     on: (channel, callback) => {

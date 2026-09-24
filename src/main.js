@@ -800,6 +800,41 @@ ipcMain.handle('show-notification', async (event, { title, body }) => {
     return { success: true };
 });
 
+// 8.1 Chọn & Mở Thư Mục Cục Bộ
+ipcMain.handle('select-directory', async (event, defaultPath) => {
+    try {
+        const { dialog } = require('electron');
+        const res = await dialog.showOpenDialog(mainWindow, {
+            title: 'Chọn thư mục lưu ảnh Discord & Giải nén zip',
+            defaultPath: defaultPath || undefined,
+            properties: ['openDirectory', 'createDirectory']
+        });
+        if (res.canceled || !res.filePaths || res.filePaths.length === 0) {
+            return { canceled: true };
+        }
+        return { canceled: false, path: res.filePaths[0] };
+    } catch (e) {
+        return { canceled: true, error: e.message };
+    }
+});
+
+ipcMain.handle('open-directory', async (event, dirPath) => {
+    try {
+        const { shell } = require('electron');
+        let target = dirPath;
+        if (!target) {
+            target = path.join(__dirname, '..', 'data', 'images');
+        }
+        if (!fs.existsSync(target)) {
+            fs.mkdirSync(target, { recursive: true });
+        }
+        await shell.openPath(target);
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
 // ==============================================================
 // XỬ LÝ SỰ KIỆN TỪ WEBVIEW ZALO VÀ FACEBOOK QUA IPC TỪ RENDERER
 // ==============================================================

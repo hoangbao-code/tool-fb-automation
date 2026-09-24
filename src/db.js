@@ -129,7 +129,8 @@ db.serialize(() => {
         ['discord_bot_enabled', '0'],
         ['discord_bot_token', ''],
         ['discord_channel_id', ''],
-        ['discord_debounce_seconds', '60']
+        ['discord_debounce_seconds', '60'],
+        ['discord_image_save_dir', '']
     ];
 
     defaultSettings.forEach(([key, val]) => {

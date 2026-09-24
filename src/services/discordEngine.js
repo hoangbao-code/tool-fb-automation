@@ -20,14 +20,30 @@ let discordClient = null;
 let currentConfig = null;
 let eventBroadcaster = null;
 
-// Thư mục lưu trữ ảnh cục bộ từ Discord
-const imagesDir = path.join(__dirname, '..', '..', 'data', 'images');
-if (!fs.existsSync(imagesDir)) {
+// Thư mục lưu trữ ảnh mặc định từ Discord
+const defaultImagesDir = path.join(__dirname, '..', '..', 'data', 'images');
+
+/**
+ * Lấy thư mục lưu ảnh thực tế (do người dùng chỉ định trong Cài đặt hoặc mặc định data/images)
+ */
+async function getEffectiveImagesDir() {
     try {
-        fs.mkdirSync(imagesDir, { recursive: true });
+        const row = await dbAsync.get(`SELECT value FROM settings WHERE key = 'discord_image_save_dir'`);
+        if (row && row.value && row.value.trim().length > 0) {
+            const customDir = row.value.trim();
+            if (!fs.existsSync(customDir)) {
+                fs.mkdirSync(customDir, { recursive: true });
+            }
+            return customDir;
+        }
     } catch (e) {
-        console.error('[DiscordEngine] Không thể tạo thư mục lưu ảnh:', e.message);
+        console.warn('[DiscordEngine] Không thể đọc cấu hình discord_image_save_dir:', e.message);
     }
+
+    if (!fs.existsSync(defaultImagesDir)) {
+        try { fs.mkdirSync(defaultImagesDir, { recursive: true }); } catch (e) {}
+    }
+    return defaultImagesDir;
 }
 
 // Quản lý bộ đệm tin nhắn (Debounce 60 giây) cho từng kênh
@@ -80,9 +96,7 @@ function extractImageUrls(message) {
  */
 async function extractImagesFromDiscordZips(zipList, postId) {
     if (!Array.isArray(zipList) || zipList.length === 0) return [];
-    if (!fs.existsSync(imagesDir)) {
-        try { fs.mkdirSync(imagesDir, { recursive: true }); } catch (e) {}
-    }
+    const imagesDir = await getEffectiveImagesDir();
 
     const extractedImagePaths = [];
 
@@ -161,9 +175,7 @@ async function extractImagesFromDiscordZips(zipList, postId) {
  */
 async function downloadAndSaveDiscordImages(imageUrls, postId) {
     if (!Array.isArray(imageUrls) || imageUrls.length === 0) return [];
-    if (!fs.existsSync(imagesDir)) {
-        try { fs.mkdirSync(imagesDir, { recursive: true }); } catch (e) {}
-    }
+    const imagesDir = await getEffectiveImagesDir();
     const savedPaths = [];
     for (let i = 0; i < imageUrls.length; i++) {
         const url = imageUrls[i];
@@ -883,5 +895,6 @@ module.exports = {
     extractMediaAttachments,
     extractImageUrls,
     extractImagesFromDiscordZips,
-    downloadAndSaveDiscordImages
+    downloadAndSaveDiscordImages,
+    getEffectiveImagesDir
 };

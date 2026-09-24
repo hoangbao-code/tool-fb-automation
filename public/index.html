@@ -513,6 +513,24 @@
                                 <p class="text-[11px] text-slate-400">Khi bạn gửi tin hoặc ảnh vào kênh, bot sẽ chờ trong khoảng thời gian này không có tin mới nữa thì mới gom thành 1 bài hoàn chỉnh và gửi sang Gemini Web.</p>
                             </div>
 
+                            <!-- Thư mục lưu ảnh & giải nén zip của Bot -->
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-xs font-semibold text-slate-300">Thư mục xuất ảnh Discord & Giải nén zip:</label>
+                                    <span class="text-[11px] text-slate-400">Nơi bot lưu trữ ảnh tải về máy</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input type="text" id="discord-image-dir" placeholder="Mặc định: ./data/images" class="flex-1 bg-slate-900 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 font-mono">
+                                    <button type="button" onclick="chooseImageDirUI()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shrink-0" title="Chọn thư mục trên máy tính">
+                                        <i data-lucide="folder" class="w-4 h-4 text-amber-400"></i> Chọn Thư Mục
+                                    </button>
+                                    <button type="button" onclick="openImageDirUI()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shrink-0" title="Mở thư mục này trong Windows Explorer">
+                                        <i data-lucide="external-link" class="w-4 h-4 text-blue-400"></i> Mở Thư Mục
+                                    </button>
+                                </div>
+                                <p class="text-[11px] text-slate-400">Toàn bộ ảnh bạn gửi qua Discord và các ảnh giải nén từ file .zip sẽ được bot tự động lưu vào thư mục này để máy bạn dễ dàng quản lý.</p>
+                            </div>
+
                             <div class="pt-2 flex items-center justify-end gap-3">
                                 <button type="button" onclick="sendDiscordTestMsgUI()" class="bg-slate-800 hover:bg-slate-700 text-violet-300 border border-violet-800/40 px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all" title="Gửi một tin nhắn thử nghiệm vào kênh Discord để xác nhận">
                                     <i data-lucide="send" class="w-4 h-4 text-violet-400"></i> Gửi Tin Test Vào Kênh

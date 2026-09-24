@@ -3496,12 +3496,16 @@ async function loadDiscordSettingsUI() {
             const tokenInput = document.getElementById('discord-bot-token');
             const chInput = document.getElementById('discord-channel-id');
             const debRange = document.getElementById('discord-debounce-range');
+            const imgDirInput = document.getElementById('discord-image-dir');
 
             if (tokenInput && s.discord_bot_token) tokenInput.value = s.discord_bot_token;
             if (chInput && s.discord_channel_id) chInput.value = s.discord_channel_id;
             if (debRange && s.discord_debounce_seconds) {
                 debRange.value = s.discord_debounce_seconds;
                 updateDebounceLabelUI(s.discord_debounce_seconds);
+            }
+            if (imgDirInput && s.discord_image_save_dir !== undefined) {
+                imgDirInput.value = s.discord_image_save_dir || '';
             }
         }
 
@@ -3513,10 +3517,36 @@ async function loadDiscordSettingsUI() {
     }
 }
 
+async function chooseImageDirUI() {
+    try {
+        const currentVal = document.getElementById('discord-image-dir')?.value || '';
+        const res = await window.electronApi.selectDirectory(currentVal);
+        if (!res.canceled && res.path) {
+            document.getElementById('discord-image-dir').value = res.path;
+            showToast('Đã chọn thư mục: ' + res.path + '. Hãy bấm "Lưu Cấu Hình" để áp dụng!', 'info');
+        }
+    } catch (err) {
+        showToast('Lỗi chọn thư mục: ' + err.message, 'error');
+    }
+}
+
+async function openImageDirUI() {
+    try {
+        const currentVal = document.getElementById('discord-image-dir')?.value?.trim() || '';
+        const res = await window.electronApi.openDirectory(currentVal);
+        if (!res.success && res.error) {
+            showToast('Không thể mở thư mục: ' + res.error, 'error');
+        }
+    } catch (err) {
+        showToast('Lỗi mở thư mục: ' + err.message, 'error');
+    }
+}
+
 async function saveDiscordConfigUI() {
     const token = document.getElementById('discord-bot-token')?.value?.trim() || '';
     const channelId = document.getElementById('discord-channel-id')?.value?.trim() || '';
     const debounceSeconds = document.getElementById('discord-debounce-range')?.value || '60';
+    const imageDir = document.getElementById('discord-image-dir')?.value?.trim() || '';
 
     if (!token) {
         showToast('Vui lòng nhập Discord Bot Token!', 'warning');
@@ -3531,7 +3561,8 @@ async function saveDiscordConfigUI() {
         await window.electronApi.saveSettings({
             discord_bot_token: token,
             discord_channel_id: channelId,
-            discord_debounce_seconds: debounceSeconds
+            discord_debounce_seconds: debounceSeconds,
+            discord_image_save_dir: imageDir
         });
         showToast('Đã lưu cấu hình Discord Bot thành công!', 'success');
     } catch (e) {
