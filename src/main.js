@@ -22,7 +22,8 @@ const {
     startDiscordBot,
     stopDiscordBot,
     getDiscordBotStatus,
-    setDiscordEventBroadcaster
+    setDiscordEventBroadcaster,
+    sendDiscordTestMessage
 } = require('./services/discordEngine');
 
 dotenv.config();
@@ -628,6 +629,80 @@ ipcMain.handle('get-discord-status', async () => {
     try {
         const status = getDiscordBotStatus();
         return { success: true, status };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('send-discord-test-msg', async (event, text) => {
+    try {
+        const res = await sendDiscordTestMessage(text);
+        return res;
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+// 6.2 Kiểm tra toàn diện hệ thống & API (System Health Check)
+ipcMain.handle('get-system-health', async () => {
+    try {
+        // 1. Chrome Gemini Web
+        let chromeActive = false;
+        let chromeBrowser = null;
+        let geminiTabUrl = null;
+        try {
+            const chRes = await isChromeDebuggingActive();
+            chromeActive = !!chRes.active;
+            chromeBrowser = chRes.browser || null;
+            if (chromeActive) {
+                const tabRes = await getActiveGeminiTabInfo();
+                if (tabRes && tabRes.success) {
+                    geminiTabUrl = tabRes.url;
+                }
+            }
+        } catch (e) {}
+
+        // 2. Discord Bot
+        const discordStatus = getDiscordBotStatus();
+
+        // 3. Facebook Groups & Session
+        const totalFb = await dbAsync.get(`SELECT COUNT(*) as c FROM fb_groups`);
+        const activeFb = await dbAsync.get(`SELECT COUNT(*) as c FROM fb_groups WHERE is_active = 1`);
+
+        // 4. Posts Queue
+        const pendingPosts = await dbAsync.get(`SELECT COUNT(*) as c FROM posts WHERE status = 'pending'`);
+        const postedPosts = await dbAsync.get(`SELECT COUNT(*) as c FROM posts WHERE status = 'posted'`);
+        const failedPosts = await dbAsync.get(`SELECT COUNT(*) as c FROM posts WHERE status = 'failed'`);
+
+        // 5. System settings
+        const autoPost = await dbAsync.get(`SELECT value FROM settings WHERE key = 'auto_post_enabled'`);
+        const stopFlag = await dbAsync.get(`SELECT value FROM settings WHERE key = 'emergency_stop'`);
+
+        return {
+            success: true,
+            health: {
+                timestamp: new Date().toISOString(),
+                chrome: {
+                    active: chromeActive,
+                    browser: chromeBrowser,
+                    geminiTabUrl: geminiTabUrl
+                },
+                discord: discordStatus,
+                facebook: {
+                    totalGroups: totalFb?.c || 0,
+                    activeGroups: activeFb?.c || 0
+                },
+                queue: {
+                    pending: pendingPosts?.c || 0,
+                    posted: postedPosts?.c || 0,
+                    failed: failedPosts?.c || 0
+                },
+                settings: {
+                    autoPostEnabled: autoPost?.value === '1',
+                    emergencyStop: stopFlag?.value === '1'
+                }
+            }
+        };
     } catch (e) {
         return { success: false, error: e.message };
     }

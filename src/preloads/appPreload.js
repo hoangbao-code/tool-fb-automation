@@ -59,10 +59,12 @@ contextBridge.exposeInMainWorld('electronApi', {
     getActiveGeminiUrl: () => ipcRenderer.invoke('get-active-gemini-url'),
     testChromeGemini: (payload) => ipcRenderer.invoke('test-chrome-gemini', payload),
 
-    // 6.1 Bot Discord
+    // 6.1 Bot Discord & Kiểm Tra Hệ Thống
     startDiscordBot: (config) => ipcRenderer.invoke('start-discord-bot', config),
     stopDiscordBot: () => ipcRenderer.invoke('stop-discord-bot'),
     getDiscordStatus: () => ipcRenderer.invoke('get-discord-status'),
+    sendDiscordTestMsg: (text) => ipcRenderer.invoke('send-discord-test-msg', text),
+    getSystemHealth: () => ipcRenderer.invoke('get-system-health'),
 
     // 7. Nhật ký
     getLogs: () => ipcRenderer.invoke('get-logs'),

@@ -227,6 +227,7 @@ function switchTab(tabId) {
         'zalo-groups': { title: 'QUẢN LÝ NHÓM ZALO', sub: 'Tích chọn các nhóm Zalo cần tự động gom tin' },
         discord: { title: 'NGUỒN TIN DISCORD BOT', sub: 'Nhận bài + ảnh từ Discord, gom sau 1 phút, biên tập Gemini Web và duyệt bài tương tác' },
         ai: { title: 'GEMINI WEB TRỰC TIẾP', sub: 'Tự động gửi tin vào cuộc trò chuyện & trích xuất bài đăng' },
+        health: { title: 'TRUNG TÂM KIỂM TRA HỆ THỐNG & API', sub: 'Giám sát thời gian thực: Gemini Web, Bot Discord, Facebook Webview và Database' },
         settings: { title: 'CÀI ĐẶT HỆ THỐNG', sub: 'Cấu hình thời gian giãn cách chống spam và tự động hóa' },
         logs: { title: 'NHẬT KÝ HOẠT ĐỘNG', sub: 'Theo dõi tiến trình hệ thống theo thời gian thực' }
     };
@@ -242,6 +243,7 @@ function switchTab(tabId) {
     else if (tabId === 'zalo-groups') loadZaloGroups();
     else if (tabId === 'discord') loadDiscordSettingsUI();
     else if (tabId === 'ai') { loadAiSettings(); checkChromeGeminiUI(true); }
+    else if (tabId === 'health') runFullSystemHealthCheckUI();
     else if (tabId === 'settings') loadGeneralSettings();
     else if (tabId === 'logs') loadLogs();
 }
@@ -3309,6 +3311,135 @@ async function toggleDiscordBotUI() {
         }
     } catch (e) {
         showToast('Lỗi: ' + e.message, 'error');
+    }
+}
+
+// Gửi tin nhắn thử nghiệm vào kênh Discord
+async function sendDiscordTestMsgUI() {
+    try {
+        const statusRes = await window.electronApi.getDiscordStatus();
+        if (!statusRes?.status?.isConnected) {
+            showToast('Bot Discord chưa kết nối! Vui lòng bấm Khởi Động Bot trước.', 'warning');
+            return;
+        }
+
+        showToast('Đang gửi tin nhắn thử nghiệm vào Discord...', 'info');
+        const res = await window.electronApi.sendDiscordTestMsg('🔔 **Kiểm tra kết nối thành công!**\nPostHub Tool Desktop và Discord Bot đang hoạt động hoàn hảo.');
+        if (res.success) {
+            showToast('✓ Đã gửi tin nhắn test thành công vào kênh Discord!', 'success');
+        } else {
+            showToast('Lỗi gửi tin test: ' + res.error, 'error');
+        }
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
+    }
+}
+
+// 9. TRUNG TÂM KIỂM TRA HỆ THỐNG & API (HEALTH CHECK DASHBOARD)
+async function runFullSystemHealthCheckUI() {
+    const overallBadge = document.getElementById('health-overall-badge');
+    const runBtn = document.getElementById('btn-run-health-check');
+
+    if (runBtn) {
+        runBtn.disabled = true;
+        runBtn.innerHTML = '<i data-lucide="refresh-cw" class="w-4 h-4 animate-spin"></i> Đang Kiểm Tra...';
+        if (window.lucide) lucide.createIcons();
+    }
+
+    try {
+        const res = await window.electronApi.getSystemHealth();
+        if (!res.success) throw new Error(res.error);
+
+        const h = res.health;
+
+        // 1. Chrome Gemini Web
+        const chromeBadge = document.getElementById('health-chrome-badge');
+        const chromePort = document.getElementById('health-chrome-port');
+        const chromeUrl = document.getElementById('health-chrome-url');
+        const chromeBrowser = document.getElementById('health-chrome-browser');
+
+        if (chromeBadge) {
+            if (h.chrome.active) {
+                chromeBadge.className = 'text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+                chromeBadge.innerText = '🟢 Đang Sẵn Sàng';
+            } else {
+                chromeBadge.className = 'text-xs px-2.5 py-0.5 rounded-full font-semibold bg-rose-500/20 text-rose-400 border border-rose-500/30';
+                chromeBadge.innerText = '🔴 Chưa Mở Chrome';
+            }
+        }
+        if (chromePort) chromePort.innerText = h.chrome.active ? '🟢 Cổng 9222 Đang Mở (OK)' : '🔴 Chưa mở';
+        if (chromeUrl) {
+            chromeUrl.innerText = h.chrome.geminiTabUrl ? h.chrome.geminiTabUrl : (h.chrome.active ? 'Chưa mở tab Gemini' : 'Chưa kết nối');
+            chromeUrl.title = h.chrome.geminiTabUrl || '';
+        }
+        if (chromeBrowser) chromeBrowser.innerText = h.chrome.browser || 'Google Chrome';
+
+        // 2. Bot Discord
+        const discordBadge = document.getElementById('health-discord-badge');
+        const discordName = document.getElementById('health-discord-name');
+        const discordChannel = document.getElementById('health-discord-channel');
+        const discordDebounce = document.getElementById('health-discord-debounce');
+
+        if (discordBadge) {
+            if (h.discord.isConnected) {
+                discordBadge.className = 'text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+                discordBadge.innerText = '🟢 Đang Lắng Nghe Kênh';
+            } else {
+                discordBadge.className = 'text-xs px-2.5 py-0.5 rounded-full font-semibold bg-slate-800 text-slate-400 border border-slate-700';
+                discordBadge.innerText = 'Chưa Kết Nối';
+            }
+        }
+        if (discordName) discordName.innerText = h.discord.botName || 'Chưa online';
+        if (discordChannel) discordChannel.innerText = h.discord.channelId ? `ID: ${h.discord.channelId}` : 'Chưa cấu hình';
+        if (discordDebounce) discordDebounce.innerText = `${h.discord.debounceSeconds} giây (${(h.discord.debounceSeconds / 60).toFixed(1)} phút)`;
+
+        // 3. Facebook Groups & Webview
+        const fbBadge = document.getElementById('health-fb-badge');
+        const fbTotal = document.getElementById('health-fb-total');
+        const fbActive = document.getElementById('health-fb-active');
+
+        if (fbBadge) {
+            fbBadge.className = h.facebook.activeGroups > 0 ? 'text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-xs px-2.5 py-0.5 rounded-full font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30';
+            fbBadge.innerText = h.facebook.activeGroups > 0 ? `🟢 ${h.facebook.activeGroups} Nhóm Sẵn Sàng` : '⚠️ Chưa Chọn Nhóm';
+        }
+        if (fbTotal) fbTotal.innerText = `${h.facebook.totalGroups} nhóm đã quét`;
+        if (fbActive) fbActive.innerText = `${h.facebook.activeGroups} nhóm đang BẬT`;
+
+        // 4. Queue & Database
+        const dbBadge = document.getElementById('health-db-badge');
+        const qPending = document.getElementById('health-queue-pending');
+        const qPosted = document.getElementById('health-queue-posted');
+        const qAuto = document.getElementById('health-setting-auto');
+
+        if (dbBadge) {
+            dbBadge.className = 'text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+            dbBadge.innerText = '🟢 Hoạt Động Tốt';
+        }
+        if (qPending) qPending.innerText = `${h.queue.pending} bài chờ duyệt`;
+        if (qPosted) qPosted.innerText = `${h.queue.posted} bài đã đăng`;
+        if (qAuto) qAuto.innerText = h.settings.autoPostEnabled ? '🟢 Đang Bật (Tự động)' : '⚪ Đang Tắt (Duyệt tay)';
+
+        // Đánh giá tổng quan
+        if (overallBadge) {
+            const isAllGood = h.chrome.active && h.discord.isConnected && h.facebook.activeGroups > 0;
+            if (isAllGood) {
+                overallBadge.className = 'text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+                overallBadge.innerText = '✓ Toàn Bộ Hệ Thống Đều Sẵn Sàng!';
+            } else {
+                overallBadge.className = 'text-xs px-2.5 py-0.5 rounded-full font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30';
+                overallBadge.innerText = 'Cần Kiểm Tra Lại Cấu Hình';
+            }
+        }
+
+        showToast('✓ Kiểm tra hệ thống & API hoàn tất!', 'success');
+    } catch (err) {
+        showToast('Lỗi kiểm tra hệ thống: ' + err.message, 'error');
+    } finally {
+        if (runBtn) {
+            runBtn.disabled = false;
+            runBtn.innerHTML = '<i data-lucide="refresh-cw" class="w-4 h-4"></i> Kiểm Tra Toàn Bộ Ngay';
+            if (window.lucide) lucide.createIcons();
+        }
     }
 }
 

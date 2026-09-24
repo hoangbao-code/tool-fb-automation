@@ -2,6 +2,7 @@ const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 const { dbAsync } = require('../db');
 const { rewriteWithGemini } = require('./gemini');
 const { publishPost } = require('./fbEngine');
+const { isChromeDebuggingActive } = require('./chromeGemini');
 
 let discordClient = null;
 let currentConfig = null;
@@ -45,6 +46,11 @@ function createApprovalButtons(postId, disabled = false) {
             .setCustomId(`discord_rewrite_${postId}`)
             .setLabel('🔄 Viết lại AI')
             .setStyle(ButtonStyle.Primary)
+            .setDisabled(disabled),
+        new ButtonBuilder()
+            .setCustomId(`discord_groups_${postId}`)
+            .setLabel('👥 Xem Nhóm FB')
+            .setStyle(ButtonStyle.Secondary)
             .setDisabled(disabled),
         new ButtonBuilder()
             .setCustomId(`discord_reject_${postId}`)
@@ -230,6 +236,46 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                 const text = message.content ? message.content.trim() : '';
                 const images = extractImageUrls(message);
 
+                // Lệnh kiểm tra trạng thái qua Discord
+                if (text.toLowerCase() === '!status' || text.toLowerCase() === '!check') {
+                    const activeGroups = await dbAsync.all(`SELECT name FROM fb_groups WHERE is_active = 1`);
+                    const pendingPosts = await dbAsync.all(`SELECT id FROM posts WHERE status = 'pending'`);
+                    let chromeStatus = { active: false };
+                    try {
+                        chromeStatus = await isChromeDebuggingActive();
+                    } catch (e) {}
+
+                    const statusEmbed = new EmbedBuilder()
+                        .setColor(0x5865f2)
+                        .setTitle('📊 BÁO CÁO HỆ THỐNG POSTHUB TOOL')
+                        .setDescription('Tình trạng hoạt động thời gian thực của Tool Desktop kết nối với Discord:')
+                        .addFields(
+                            { name: '🤖 Chrome Gemini', value: chromeStatus.active ? '🟢 Sẵn sàng' : '🔴 Chưa mở', inline: true },
+                            { name: '👥 Nhóm FB Đã Chọn', value: `${activeGroups.length} nhóm`, inline: true },
+                            { name: '📝 Bài Chờ Duyệt', value: `${pendingPosts.length} bài`, inline: true },
+                            { name: '⏳ Thời Gian Gom', value: `${currentConfig.debounceSeconds} giây`, inline: true },
+                            { name: '💻 Tool Desktop', value: '🟢 Đang chạy', inline: true }
+                        )
+                        .setFooter({ text: 'Gửi nội dung & ảnh phòng vào kênh này. Bot sẽ gom sau 1 phút và gửi nút duyệt!' })
+                        .setTimestamp();
+
+                    await message.reply({ embeds: [statusEmbed] });
+                    return;
+                }
+
+                // Lệnh xem danh sách nhóm FB qua Discord
+                if (text.toLowerCase() === '!groups') {
+                    const activeGroups = await dbAsync.all(`SELECT name FROM fb_groups WHERE is_active = 1`);
+                    if (activeGroups.length === 0) {
+                        await message.reply('⚠️ Hiện chưa có nhóm Facebook nào được chọn trong Tool Desktop. Hãy vào tab "Nhóm Facebook" trên tool để tích chọn!');
+                        return;
+                    }
+                    const listStr = activeGroups.slice(0, 15).map((g, i) => `${i + 1}. **${g.name}**`).join('\n');
+                    const extra = activeGroups.length > 15 ? `\n... và ${activeGroups.length - 15} nhóm khác.` : '';
+                    await message.reply(`👥 **Danh sách ${activeGroups.length} nhóm Facebook đang kích hoạt để đăng bài:**\n\n${listStr}${extra}`);
+                    return;
+                }
+
                 if (!text && images.length === 0) return;
 
                 await dbAsync.log('info', `[Discord Bot] Bắt được tin mới từ ${message.author.tag} (${text ? text.substring(0, 40) + '...' : ''} - ${images.length} ảnh)`);
@@ -360,6 +406,25 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                 await dbAsync.log('info', `[Discord] Bạn đã hủy bài đăng #${postId} từ Discord.`);
                 return;
             }
+
+            // 4. Bấm NÚT XEM NHÓM FB
+            if (customId.startsWith('discord_groups_')) {
+                const activeFbGroups = await dbAsync.all(`SELECT name FROM fb_groups WHERE is_active = 1`);
+                if (activeFbGroups.length === 0) {
+                    await interaction.reply({
+                        content: '⚠️ Hiện tại chưa có nhóm Facebook nào được kích hoạt để đăng bài trong Tool Desktop.',
+                        ephemeral: true
+                    });
+                } else {
+                    const listStr = activeFbGroups.slice(0, 15).map((g, i) => `${i + 1}. **${g.name}**`).join('\n');
+                    const extraStr = activeFbGroups.length > 15 ? `\n... và ${activeFbGroups.length - 15} nhóm khác.` : '';
+                    await interaction.reply({
+                        content: `👥 **Danh sách ${activeFbGroups.length} nhóm Facebook sẽ nhận bài đăng này:**\n\n${listStr}${extraStr}`,
+                        ephemeral: true
+                    });
+                }
+                return;
+            }
         });
 
         client.on('error', async (err) => {
@@ -375,6 +440,32 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
             }
         });
     });
+}
+
+/**
+ * Gửi tin nhắn kiểm tra kết nối vào kênh Discord
+ */
+async function sendDiscordTestMessage(customText) {
+    if (!discordClient || !discordClient.isReady()) {
+        throw new Error('Bot Discord chưa kết nối hoặc chưa online.');
+    }
+    const chId = currentConfig?.channelId;
+    if (!chId) throw new Error('Chưa cấu hình Channel ID.');
+    const ch = await discordClient.channels.fetch(chId);
+    if (!ch) throw new Error(`Không tìm thấy kênh với ID: ${chId}`);
+
+    const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle('🔔 Kiểm Tra Kết Nối PostHub Tool')
+        .setDescription(customText || '✅ **Bot Discord đã kết nối thành công với Tool Desktop!**\nSẵn sàng nhận bài viết và hình ảnh phòng trọ để biên tập bằng Gemini Web.')
+        .addFields(
+            { name: 'Thời gian chờ gom bài', value: `${currentConfig?.debounceSeconds || 60} giây`, inline: true },
+            { name: 'Trạng thái Bot', value: '🟢 Online & Sẵn sàng', inline: true }
+        )
+        .setTimestamp();
+
+    await ch.send({ embeds: [embed] });
+    return { success: true };
 }
 
 /**
@@ -418,5 +509,6 @@ module.exports = {
     stopDiscordBot,
     getDiscordBotStatus,
     setDiscordEventBroadcaster,
+    sendDiscordTestMessage,
     processDiscordBuffer // Exported for unit tests
 };

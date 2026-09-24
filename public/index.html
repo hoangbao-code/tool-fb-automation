@@ -75,6 +75,13 @@
                     <span>Gemini Web (AI)</span>
                 </button>
 
+                <!-- Tab: Kiểm Tra Hệ Thống & API -->
+                <button onclick="switchTab('health')" id="tab-btn-health" class="nav-btn">
+                    <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i>
+                    <span>Kiểm Tra Hệ Thống & API</span>
+                    <span id="badge-health-dot" class="ml-auto w-2 h-2 rounded-full bg-emerald-400"></span>
+                </button>
+
                 <!-- Tab 6: Settings -->
                 <button onclick="switchTab('settings')" id="tab-btn-settings" class="nav-btn">
                     <i data-lucide="settings" class="w-4 h-4"></i>
@@ -500,6 +507,9 @@
                             </div>
 
                             <div class="pt-2 flex items-center justify-end gap-3">
+                                <button type="button" onclick="sendDiscordTestMsgUI()" class="bg-slate-800 hover:bg-slate-700 text-violet-300 border border-violet-800/40 px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all" title="Gửi một tin nhắn thử nghiệm vào kênh Discord để xác nhận">
+                                    <i data-lucide="send" class="w-4 h-4 text-violet-400"></i> Gửi Tin Test Vào Kênh
+                                </button>
                                 <button onclick="saveDiscordConfigUI()" class="bg-violet-600 hover:bg-violet-500 text-white px-5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-md shadow-violet-900/20 transition-all">
                                     <i data-lucide="save" class="w-4 h-4"></i> Lưu Cấu Hình
                                 </button>
@@ -737,6 +747,189 @@
                              class="w-full h-full border-0"
                              allowpopups>
                     </webview>
+                </div>
+            </section>
+
+            <!-- TAB: KIỂM TRA HỆ THỐNG & API (HEALTH CHECK DASHBOARD) -->
+            <section id="tab-health" class="tab-pane tab-block h-full overflow-y-auto p-6 space-y-6">
+                <!-- Header Banner -->
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-emerald-950/60 via-slate-950/80 to-slate-900 p-5 rounded-2xl border border-emerald-800/40 shadow-xl">
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2.5">
+                            <span class="p-2 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">
+                                <i data-lucide="activity" class="w-6 h-6"></i>
+                            </span>
+                            <div>
+                                <h3 class="font-bold text-white text-lg flex items-center gap-2">
+                                    Trung Tâm Giám Sát & Kiểm Tra API Hệ Thống
+                                    <span id="health-overall-badge" class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Hệ Thống Sẵn Sàng</span>
+                                </h3>
+                                <p class="text-xs text-slate-400">Kiểm tra kết nối thời gian thực: Google Chrome Gemini Web, Bot Discord, Phiên Facebook Webview và Cơ Sở Dữ Liệu.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button id="btn-run-health-check" onclick="runFullSystemHealthCheckUI()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-900/30 transition-all">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i> Kiểm Tra Toàn Bộ Ngay
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4 Thành phần chính (Grid 2x2) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    
+                    <!-- 1. Google Chrome Gemini Web -->
+                    <div class="bg-slate-950/70 p-5 rounded-2xl border border-slate-800/80 space-y-4 shadow-sm hover:border-slate-700/80 transition-all">
+                        <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 border border-amber-500/20">
+                                    <i data-lucide="sparkles" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-sm text-white">Google Chrome Gemini Web</h4>
+                                    <span class="text-[11px] text-slate-400">Công cụ AI biên tập bài viết</span>
+                                </div>
+                            </div>
+                            <span id="health-chrome-badge" class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-slate-800 text-slate-400 border border-slate-700">Đang kiểm tra...</span>
+                        </div>
+                        <div class="text-xs space-y-2 text-slate-300">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Cổng Remote Debugging (9222):</span>
+                                <span id="health-chrome-port" class="font-semibold text-white font-mono">Chưa kết nối</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Cuộc trò chuyện / Gem đã ghim:</span>
+                                <span id="health-chrome-url" class="font-semibold text-white truncate max-w-[200px]" title="Chưa phát hiện">Chưa phát hiện</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Trình duyệt phát hiện:</span>
+                                <span id="health-chrome-browser" class="font-semibold text-white">Google Chrome</span>
+                            </div>
+                        </div>
+                        <div class="pt-2 flex items-center gap-2">
+                            <button onclick="launchChromeGeminiUI()" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all">
+                                <i data-lucide="chrome" class="w-3.5 h-3.5 text-amber-400"></i> Mở Chrome
+                            </button>
+                            <button onclick="testChromeGeminiUI()" class="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all">
+                                <i data-lucide="send" class="w-3.5 h-3.5"></i> Test Gửi Prompt
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 2. Bot Discord (Nguồn Nhận Tin & Duyệt) -->
+                    <div class="bg-slate-950/70 p-5 rounded-2xl border border-slate-800/80 space-y-4 shadow-sm hover:border-slate-700/80 transition-all">
+                        <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-9 h-9 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-400 border border-violet-500/20">
+                                    <i data-lucide="bot" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-sm text-white">Bot Discord & Nút Duyệt</h4>
+                                    <span class="text-[11px] text-slate-400">Kênh nhận bài & duyệt tương tác</span>
+                                </div>
+                            </div>
+                            <span id="health-discord-badge" class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-slate-800 text-slate-400 border border-slate-700">Đang kiểm tra...</span>
+                        </div>
+                        <div class="text-xs space-y-2 text-slate-300">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Tài khoản Bot:</span>
+                                <span id="health-discord-name" class="font-semibold text-white">Chưa kết nối</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Kênh lắng nghe ID:</span>
+                                <span id="health-discord-channel" class="font-semibold text-white font-mono">Chưa chọn</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Thời gian dừng gom bài:</span>
+                                <span id="health-discord-debounce" class="font-semibold text-violet-400">60 giây (1 phút)</span>
+                            </div>
+                        </div>
+                        <div class="pt-2 flex items-center gap-2">
+                            <button onclick="sendDiscordTestMsgUI()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all">
+                                <i data-lucide="message-square" class="w-3.5 h-3.5"></i> Gửi Tin Test Discord
+                            </button>
+                            <button onclick="switchTab('discord')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all">
+                                <i data-lucide="settings-2" class="w-3.5 h-3.5"></i> Cấu Hình Bot
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 3. Nhóm Facebook & Phiên Webview -->
+                    <div class="bg-slate-950/70 p-5 rounded-2xl border border-slate-800/80 space-y-4 shadow-sm hover:border-slate-700/80 transition-all">
+                        <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20">
+                                    <i data-lucide="users" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-sm text-white">Nhóm Facebook & Webview</h4>
+                                    <span class="text-[11px] text-slate-400">Kênh quét nhóm & đăng bài</span>
+                                </div>
+                            </div>
+                            <span id="health-fb-badge" class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30">Sẵn sàng</span>
+                        </div>
+                        <div class="text-xs space-y-2 text-slate-300">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Tổng nhóm Facebook đã quét:</span>
+                                <span id="health-fb-total" class="font-semibold text-white font-mono">0 nhóm</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Nhóm đang BẬT để đăng bài:</span>
+                                <span id="health-fb-active" class="font-bold text-emerald-400 font-mono">0 nhóm</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Chế độ đăng bài:</span>
+                                <span class="font-semibold text-white">Xáo trộn ngẫu nhiên + Giãn cách ngẫu nhiên</span>
+                            </div>
+                        </div>
+                        <div class="pt-2 flex items-center gap-2">
+                            <button onclick="switchTab('groups')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all">
+                                <i data-lucide="list" class="w-3.5 h-3.5"></i> Quản Lý Nhóm FB
+                            </button>
+                            <button onclick="switchTab('fb')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all">
+                                <i data-lucide="external-link" class="w-3.5 h-3.5"></i> Mở Facebook Web
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 4. Hàng Đợi & Cơ Sở Dữ Liệu SQLite -->
+                    <div class="bg-slate-950/70 p-5 rounded-2xl border border-slate-800/80 space-y-4 shadow-sm hover:border-slate-700/80 transition-all">
+                        <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
+                                    <i data-lucide="database" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-sm text-white">Hàng Đợi Bài & Cơ Sở Dữ Liệu</h4>
+                                    <span class="text-[11px] text-slate-400">Lưu trữ SQLite & Tiến độ đăng bài</span>
+                                </div>
+                            </div>
+                            <span id="health-db-badge" class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Bình thường</span>
+                        </div>
+                        <div class="text-xs space-y-2 text-slate-300">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Bài viết chờ duyệt:</span>
+                                <span id="health-queue-pending" class="font-bold text-amber-400 font-mono">0 bài</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Bài viết đã đăng:</span>
+                                <span id="health-queue-posted" class="font-bold text-emerald-400 font-mono">0 bài</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Tự động duyệt bài:</span>
+                                <span id="health-setting-auto" class="font-semibold text-white">Đang tắt</span>
+                            </div>
+                        </div>
+                        <div class="pt-2 flex items-center gap-2">
+                            <button onclick="switchTab('feed')" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all">
+                                <i data-lucide="layers" class="w-3.5 h-3.5"></i> Mở Bảng Tin
+                            </button>
+                            <button onclick="clearAllPostsUI('all')" class="bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800/60 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Dọn Sạch Hàng Đợi
+                            </button>
+                        </div>
+                    </div>
+
                 </div>
             </section>
 

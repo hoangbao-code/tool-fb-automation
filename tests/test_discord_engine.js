@@ -21,13 +21,15 @@ async function runDiscordEngineTests() {
     const testRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`discord_approve_${postId}`).setLabel('✅ Duyệt & Đăng FB').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`discord_rewrite_${postId}`).setLabel('🔄 Viết lại AI').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`discord_groups_${postId}`).setLabel('👥 Xem Nhóm FB').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`discord_reject_${postId}`).setLabel('❌ Hủy bỏ').setStyle(ButtonStyle.Danger)
     );
-    assert.strictEqual(testRow.components.length, 3, 'Phải có đủ 3 nút bấm tương tác');
+    assert.strictEqual(testRow.components.length, 4, 'Phải có đủ 4 nút bấm tương tác');
     assert.strictEqual(testRow.components[0].data.custom_id, `discord_approve_${postId}`);
     assert.strictEqual(testRow.components[1].data.custom_id, `discord_rewrite_${postId}`);
-    assert.strictEqual(testRow.components[2].data.custom_id, `discord_reject_${postId}`);
-    console.log('  ✓ Đầy đủ 3 nút bấm: [✅ Duyệt & Đăng FB], [🔄 Viết lại AI], [❌ Hủy bỏ].');
+    assert.strictEqual(testRow.components[2].data.custom_id, `discord_groups_${postId}`);
+    assert.strictEqual(testRow.components[3].data.custom_id, `discord_reject_${postId}`);
+    console.log('  ✓ Đầy đủ 4 nút bấm: [✅ Duyệt & Đăng FB], [🔄 Viết lại AI], [👥 Xem Nhóm FB], [❌ Hủy bỏ].');
 
     // 3. Kiểm thử lọc ảnh đính kèm từ Discord attachments
     console.log('\n3. Kiểm thử lọc ảnh đính kèm Discord (Attachments):');
