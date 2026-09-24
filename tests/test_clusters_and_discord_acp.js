@@ -1,3 +1,4 @@
+process.env.NODE_ENV = 'test';
 const assert = require('assert');
 const path = require('path');
 const fs = require('fs');
@@ -77,8 +78,8 @@ async function runClusterAndDiscordACPTests() {
 
         // 3. Kiểm thử Giao diện Nút Discord: Duyệt theo cụm & Select Menu & Nút ACP
         console.log('\n3. Kiểm thử Giao diện Component Discord (Menu Cụm & Nút ACP):');
-        // 3. Kiểm thử Giao diện Nút Discord: Xác Nhận & Select Menu Nhóm/Cụm & Nút ACP
-        console.log('\n3. Kiểm thử Giao diện Component Discord (Nút Xác Nhận, Menu Nhóm & Review ACP):');
+        // 3. Kiểm thử Giao diện Nút Discord: Xác Nhận & Chỉ Hiện Các Nhóm Đã Setting & Review ACP
+        console.log('\n3. Kiểm thử Giao diện Component Discord (Nút Xác Nhận, Menu Chỉ Hiện Nhóm Đã Setting & Review ACP):');
         const fakePostId = 8888;
 
         // Button [✅ Xác Nhận]
@@ -92,44 +93,27 @@ async function runClusterAndDiscordACPTests() {
         assert.strictEqual(mainRow.components[0].data.label, '✅ Xác Nhận');
         console.log('  ✓ Nút [✅ Xác Nhận] hiển thị chuẩn xác.');
 
-        // StringSelectMenu chọn Nhóm hoặc Cụm
+        // StringSelectMenu: CHỈ HIỂN THỊ CÁC NHÓM ĐÃ SETTING TRONG TOOL (Mỗi nhóm bao gồm các group FB đã chọn sẵn)
         const clusters = await dbAsync.getClusters();
-        const activeFbGroups = await dbAsync.all(`SELECT id, name, url FROM fb_groups WHERE is_active = 1`);
-        assert.ok(clusters.length >= 1, 'Phải có ít nhất 1 cụm vừa tạo');
-        assert.ok(activeFbGroups.length >= 3, 'Phải có ít nhất 3 nhóm active');
+        assert.ok(clusters.length >= 1, 'Phải có ít nhất 1 nhóm đã setting');
 
-        const selectOptions = [
+        const selectOptions = clusters.slice(0, 25).map(c =>
             new StringSelectMenuOptionBuilder()
-                .setLabel('🌐 Toàn bộ nhóm đã chọn trong Tool')
-                .setValue('target_all')
-                .setDescription(`${activeFbGroups.length} nhóm Facebook đã kích hoạt`),
-            ...clusters.slice(0, 10).map(c =>
-                new StringSelectMenuOptionBuilder()
-                    .setLabel(`📁 Cụm: ${c.name.substring(0, 85)}`)
-                    .setValue(`target_cluster_${c.id}`)
-                    .setDescription(`${c.group_count || 0} nhóm Facebook`)
-            )
-        ];
-        const remainingSlots = 25 - selectOptions.length;
-        for (const g of activeFbGroups.slice(0, remainingSlots)) {
-            selectOptions.push(
-                new StringSelectMenuOptionBuilder()
-                    .setLabel(`📌 ${g.name.substring(0, 85)}`)
-                    .setValue(`target_group_${g.id}`)
-                    .setDescription('Đăng riêng vào nhóm này')
-            );
-        }
+                .setLabel(`${c.name.substring(0, 85)}`)
+                .setValue(`target_cluster_${c.id}`)
+                .setDescription(`Bao gồm ${c.group_count || 0} group Facebook đã chọn sẵn`)
+                .setEmoji('📁')
+        );
 
         const targetSelectMenu = new ActionRowBuilder().addComponents(
             new StringSelectMenuBuilder()
                 .setCustomId(`discord_select_target_${fakePostId}`)
-                .setPlaceholder('🎯 Chọn Cụm hoặc Nhóm Facebook bạn muốn đăng...')
+                .setPlaceholder('🎯 Chọn Nhóm bạn muốn đăng...')
                 .addOptions(selectOptions)
         );
         assert.strictEqual(targetSelectMenu.components[0].data.custom_id, `discord_select_target_${fakePostId}`);
-        assert.ok(targetSelectMenu.components[0].options.length >= 4, 'Menu chọn mục tiêu phải có Tất cả nhóm + Cụm + Các nhóm riêng');
-        assert.ok(targetSelectMenu.components[0].options.length <= 25, 'Menu không được vượt quá giới hạn 25 items của Discord');
-        console.log(`  ✓ Menu Dropdown chọn Nhóm/Cụm khởi tạo thành công với ${targetSelectMenu.components[0].options.length} lựa chọn.`);
+        assert.strictEqual(targetSelectMenu.components[0].options.length, clusters.length, 'Menu chỉ hiện đúng các nhóm đã setting trong tool');
+        console.log(`  ✓ Menu Dropdown chỉ hiển thị đúng ${targetSelectMenu.components[0].options.length} nhóm đã setting trong Tool (không lẫn tạp).`);
 
         // Nút ACP xác nhận đăng sau khi đã xem review
         const chosenClusterId = cluster1.id;
@@ -151,19 +135,8 @@ async function runClusterAndDiscordACPTests() {
         assert.strictEqual(acpRow.components[0].data.label, '🚀 Xác Nhận Đăng (ACP)');
         console.log(`  ✓ Nút ACP [🚀 Xác Nhận Đăng (ACP)] với CustomID: discord_acp_${fakePostId}_${chosenClusterId} hợp lệ.`);
 
-        // Nút ACP với đăng 1 nhóm riêng lẻ
-        const singleGroupTarget = `group_${sampleGroup1}`;
-        const acpSingleRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`discord_acp_${fakePostId}_${singleGroupTarget}`)
-                .setLabel('🚀 Xác Nhận Đăng (ACP)')
-                .setStyle(ButtonStyle.Success)
-        );
-        assert.strictEqual(acpSingleRow.components[0].data.custom_id, `discord_acp_${fakePostId}_group_${sampleGroup1}`);
-        console.log(`  ✓ Nút ACP cho 1 nhóm riêng lẻ [discord_acp_${fakePostId}_group_${sampleGroup1}] hợp lệ.`);
-
-        // 4. Kiểm thử Đăng bài theo Cụm & Nhóm riêng lẻ (publishPost routing)
-        console.log('\n4. Kiểm thử Luồng Đăng Bài theo Cụm & Nhóm Riêng Lẻ:');
+        // 4. Kiểm thử Đăng bài theo Nhóm & Trả về Danh Sách Link Bài Viết / Group Để Check
+        console.log('\n4. Kiểm thử Luồng Đăng Bài theo Nhóm & Tạo Link Kiểm Tra:');
         // Tạo bài viết mẫu trong DB
         const postRes = await dbAsync.run(
             `INSERT INTO posts (rewritten_text, status, images) VALUES (?, 'pending', ?)`,
@@ -172,20 +145,26 @@ async function runClusterAndDiscordACPTests() {
         const testPostId = postRes.id;
         assert.ok(testPostId, 'Tạo bài post mẫu thành công');
 
-        // Lấy bài post kiểm tra cột images và target_cluster_id
-        const createdPost = await dbAsync.get(`SELECT * FROM posts WHERE id = ?`, [testPostId]);
-        assert.strictEqual(createdPost.rewritten_text, 'Cho thuê phòng studio Bình Thạnh giá tốt');
-        const parsedImages = JSON.parse(createdPost.images);
-        assert.strictEqual(parsedImages[0], dummyImgFile);
-        console.log('  ✓ Bài viết lưu trữ ảnh cục bộ hợp lệ trong DB.');
+        // Gọi publishPost và kiểm tra kết quả trả về có chứa danh sách groups và links
+        const pubResult = await publishPost(testPostId, chosenClusterId);
+        assert.strictEqual(pubResult.success, true);
+        assert.ok(Array.isArray(pubResult.groups), 'publishPost phải trả về mảng groups');
+        assert.strictEqual(pubResult.groups.length, 2, 'Số lượng group đã đăng phải bằng 2');
+        assert.ok(pubResult.groups[0].url, 'Mỗi group đã đăng phải có URL Facebook để check');
 
-        // Kiểm tra getGroupsForCluster khi gọi publishPost
-        const targetGroups = await dbAsync.getGroupsForCluster(cluster1.id);
-        assert.strictEqual(targetGroups.length, 2);
-        assert.ok(targetGroups.some(g => g.id === sampleGroup1));
-        assert.ok(targetGroups.some(g => g.id === sampleGroup2));
-        assert.ok(!targetGroups.some(g => g.id === sampleGroup3), 'Không được lẫn nhóm của cụm khác vào');
-        console.log('  ✓ Bộ lọc nhóm theo Cụm cách ly tuyệt đối, không đăng nhầm sang cụm khác.');
+        // Kiểm tra cột post_links trong DB
+        const updatedPost = await dbAsync.get(`SELECT * FROM posts WHERE id = ?`, [testPostId]);
+        assert.strictEqual(updatedPost.status, 'posted');
+        assert.ok(updatedPost.post_links, 'Cột post_links phải được lưu trữ trong DB');
+        const parsedLinks = JSON.parse(updatedPost.post_links);
+        assert.strictEqual(parsedLinks.length, 2);
+        console.log(`  ✓ publishPost lưu trữ và trả về đầy đủ ${parsedLinks.length} link group Facebook để check.`);
+
+        // Tạo chuỗi link hiển thị trên Discord Embed
+        const linksMarkdown = pubResult.groups.map((g, idx) => `${idx + 1}. 🔗 **[${g.name}](${g.url})**`).join('\n');
+        assert.ok(linksMarkdown.includes(sampleUrl1));
+        assert.ok(linksMarkdown.includes(sampleUrl2));
+        console.log('  ✓ Tạo chuỗi Markdown Links cho Discord Embed chính xác:\n' + linksMarkdown.split('\n').map(l => '      ' + l).join('\n'));
 
         // 5. Kiểm thử Xóa Cụm Nhóm
         console.log('\n5. Kiểm thử Xóa Cụm Nhóm:');

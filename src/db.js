@@ -67,6 +67,7 @@ db.serialize(() => {
     // Tự động nâng cấp cột bảng posts nếu thiếu
     db.run(`ALTER TABLE posts ADD COLUMN target_cluster_id INTEGER`, () => {});
     db.run(`ALTER TABLE posts ADD COLUMN images TEXT`, () => {});
+    db.run(`ALTER TABLE posts ADD COLUMN post_links TEXT`, () => {});
 
     // 4. Tin nhắn Zalo đã bắt được
     db.run(`

@@ -176,22 +176,32 @@ async function publishPost(postId, clusterId = null) {
 
         // Nghỉ giãn cách rải rác giữa các nhóm (trừ nhóm cuối cùng)
         if (i < shuffledGroups.length - 1) {
-            const jitterDelay = Math.floor(Math.random() * (baseMax - baseMin + 1)) + baseMin;
-            await dbAsync.log('info', `[Facebook] Giãn cách ngẫu nhiên ${jitterDelay}s trước khi đăng nhóm tiếp theo để chống spam & ngâm bài...`);
-            await new Promise(r => setTimeout(r, jitterDelay * 1000));
+            if (process.env.NODE_ENV === 'test') {
+                await new Promise(r => setTimeout(r, 10));
+            } else {
+                const jitterDelay = Math.floor(Math.random() * (baseMax - baseMin + 1)) + baseMin;
+                await dbAsync.log('info', `[Facebook] Giãn cách ngẫu nhiên ${jitterDelay}s trước khi đăng nhóm tiếp theo để chống spam & ngâm bài...`);
+                await new Promise(r => setTimeout(r, jitterDelay * 1000));
+            }
         }
     }
 
+    const postedGroups = shuffledGroups.map(g => ({
+        id: g.id,
+        name: g.name,
+        url: g.url
+    }));
+
     await dbAsync.run(
-        `UPDATE posts SET status = 'posted', posted_at = CURRENT_TIMESTAMP WHERE id = ?`,
-        [postId]
+        `UPDATE posts SET status = 'posted', posted_at = CURRENT_TIMESTAMP, post_links = ? WHERE id = ?`,
+        [JSON.stringify(postedGroups), postId]
     );
 
     if (eventBroadcaster) {
-        eventBroadcaster('post-published', { id: postId, status: 'posted', groupCount: shuffledGroups.length });
+        eventBroadcaster('post-published', { id: postId, status: 'posted', groupCount: shuffledGroups.length, groups: postedGroups });
     }
     await dbAsync.log('info', `✓ Đã hoàn tất đăng bài #${postId} rải rác lộn xộn lên ${shuffledGroups.length} nhóm an toàn!`);
-    return { success: true };
+    return { success: true, groupCount: shuffledGroups.length, groups: postedGroups };
 }
 
 /**
