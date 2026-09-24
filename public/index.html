@@ -128,8 +128,20 @@
                 <span id="page-subtitle" class="text-xs text-slate-400 hidden sm:inline">| Xem xét và xuất bản bài viết tự động</span>
             </div>
 
-            <!-- Header Quick Stats -->
-            <div class="flex items-center gap-4 text-xs">
+            <!-- Header Quick Stats & Quick Image Dir Button -->
+            <div class="flex items-center gap-3 text-xs">
+                <!-- Nút chọn nhanh thư mục xuất ảnh của Bot -->
+                <div class="flex items-center bg-slate-900 hover:bg-slate-800/90 rounded-lg border border-slate-700/80 transition-all p-0.5">
+                    <button type="button" onclick="chooseImageDirUI()" class="flex items-center gap-1.5 text-slate-300 hover:text-white px-2.5 py-1 text-xs font-semibold" title="Click để chọn thư mục lưu ảnh và giải nén zip của bot">
+                        <i data-lucide="folder" class="w-3.5 h-3.5 text-amber-400"></i>
+                        <span class="text-slate-400 hidden sm:inline">Xuất ảnh:</span>
+                        <b id="head-image-dir-display" class="text-amber-300 font-mono text-[11px] max-w-[140px] truncate" title="Thư mục xuất ảnh">data/images</b>
+                    </button>
+                    <button type="button" onclick="openImageDirUI()" class="p-1 text-slate-400 hover:text-blue-400 border-l border-slate-800 transition-all" title="Mở thư mục này trong Windows Explorer">
+                        <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+
                 <div class="flex items-center gap-1.5 bg-slate-900 px-3 py-1 rounded-lg border border-slate-800">
                     <span class="text-slate-400">Tin Zalo:</span>
                     <b id="head-stat-zalo" class="text-blue-400 font-bold">0</b>
@@ -462,6 +474,11 @@
                         </div>
                     </div>
                     <div class="flex items-center gap-3">
+                        <button type="button" onclick="chooseImageDirUI()" class="bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-sm" title="Click để chọn thư mục xuất ảnh của Bot trên máy tính">
+                            <i data-lucide="folder" class="w-4 h-4 text-amber-400"></i>
+                            <span>Thư mục xuất ảnh:</span>
+                            <span class="discord-image-dir-val font-mono text-[11px] text-amber-300 underline max-w-[150px] truncate">data/images</span>
+                        </button>
                         <button id="discord-toggle-btn" onclick="toggleDiscordBotUI()" class="bg-violet-600 hover:bg-violet-500 text-white px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-violet-900/30 transition-all">
                             <i data-lucide="play" class="w-4 h-4"></i> Khởi Động Bot Discord
                         </button>

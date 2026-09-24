@@ -3507,6 +3507,7 @@ async function loadDiscordSettingsUI() {
             if (imgDirInput && s.discord_image_save_dir !== undefined) {
                 imgDirInput.value = s.discord_image_save_dir || '';
             }
+            updateImageDirDisplays(s.discord_image_save_dir || '');
         }
 
         if (statusRes?.success) {
@@ -3517,13 +3518,40 @@ async function loadDiscordSettingsUI() {
     }
 }
 
+function updateImageDirDisplays(dirPath) {
+    state.discordImageDir = dirPath || '';
+    const display = dirPath && dirPath.trim() ? dirPath.trim() : 'data/images';
+    const shortText = display.length > 28 ? '...' + display.slice(-25) : display;
+
+    const headDisplay = document.getElementById('head-image-dir-display');
+    if (headDisplay) {
+        headDisplay.innerText = shortText;
+        headDisplay.title = display;
+    }
+
+    const inputDisplay = document.getElementById('discord-image-dir');
+    if (inputDisplay) {
+        inputDisplay.value = dirPath || '';
+    }
+
+    document.querySelectorAll('.discord-image-dir-val').forEach(el => {
+        el.innerText = shortText;
+        el.title = display;
+    });
+
+    if (window.lucide) lucide.createIcons();
+}
+
 async function chooseImageDirUI() {
     try {
-        const currentVal = document.getElementById('discord-image-dir')?.value || '';
+        const currentVal = state.discordImageDir || document.getElementById('discord-image-dir')?.value || '';
         const res = await window.electronApi.selectDirectory(currentVal);
         if (!res.canceled && res.path) {
-            document.getElementById('discord-image-dir').value = res.path;
-            showToast('Đã chọn thư mục: ' + res.path + '. Hãy bấm "Lưu Cấu Hình" để áp dụng!', 'info');
+            const newPath = res.path;
+            // TỰ ĐỘNG LƯU NGAY VÀO DATABASE - KHÔNG CẦN VÀO SETTINGS HAY CODE NỮA
+            await window.electronApi.saveSettings({ discord_image_save_dir: newPath });
+            updateImageDirDisplays(newPath);
+            showToast(`✓ Đã lưu thư mục xuất ảnh của Bot: ${newPath}`, 'success');
         }
     } catch (err) {
         showToast('Lỗi chọn thư mục: ' + err.message, 'error');
@@ -3532,7 +3560,7 @@ async function chooseImageDirUI() {
 
 async function openImageDirUI() {
     try {
-        const currentVal = document.getElementById('discord-image-dir')?.value?.trim() || '';
+        const currentVal = state.discordImageDir || document.getElementById('discord-image-dir')?.value?.trim() || '';
         const res = await window.electronApi.openDirectory(currentVal);
         if (!res.success && res.error) {
             showToast('Không thể mở thư mục: ' + res.error, 'error');
