@@ -87,14 +87,21 @@ async function publishPost(postId, clusterId = null) {
     const post = await dbAsync.get(`SELECT * FROM posts WHERE id = ?`, [postId]);
     if (!post) throw new Error('Không tìm thấy bài viết ID: ' + postId);
 
-    const actualClusterId = clusterId || post.target_cluster_id;
+    const actualTarget = clusterId || post.target_cluster_id;
     let targetGroups = [];
     let clusterLabel = '';
 
-    if (actualClusterId && actualClusterId !== 'all') {
-        const cluster = await dbAsync.get(`SELECT name FROM fb_clusters WHERE id = ?`, [actualClusterId]);
-        clusterLabel = cluster ? `Cụm [${cluster.name}]` : `Cụm #${actualClusterId}`;
-        targetGroups = await dbAsync.getGroupsForCluster(actualClusterId);
+    if (typeof actualTarget === 'string' && actualTarget.startsWith('group_')) {
+        const gid = parseInt(actualTarget.replace('group_', ''), 10);
+        const grp = await dbAsync.get(`SELECT * FROM fb_groups WHERE id = ?`, [gid]);
+        if (grp) {
+            targetGroups = [grp];
+            clusterLabel = `Nhóm [${grp.name}]`;
+        }
+    } else if (actualTarget && actualTarget !== 'all') {
+        const cluster = await dbAsync.get(`SELECT name FROM fb_clusters WHERE id = ?`, [actualTarget]);
+        clusterLabel = cluster ? `Cụm [${cluster.name}]` : `Cụm #${actualTarget}`;
+        targetGroups = await dbAsync.getGroupsForCluster(actualTarget);
     } else {
         clusterLabel = 'Tất cả nhóm đã chọn';
         targetGroups = await dbAsync.all(`SELECT * FROM fb_groups WHERE is_active = 1`);

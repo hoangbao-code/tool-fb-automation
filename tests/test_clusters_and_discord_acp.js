@@ -77,45 +77,61 @@ async function runClusterAndDiscordACPTests() {
 
         // 3. Kiểm thử Giao diện Nút Discord: Duyệt theo cụm & Select Menu & Nút ACP
         console.log('\n3. Kiểm thử Giao diện Component Discord (Menu Cụm & Nút ACP):');
+        // 3. Kiểm thử Giao diện Nút Discord: Xác Nhận & Select Menu Nhóm/Cụm & Nút ACP
+        console.log('\n3. Kiểm thử Giao diện Component Discord (Nút Xác Nhận, Menu Nhóm & Review ACP):');
         const fakePostId = 8888;
 
-        // Button [✅ Duyệt Theo Cụm]
+        // Button [✅ Xác Nhận]
         const mainRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`discord_choose_cluster_${fakePostId}`).setLabel('✅ Duyệt Theo Cụm').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`discord_choose_cluster_${fakePostId}`).setLabel('✅ Xác Nhận').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`discord_rewrite_${fakePostId}`).setLabel('🔄 Viết lại AI').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`discord_groups_${fakePostId}`).setLabel('👥 Xem Nhóm FB').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`discord_reject_${fakePostId}`).setLabel('❌ Hủy bỏ').setStyle(ButtonStyle.Danger)
         );
         assert.strictEqual(mainRow.components[0].data.custom_id, `discord_choose_cluster_${fakePostId}`);
-        assert.strictEqual(mainRow.components[0].data.label, '✅ Duyệt Theo Cụm');
-        console.log('  ✓ Nút [✅ Duyệt Theo Cụm] hiển thị chuẩn xác.');
+        assert.strictEqual(mainRow.components[0].data.label, '✅ Xác Nhận');
+        console.log('  ✓ Nút [✅ Xác Nhận] hiển thị chuẩn xác.');
 
-        // StringSelectMenu chọn cụm
+        // StringSelectMenu chọn Nhóm hoặc Cụm
         const clusters = await dbAsync.getClusters();
+        const activeFbGroups = await dbAsync.all(`SELECT id, name, url FROM fb_groups WHERE is_active = 1`);
         assert.ok(clusters.length >= 1, 'Phải có ít nhất 1 cụm vừa tạo');
+        assert.ok(activeFbGroups.length >= 3, 'Phải có ít nhất 3 nhóm active');
+
         const selectOptions = [
             new StringSelectMenuOptionBuilder()
-                .setLabel('🌐 Tất cả các nhóm')
-                .setValue('all')
-                .setDescription('Đăng vào toàn bộ các nhóm đang kích hoạt'),
-            ...clusters.slice(0, 24).map(c =>
+                .setLabel('🌐 Toàn bộ nhóm đã chọn trong Tool')
+                .setValue('target_all')
+                .setDescription(`${activeFbGroups.length} nhóm Facebook đã kích hoạt`),
+            ...clusters.slice(0, 10).map(c =>
                 new StringSelectMenuOptionBuilder()
-                    .setLabel(`📁 ${c.name.substring(0, 95)}`)
-                    .setValue(String(c.id))
+                    .setLabel(`📁 Cụm: ${c.name.substring(0, 85)}`)
+                    .setValue(`target_cluster_${c.id}`)
                     .setDescription(`${c.group_count || 0} nhóm Facebook`)
             )
         ];
-        const clusterSelectMenu = new ActionRowBuilder().addComponents(
+        const remainingSlots = 25 - selectOptions.length;
+        for (const g of activeFbGroups.slice(0, remainingSlots)) {
+            selectOptions.push(
+                new StringSelectMenuOptionBuilder()
+                    .setLabel(`📌 ${g.name.substring(0, 85)}`)
+                    .setValue(`target_group_${g.id}`)
+                    .setDescription('Đăng riêng vào nhóm này')
+            );
+        }
+
+        const targetSelectMenu = new ActionRowBuilder().addComponents(
             new StringSelectMenuBuilder()
-                .setCustomId(`discord_select_cluster_${fakePostId}`)
-                .setPlaceholder('👉 Chọn cụm nhóm Facebook muốn đăng...')
+                .setCustomId(`discord_select_target_${fakePostId}`)
+                .setPlaceholder('🎯 Chọn Cụm hoặc Nhóm Facebook bạn muốn đăng...')
                 .addOptions(selectOptions)
         );
-        assert.strictEqual(clusterSelectMenu.components[0].data.custom_id, `discord_select_cluster_${fakePostId}`);
-        assert.ok(clusterSelectMenu.components[0].options.length >= 2, 'Menu chọn cụm phải có tùy chọn All + các cụm');
-        console.log(`  ✓ Menu Dropdown chọn cụm khởi tạo thành công với ${clusterSelectMenu.components[0].options.length} lựa chọn.`);
+        assert.strictEqual(targetSelectMenu.components[0].data.custom_id, `discord_select_target_${fakePostId}`);
+        assert.ok(targetSelectMenu.components[0].options.length >= 4, 'Menu chọn mục tiêu phải có Tất cả nhóm + Cụm + Các nhóm riêng');
+        assert.ok(targetSelectMenu.components[0].options.length <= 25, 'Menu không được vượt quá giới hạn 25 items của Discord');
+        console.log(`  ✓ Menu Dropdown chọn Nhóm/Cụm khởi tạo thành công với ${targetSelectMenu.components[0].options.length} lựa chọn.`);
 
-        // Nút ACP xác nhận đăng vào cụm đã chọn
+        // Nút ACP xác nhận đăng sau khi đã xem review
         const chosenClusterId = cluster1.id;
         const acpRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -124,7 +140,7 @@ async function runClusterAndDiscordACPTests() {
                 .setStyle(ButtonStyle.Success),
             new ButtonBuilder()
                 .setCustomId(`discord_choose_cluster_${fakePostId}`)
-                .setLabel('🔙 Chọn Cụm Khác')
+                .setLabel('🔙 Chọn Nhóm Khác')
                 .setStyle(ButtonStyle.Secondary),
             new ButtonBuilder()
                 .setCustomId(`discord_reject_${fakePostId}`)
@@ -135,8 +151,19 @@ async function runClusterAndDiscordACPTests() {
         assert.strictEqual(acpRow.components[0].data.label, '🚀 Xác Nhận Đăng (ACP)');
         console.log(`  ✓ Nút ACP [🚀 Xác Nhận Đăng (ACP)] với CustomID: discord_acp_${fakePostId}_${chosenClusterId} hợp lệ.`);
 
-        // 4. Kiểm thử Đăng bài theo Cụm (publishPost with clusterId)
-        console.log('\n4. Kiểm thử Luồng Đăng Bài theo Cụm (Cluster Routing):');
+        // Nút ACP với đăng 1 nhóm riêng lẻ
+        const singleGroupTarget = `group_${sampleGroup1}`;
+        const acpSingleRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`discord_acp_${fakePostId}_${singleGroupTarget}`)
+                .setLabel('🚀 Xác Nhận Đăng (ACP)')
+                .setStyle(ButtonStyle.Success)
+        );
+        assert.strictEqual(acpSingleRow.components[0].data.custom_id, `discord_acp_${fakePostId}_group_${sampleGroup1}`);
+        console.log(`  ✓ Nút ACP cho 1 nhóm riêng lẻ [discord_acp_${fakePostId}_group_${sampleGroup1}] hợp lệ.`);
+
+        // 4. Kiểm thử Đăng bài theo Cụm & Nhóm riêng lẻ (publishPost routing)
+        console.log('\n4. Kiểm thử Luồng Đăng Bài theo Cụm & Nhóm Riêng Lẻ:');
         // Tạo bài viết mẫu trong DB
         const postRes = await dbAsync.run(
             `INSERT INTO posts (rewritten_text, status, images) VALUES (?, 'pending', ?)`,
