@@ -420,11 +420,15 @@ function renderPostImages(imagesData) {
                 <i data-lucide="image" class="w-3 h-3 text-blue-400"></i> Ảnh đính kèm (${imgs.length}):
             </span>
             <div class="flex flex-wrap gap-2">
-                ${imgs.slice(0, 4).map((src, idx) => `
-                    <div class="relative group/img w-14 h-14 rounded-lg overflow-hidden bg-slate-950 border border-slate-800 shadow-sm cursor-pointer" onclick="window.open('${escapeHtml(src)}', '_blank')">
-                        <img src="${escapeHtml(src)}" class="w-full h-full object-cover group-hover/img:scale-110 transition-all duration-200" alt="Ảnh ${idx + 1}" />
+                ${imgs.slice(0, 4).map((src, idx) => {
+                    const displaySrc = (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('file://') || src.startsWith('data:'))
+                        ? src
+                        : 'file:///' + src.replace(/\\/g, '/');
+                    return `
+                    <div class="relative group/img w-14 h-14 rounded-lg overflow-hidden bg-slate-950 border border-slate-800 shadow-sm cursor-pointer" onclick="window.open('${escapeHtml(displaySrc)}', '_blank')">
+                        <img src="${escapeHtml(displaySrc)}" class="w-full h-full object-cover group-hover/img:scale-110 transition-all duration-200" alt="Ảnh ${idx + 1}" />
                     </div>
-                `).join('')}
+                `}).join('')}
                 ${imgs.length > 4 ? `
                     <div class="w-14 h-14 rounded-lg bg-slate-800/80 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-300">
                         +${imgs.length - 4}

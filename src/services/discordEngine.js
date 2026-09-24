@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const AdmZip = require('adm-zip');
 const { 
     Client, 
     GatewayIntentBits, 
@@ -37,20 +38,121 @@ function setDiscordEventBroadcaster(fn) {
 }
 
 /**
- * Trích xuất link ảnh từ tin nhắn Discord
+ * Trích xuất link ảnh và file nén zip từ tin nhắn Discord
  */
-function extractImageUrls(message) {
-    const urls = [];
+function extractMediaAttachments(message) {
+    const images = [];
+    const zips = [];
     if (message.attachments && message.attachments.size > 0) {
         message.attachments.forEach(att => {
-            const isImage = (att.contentType && att.contentType.startsWith('image/')) ||
-                /\.(png|jpe?g|webp|gif|bmp)$/i.test(att.name || att.url);
+            const fileName = att.name || '';
+            const contentType = att.contentType || '';
+            const url = att.url;
+
+            const isImage = (contentType && contentType.startsWith('image/')) ||
+                /\.(png|jpe?g|webp|gif|bmp)$/i.test(fileName || url);
+
+            const isZip = contentType === 'application/zip' ||
+                contentType === 'application/x-zip-compressed' ||
+                (contentType === 'application/octet-stream' && /\.zip$/i.test(fileName)) ||
+                /\.zip$/i.test(fileName || url);
+
             if (isImage) {
-                urls.push(att.url);
+                images.push(url);
+            } else if (isZip) {
+                zips.push({ url, name: fileName || 'archive.zip' });
             }
         });
     }
-    return urls;
+    return { images, zips };
+}
+
+/**
+ * Giữ hàm cũ để tương thích
+ */
+function extractImageUrls(message) {
+    return extractMediaAttachments(message).images;
+}
+
+/**
+ * Tự động tải và giải nén file zip từ Discord, trích xuất tất cả ảnh bên trong
+ * Hỗ trợ cả file zip online (URL) lẫn file zip cục bộ
+ */
+async function extractImagesFromDiscordZips(zipList, postId) {
+    if (!Array.isArray(zipList) || zipList.length === 0) return [];
+    if (!fs.existsSync(imagesDir)) {
+        try { fs.mkdirSync(imagesDir, { recursive: true }); } catch (e) {}
+    }
+
+    const extractedImagePaths = [];
+
+    for (let z = 0; z < zipList.length; z++) {
+        const item = zipList[z];
+        const zipUrl = typeof item === 'string' ? item : item.url;
+        const zipName = (typeof item === 'object' && item.name) ? item.name : (typeof item === 'string' ? path.basename(item) : `archive_${z + 1}.zip`);
+
+        try {
+            console.log(`[DiscordEngine] Đang xử lý file zip: ${zipName}...`);
+            let admZip = null;
+
+            // Nếu là đường dẫn file cục bộ (dùng trong test hoặc file đã tải)
+            if (typeof zipUrl === 'string' && fs.existsSync(zipUrl)) {
+                admZip = new AdmZip(zipUrl);
+            } else {
+                // Tải từ Discord URL
+                const res = await fetch(zipUrl, { signal: AbortSignal.timeout(60000) });
+                if (!res.ok) {
+                    console.warn(`[DiscordEngine] Không thể tải file zip (HTTP ${res.status}): ${zipUrl}`);
+                    continue;
+                }
+                const arrayBuffer = await res.arrayBuffer();
+                admZip = new AdmZip(Buffer.from(arrayBuffer));
+            }
+
+            const entries = admZip.getEntries();
+            let countInZip = 0;
+
+            for (let i = 0; i < entries.length; i++) {
+                const entry = entries[i];
+                if (entry.isDirectory) continue;
+
+                const entryName = entry.entryName || '';
+                // Bỏ qua rác macOS / Windows
+                if (entryName.includes('__MACOSX') || entry.name.startsWith('._') || entry.name.startsWith('.') || entryName.toLowerCase().includes('thumbs.db')) {
+                    continue;
+                }
+
+                // Kiểm tra định dạng ảnh
+                const extMatch = entry.name.match(/\.(png|jpe?g|webp|gif|bmp)$/i);
+                if (extMatch) {
+                    try {
+                        const ext = extMatch[1].toLowerCase();
+                        const rawBase = path.basename(entry.name, path.extname(entry.name));
+                        const baseClean = rawBase.replace(/[^a-zA-Z0-9_\-]/g, '_');
+                        const savedFileName = `post_${postId || Date.now()}_zip_${z + 1}_${i + 1}_${baseClean || 'photo'}_${Date.now()}.${ext}`;
+                        const targetFilePath = path.join(imagesDir, savedFileName);
+
+                        const imgBuffer = admZip.readFile(entry);
+                        if (imgBuffer && imgBuffer.length > 0) {
+                            fs.writeFileSync(targetFilePath, imgBuffer);
+                            extractedImagePaths.push(targetFilePath);
+                            countInZip++;
+                        }
+                    } catch (entryErr) {
+                        console.warn(`[DiscordEngine] Lỗi trích xuất file ${entry.name} trong zip:`, entryErr.message);
+                    }
+                }
+            }
+
+            console.log(`[DiscordEngine] Đã giải nén ${countInZip} ảnh từ file zip "${zipName}".`);
+            await dbAsync.log('info', `[Discord Bot] Đã tự động giải nén thành công ${countInZip} ảnh từ file zip "${zipName}".`);
+        } catch (zipErr) {
+            console.error(`[DiscordEngine] Lỗi khi giải nén file zip "${zipName}":`, zipErr.message);
+            await dbAsync.log('warn', `[Discord Bot] Lỗi khi xử lý file zip "${zipName}": ${zipErr.message}`);
+        }
+    }
+
+    return extractedImagePaths;
 }
 
 /**
@@ -127,31 +229,51 @@ async function processDiscordBuffer(channelId) {
     if (!buffer) return;
     channelBuffers.delete(channelId);
 
-    const { channel, texts, images, username, userTag } = buffer;
+    const { channel, texts, images, zips = [], username, userTag } = buffer;
     const combinedText = texts.filter(Boolean).join('\n\n').trim();
     const uniqueImages = [...new Set(images)];
 
-    if (!combinedText && uniqueImages.length === 0) return;
+    // Khử trùng lặp file zip
+    const uniqueZips = [];
+    const seenZipUrls = new Set();
+    for (const z of zips) {
+        const u = typeof z === 'string' ? z : z.url;
+        if (u && !seenZipUrls.has(u)) {
+            seenZipUrls.add(u);
+            uniqueZips.push(typeof z === 'string' ? { url: z, name: 'archive.zip' } : z);
+        }
+    }
 
-    await dbAsync.log('info', `[Discord Bot] Đã hết 1 phút chờ. Bắt đầu xử lý bài đăng từ ${userTag} (${combinedText.length} ký tự, ${uniqueImages.length} ảnh)...`);
+    if (!combinedText && uniqueImages.length === 0 && uniqueZips.length === 0) return;
+
+    const mediaDesc = [];
+    if (uniqueImages.length > 0) mediaDesc.push(`${uniqueImages.length} ảnh trực tiếp`);
+    if (uniqueZips.length > 0) mediaDesc.push(`${uniqueZips.length} file zip`);
+    const mediaDescStr = mediaDesc.length > 0 ? mediaDesc.join(' + ') : 'không có ảnh';
+
+    await dbAsync.log('info', `[Discord Bot] Đã hết thời gian chờ gom. Bắt đầu xử lý bài đăng từ ${userTag} (${combinedText.length} ký tự, ${mediaDescStr})...`);
 
     // Gửi thông báo đang xử lý vào Discord
     let statusMsg = null;
     try {
-        statusMsg = await channel.send(`⏳ **Đã gom xong bài (${uniqueImages.length} ảnh)!** Đang gửi vào Google Chrome Gemini Web để biên tập lại nội dung, bạn chờ chút nhé...`);
+        const zipNote = uniqueZips.length > 0 ? `📦 Đang tự động giải nén ${uniqueZips.length} file zip... ` : '';
+        statusMsg = await channel.send(`⏳ **Đã gom xong bài (${mediaDescStr})!** ${zipNote}Đang lưu ảnh và gửi vào Google Chrome Gemini Web để biên tập lại nội dung...`);
     } catch (e) {
         console.warn('[Discord] Không thể gửi status message:', e.message);
     }
 
-    // Tải toàn bộ ảnh từ Discord và lưu trữ cục bộ trên ổ cứng (tránh lỗi link hết hạn)
-    const localImages = await downloadAndSaveDiscordImages(uniqueImages, Date.now());
+    // Tải toàn bộ ảnh trực tiếp và giải nén toàn bộ ảnh trong các file zip
+    const currentTimestamp = Date.now();
+    const localDirectImages = await downloadAndSaveDiscordImages(uniqueImages, currentTimestamp);
+    const localZipImages = await extractImagesFromDiscordZips(uniqueZips, currentTimestamp);
+    const allLocalImages = [...localDirectImages, ...localZipImages];
 
     // 1. Lưu tin nhắn gốc vào bảng messages
     let msgRecord = null;
     try {
         msgRecord = await dbAsync.run(
             `INSERT INTO messages (group_name, sender, content, images) VALUES (?, ?, ?, ?)`,
-            [`Discord: #${channel.name || 'channel'}`, userTag || username, combinedText, JSON.stringify(localImages)]
+            [`Discord: #${channel.name || 'channel'}`, userTag || username, combinedText, JSON.stringify(allLocalImages)]
         );
     } catch (e) {
         console.error('[Discord] Lỗi lưu messages vào SQLite:', e);
@@ -177,7 +299,7 @@ async function processDiscordBuffer(channelId) {
     try {
         postRecord = await dbAsync.run(
             `INSERT INTO posts (message_id, group_name, original_text, rewritten_text, target_fb_group, status, images) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [msgRecord?.id || null, `Discord: #${channel.name || 'channel'}`, combinedText, rewritten, targetFbStr, 'pending', JSON.stringify(localImages)]
+            [msgRecord?.id || null, `Discord: #${channel.name || 'channel'}`, combinedText, rewritten, targetFbStr, 'pending', JSON.stringify(allLocalImages)]
         );
     } catch (e) {
         console.error('[Discord] Lỗi lưu posts vào SQLite:', e);
@@ -195,7 +317,7 @@ async function processDiscordBuffer(channelId) {
             groupName: `Discord: #${channel.name || 'channel'}`,
             originalText: combinedText,
             rewrittenText: rewritten,
-            images: uniqueImages,
+            images: allLocalImages,
             status: 'pending',
             targetFbGroup: targetFbStr,
             time: new Date().toLocaleTimeString('vi-VN')
@@ -204,39 +326,51 @@ async function processDiscordBuffer(channelId) {
 
     // 5. Gửi bài viết và các nút bấm Xác nhận trở lại kênh Discord
     try {
+        let imageFieldVal = `${allLocalImages.length} ảnh đính kèm`;
+        if (uniqueZips.length > 0) {
+            imageFieldVal = `${allLocalImages.length} ảnh (${localZipImages.length} ảnh giải nén từ ${uniqueZips.length} file zip)`;
+        }
+
         const embed = new EmbedBuilder()
             .setColor(aiSuccess ? 0x2ecc71 : 0xf39c12)
             .setTitle(`📝 BÀI VIẾT ĐÃ BIÊN TẬP XONG (Mã bài: #${postId})`)
             .setDescription(rewritten.length > 4000 ? rewritten.substring(0, 3995) + '...' : rewritten)
             .addFields(
-                { name: '📸 Hình ảnh', value: `${uniqueImages.length} ảnh đính kèm`, inline: true },
+                { name: '📸 Hình ảnh', value: imageFieldVal, inline: true },
                 { name: '🎯 Nhóm FB đích', value: `${activeFbGroups.length} nhóm đang bật`, inline: true },
                 { name: '🤖 Trạng thái AI', value: aiSuccess ? '✓ Gemini Web biên tập' : '⚠️ Nội dung gốc (AI bận)', inline: true }
             )
-            .setFooter({ text: 'Kiểm tra nội dung phía trên. Bấm nút bên dưới để Đăng bài ngay lên Facebook!' })
+            .setFooter({ text: 'Kiểm tra nội dung phía trên. Bấm [✅ Duyệt Theo Cụm] bên dưới để chọn cụm nhóm và đăng!' })
             .setTimestamp();
 
+        // Gửi ảnh xem trước: Ưu tiên link discord nếu có, hoặc đính kèm ảnh cục bộ đã giải nén
+        const sendFiles = [];
         if (uniqueImages.length > 0) {
             embed.setImage(uniqueImages[0]);
+        } else if (allLocalImages.length > 0 && fs.existsSync(allLocalImages[0])) {
+            const previewName = path.basename(allLocalImages[0]);
+            sendFiles.push({ attachment: allLocalImages[0], name: previewName });
+            embed.setImage(`attachment://${previewName}`);
         }
 
         const buttonsRow = createApprovalButtons(postId, false);
 
-        if (statusMsg) {
-            await statusMsg.edit({
-                content: `✨ **Bài viết #${postId} đã sẵn sàng!** Vui lòng kiểm tra và bấm nút xác nhận bên dưới:`,
-                embeds: [embed],
-                components: [buttonsRow]
-            });
-        } else {
-            await channel.send({
-                content: `✨ **Bài viết #${postId} đã sẵn sàng!** Vui lòng kiểm tra và bấm nút xác nhận bên dưới:`,
-                embeds: [embed],
-                components: [buttonsRow]
-            });
+        const responsePayload = {
+            content: `✨ **Bài viết #${postId} đã sẵn sàng!** Vui lòng kiểm tra và bấm nút xác nhận bên dưới:`,
+            embeds: [embed],
+            components: [buttonsRow]
+        };
+        if (sendFiles.length > 0) {
+            responsePayload.files = sendFiles;
         }
 
-        await dbAsync.log('info', `[Discord Bot] Đã gửi bài #${postId} kèm nút bấm duyệt vào kênh Discord (#${channel.name}). Đang chờ bạn bấm xác nhận...`);
+        if (statusMsg) {
+            await statusMsg.edit(responsePayload);
+        } else {
+            await channel.send(responsePayload);
+        }
+
+        await dbAsync.log('info', `[Discord Bot] Đã gửi bài #${postId} (${allLocalImages.length} ảnh) kèm nút bấm duyệt vào kênh Discord (#${channel.name}). Đang chờ bạn bấm xác nhận...`);
     } catch (sendErr) {
         console.error('[Discord] Lỗi gửi tin nhắn xác nhận vào Discord:', sendErr);
     }
@@ -296,7 +430,7 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                 if (message.channelId !== currentConfig.channelId) return;
 
                 const text = message.content ? message.content.trim() : '';
-                const images = extractImageUrls(message);
+                const { images, zips } = extractMediaAttachments(message);
 
                 // Lệnh kiểm tra trạng thái qua Discord
                 if (text.toLowerCase() === '!status' || text.toLowerCase() === '!check') {
@@ -318,7 +452,7 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                             { name: '⏳ Thời Gian Gom', value: `${currentConfig.debounceSeconds} giây`, inline: true },
                             { name: '💻 Tool Desktop', value: '🟢 Đang chạy', inline: true }
                         )
-                        .setFooter({ text: 'Gửi nội dung & ảnh phòng vào kênh này. Bot sẽ gom sau 1 phút và gửi nút duyệt!' })
+                        .setFooter({ text: 'Gửi nội dung & ảnh hoặc file zip vào kênh này. Bot sẽ gom sau 1 phút và gửi nút duyệt!' })
                         .setTimestamp();
 
                     await message.reply({ embeds: [statusEmbed] });
@@ -338,9 +472,14 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                     return;
                 }
 
-                if (!text && images.length === 0) return;
+                if (!text && images.length === 0 && zips.length === 0) return;
 
-                await dbAsync.log('info', `[Discord Bot] Bắt được tin mới từ ${message.author.tag} (${text ? text.substring(0, 40) + '...' : ''} - ${images.length} ảnh)`);
+                const mediaDetails = [];
+                if (images.length > 0) mediaDetails.push(`${images.length} ảnh`);
+                if (zips.length > 0) mediaDetails.push(`${zips.length} file zip`);
+                const mediaStr = mediaDetails.length > 0 ? ` (${mediaDetails.join(', ')})` : '';
+
+                await dbAsync.log('info', `[Discord Bot] Bắt được tin mới từ ${message.author.tag} (${text ? text.substring(0, 40) + '...' : ''}${mediaStr})`);
 
                 // Thêm phản ứng emoji để người dùng biết bot đã nhận
                 try {
@@ -355,13 +494,15 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                     clearTimeout(buffer.timer);
                     if (text) buffer.texts.push(text);
                     if (images.length > 0) buffer.images.push(...images);
+                    if (zips.length > 0) buffer.zips.push(...zips);
                 } else {
                     buffer = {
                         channel: message.channel,
                         username: message.member?.displayName || message.author.username,
                         userTag: message.author.tag,
                         texts: text ? [text] : [],
-                        images: [...images]
+                        images: [...images],
+                        zips: [...zips]
                     };
                     channelBuffers.set(message.channelId, buffer);
                 }
@@ -738,5 +879,9 @@ module.exports = {
     getDiscordBotStatus,
     setDiscordEventBroadcaster,
     sendDiscordTestMessage,
-    processDiscordBuffer // Exported for unit tests
+    processDiscordBuffer,
+    extractMediaAttachments,
+    extractImageUrls,
+    extractImagesFromDiscordZips,
+    downloadAndSaveDiscordImages
 };
