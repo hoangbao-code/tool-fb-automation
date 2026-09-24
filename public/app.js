@@ -189,6 +189,10 @@ function setupEventListeners() {
     window.electronApi.on('new-log-entry', (log) => {
         appendLogEntry(log);
     });
+
+    window.electronApi.on('discord-bot-status', (data) => {
+        updateDiscordStatusUI(data);
+    });
 }
 
 // Chuyển Tab giao diện
@@ -221,6 +225,7 @@ function switchTab(tabId) {
         fb: { title: 'FACEBOOK TRỰC TIẾP', sub: 'Tự động quét nhóm đã tham gia và xuất bản bài viết' },
         groups: { title: 'QUẢN LÝ NHÓM FACEBOOK', sub: 'Tích chọn các nhóm mục tiêu để đăng bài' },
         'zalo-groups': { title: 'QUẢN LÝ NHÓM ZALO', sub: 'Tích chọn các nhóm Zalo cần tự động gom tin' },
+        discord: { title: 'NGUỒN TIN DISCORD BOT', sub: 'Nhận bài + ảnh từ Discord, gom sau 1 phút, biên tập Gemini Web và duyệt bài tương tác' },
         ai: { title: 'GEMINI WEB TRỰC TIẾP', sub: 'Tự động gửi tin vào cuộc trò chuyện & trích xuất bài đăng' },
         settings: { title: 'CÀI ĐẶT HỆ THỐNG', sub: 'Cấu hình thời gian giãn cách chống spam và tự động hóa' },
         logs: { title: 'NHẬT KÝ HOẠT ĐỘNG', sub: 'Theo dõi tiến trình hệ thống theo thời gian thực' }
@@ -235,6 +240,7 @@ function switchTab(tabId) {
     if (tabId === 'feed') loadPosts();
     else if (tabId === 'groups') loadFbGroups();
     else if (tabId === 'zalo-groups') loadZaloGroups();
+    else if (tabId === 'discord') loadDiscordSettingsUI();
     else if (tabId === 'ai') { loadAiSettings(); checkChromeGeminiUI(true); }
     else if (tabId === 'settings') loadGeneralSettings();
     else if (tabId === 'logs') loadLogs();
@@ -247,6 +253,7 @@ async function loadInitialData() {
         loadPosts(),
         loadFbGroups(),
         loadZaloGroups(),
+        loadDiscordSettingsUI(),
         loadAiSettings(),
         loadGeneralSettings(),
         loadLogs()
@@ -3141,4 +3148,168 @@ async function startZaloHistoryScanAction() {
         }
     }
 }
+
+// ==========================================
+// 8. NGUỒN TIN DISCORD BOT & DUYỆT TƯƠNG TÁC
+// ==========================================
+
+function updateDebounceLabelUI(val) {
+    const label = document.getElementById('discord-debounce-label');
+    if (label) {
+        label.innerText = `${val} giây (${val >= 60 ? (val / 60).toFixed(1) + ' phút' : ''})`;
+    }
+}
+
+function toggleTokenVisibilityUI() {
+    const input = document.getElementById('discord-bot-token');
+    const icon = document.getElementById('token-eye-icon');
+    if (!input) return;
+    if (input.type === 'password') {
+        input.type = 'text';
+        if (icon) icon.setAttribute('data-lucide', 'eye-off');
+    } else {
+        input.type = 'password';
+        if (icon) icon.setAttribute('data-lucide', 'eye');
+    }
+    if (window.lucide) lucide.createIcons();
+}
+
+function updateDiscordStatusUI(statusData) {
+    const badge = document.getElementById('discord-status-badge');
+    const toggleBtn = document.getElementById('discord-toggle-btn');
+    const dot = document.getElementById('badge-discord-dot');
+    const botNameDisp = document.getElementById('discord-bot-name-disp');
+    const chDisp = document.getElementById('discord-channel-disp');
+
+    const isConnected = (statusData?.status === 'connected' || statusData?.isConnected);
+
+    if (badge) {
+        if (isConnected) {
+            badge.className = 'text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+            badge.innerText = '● Đang lắng nghe kênh';
+        } else {
+            badge.className = 'text-xs px-2.5 py-0.5 rounded-full font-semibold bg-slate-800 text-slate-400 border border-slate-700';
+            badge.innerText = 'Chưa kết nối';
+        }
+    }
+
+    if (toggleBtn) {
+        if (isConnected) {
+            toggleBtn.className = 'bg-rose-600 hover:bg-rose-500 text-white px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-rose-900/30 transition-all';
+            toggleBtn.innerHTML = '<i data-lucide="square" class="w-4 h-4"></i> Dừng Bot Discord';
+        } else {
+            toggleBtn.className = 'bg-violet-600 hover:bg-violet-500 text-white px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-violet-900/30 transition-all';
+            toggleBtn.innerHTML = '<i data-lucide="play" class="w-4 h-4"></i> Khởi Động Bot Discord';
+        }
+    }
+
+    if (dot) {
+        dot.className = isConnected ? 'ml-auto w-2 h-2 rounded-full bg-emerald-400 animate-pulse' : 'ml-auto w-2 h-2 rounded-full bg-slate-600';
+    }
+
+    if (botNameDisp) {
+        botNameDisp.innerText = statusData?.botName || statusData?.botUser || (isConnected ? 'Đã kết nối' : 'Chưa kết nối');
+    }
+
+    if (chDisp) {
+        chDisp.innerText = statusData?.channelId ? `ID: ${statusData.channelId}` : 'Chưa chọn';
+    }
+
+    if (window.lucide) lucide.createIcons();
+}
+
+async function loadDiscordSettingsUI() {
+    try {
+        const [settingsRes, statusRes] = await Promise.all([
+            window.electronApi.getSettings(),
+            window.electronApi.getDiscordStatus()
+        ]);
+
+        if (settingsRes?.success) {
+            const s = settingsRes.settings;
+            const tokenInput = document.getElementById('discord-bot-token');
+            const chInput = document.getElementById('discord-channel-id');
+            const debRange = document.getElementById('discord-debounce-range');
+
+            if (tokenInput && s.discord_bot_token) tokenInput.value = s.discord_bot_token;
+            if (chInput && s.discord_channel_id) chInput.value = s.discord_channel_id;
+            if (debRange && s.discord_debounce_seconds) {
+                debRange.value = s.discord_debounce_seconds;
+                updateDebounceLabelUI(s.discord_debounce_seconds);
+            }
+        }
+
+        if (statusRes?.success) {
+            updateDiscordStatusUI(statusRes.status);
+        }
+    } catch (e) {
+        console.error('Lỗi loadDiscordSettingsUI:', e);
+    }
+}
+
+async function saveDiscordConfigUI() {
+    const token = document.getElementById('discord-bot-token')?.value?.trim() || '';
+    const channelId = document.getElementById('discord-channel-id')?.value?.trim() || '';
+    const debounceSeconds = document.getElementById('discord-debounce-range')?.value || '60';
+
+    if (!token) {
+        showToast('Vui lòng nhập Discord Bot Token!', 'warning');
+        return;
+    }
+    if (!channelId) {
+        showToast('Vui lòng nhập Channel ID kênh nhận bài!', 'warning');
+        return;
+    }
+
+    try {
+        await window.electronApi.saveSettings({
+            discord_bot_token: token,
+            discord_channel_id: channelId,
+            discord_debounce_seconds: debounceSeconds
+        });
+        showToast('Đã lưu cấu hình Discord Bot thành công!', 'success');
+    } catch (e) {
+        showToast('Lỗi lưu cấu hình: ' + e.message, 'error');
+    }
+}
+
+async function toggleDiscordBotUI() {
+    try {
+        const statusRes = await window.electronApi.getDiscordStatus();
+        const isConnected = statusRes?.status?.isConnected;
+
+        if (isConnected) {
+            // Dừng bot
+            const res = await window.electronApi.stopDiscordBot();
+            if (res.success) {
+                showToast('Đã dừng Bot Discord.', 'info');
+                updateDiscordStatusUI({ isConnected: false });
+            } else {
+                showToast('Lỗi khi dừng bot: ' + res.error, 'error');
+            }
+        } else {
+            // Khởi động bot
+            const token = document.getElementById('discord-bot-token')?.value?.trim();
+            const channelId = document.getElementById('discord-channel-id')?.value?.trim();
+            const debounceSeconds = document.getElementById('discord-debounce-range')?.value || '60';
+
+            if (!token || !channelId) {
+                showToast('Vui lòng nhập Token và Channel ID trước khi khởi động!', 'warning');
+                return;
+            }
+
+            showToast('Đang kết nối Discord Bot...', 'info');
+            const res = await window.electronApi.startDiscordBot({ token, channelId, debounceSeconds });
+            if (res.success) {
+                showToast(`✓ Bot ${res.botName} đã online và đang lắng nghe kênh!`, 'success');
+                updateDiscordStatusUI({ isConnected: true, botName: res.botName, channelId });
+            } else {
+                showToast('Không thể kết nối Discord: ' + res.error, 'error');
+            }
+        }
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
+    }
+}
+
 

@@ -18,6 +18,12 @@ const {
     getActiveGeminiTabInfo,
     sendPromptToChromeGemini
 } = require('./services/chromeGemini');
+const {
+    startDiscordBot,
+    stopDiscordBot,
+    getDiscordBotStatus,
+    setDiscordEventBroadcaster
+} = require('./services/discordEngine');
 
 dotenv.config();
 
@@ -170,6 +176,7 @@ function createWindow() {
 
     setEventBroadcaster(broadcast);
     setFbEventBroadcaster(broadcast);
+    setDiscordEventBroadcaster(broadcast);
     dbAsync.setLogListener((log) => broadcast('new-log-entry', log));
 
     mainWindow.on('closed', () => {
@@ -197,6 +204,27 @@ if (!gotTheLock) {
         createWindow();
         setupTray();
         startFbPostWorker();
+
+        // Tự động khởi động Discord Bot nếu đã bật trước đó
+        setTimeout(async () => {
+            try {
+                const botEnabledRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'discord_bot_enabled'`);
+                if (botEnabledRow?.value === '1') {
+                    const tokenRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'discord_bot_token'`);
+                    const channelRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'discord_channel_id'`);
+                    const debounceRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'discord_debounce_seconds'`);
+                    if (tokenRow?.value && channelRow?.value) {
+                        await startDiscordBot({
+                            token: tokenRow.value,
+                            channelId: channelRow.value,
+                            debounceSeconds: parseInt(debounceRow?.value || '60', 10)
+                        });
+                    }
+                }
+            } catch (err) {
+                console.warn('[Discord Bot] Lỗi tự khởi động:', err.message);
+            }
+        }, 3000);
 
         app.on('activate', () => {
             if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -566,6 +594,40 @@ ipcMain.handle('test-chrome-gemini', async (event, payload) => {
             await dbAsync.run(`UPDATE settings SET value = ? WHERE key = 'gemini_conversation_url'`, [res.finalUrl]);
         }
         return res;
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+// 6.1 Bot Discord
+ipcMain.handle('start-discord-bot', async (event, { token, channelId, debounceSeconds }) => {
+    try {
+        if (token) await dbAsync.run(`UPDATE settings SET value = ? WHERE key = 'discord_bot_token'`, [token]);
+        if (channelId) await dbAsync.run(`UPDATE settings SET value = ? WHERE key = 'discord_channel_id'`, [channelId]);
+        if (debounceSeconds) await dbAsync.run(`UPDATE settings SET value = ? WHERE key = 'discord_debounce_seconds'`, [String(debounceSeconds)]);
+        await dbAsync.run(`UPDATE settings SET value = '1' WHERE key = 'discord_bot_enabled'`);
+
+        const res = await startDiscordBot({ token, channelId, debounceSeconds });
+        return { success: true, botName: res.botName };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('stop-discord-bot', async () => {
+    try {
+        await stopDiscordBot();
+        await dbAsync.run(`UPDATE settings SET value = '0' WHERE key = 'discord_bot_enabled'`);
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('get-discord-status', async () => {
+    try {
+        const status = getDiscordBotStatus();
+        return { success: true, status };
     } catch (e) {
         return { success: false, error: e.message };
     }

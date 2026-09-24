@@ -10,6 +10,7 @@
     "test": "node tests/test_chrome_gemini.js && node tests/test_clear_posts_and_gemini.js && node tests/test_fb_scan.js && node tests/test_upgrades.js && node tests/test_history_scanner.js"
   },
   "dependencies": {
+    "discord.js": "^14.27.0",
     "dotenv": "^16.4.5",
     "sqlite3": "^5.1.7"
   },

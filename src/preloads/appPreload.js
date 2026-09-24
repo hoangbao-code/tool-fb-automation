@@ -59,6 +59,11 @@ contextBridge.exposeInMainWorld('electronApi', {
     getActiveGeminiUrl: () => ipcRenderer.invoke('get-active-gemini-url'),
     testChromeGemini: (payload) => ipcRenderer.invoke('test-chrome-gemini', payload),
 
+    // 6.1 Bot Discord
+    startDiscordBot: (config) => ipcRenderer.invoke('start-discord-bot', config),
+    stopDiscordBot: () => ipcRenderer.invoke('stop-discord-bot'),
+    getDiscordStatus: () => ipcRenderer.invoke('get-discord-status'),
+
     // 7. Nhật ký
     getLogs: () => ipcRenderer.invoke('get-logs'),
     addLog: (level, message) => ipcRenderer.invoke('add-log', { level, message }),
@@ -77,7 +82,8 @@ contextBridge.exposeInMainWorld('electronApi', {
             'fb-groups-updated',
             'fb-publish-step',
             'new-log-entry',
-            'status-updated'
+            'status-updated',
+            'discord-bot-status'
         ];
         if (validChannels.includes(channel)) {
             ipcRenderer.on(channel, (event, ...args) => callback(...args));
