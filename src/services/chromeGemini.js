@@ -426,7 +426,10 @@ const INJECT_SCRIPT = (promptText) => `
         ];
         for (const s of selectors) {
             const el = document.querySelector(s);
-            if (el && el.offsetParent !== null) return el;
+            if (el && el.offsetParent !== null) {
+                const editable = el.closest('[contenteditable="true"]');
+                return editable || el;
+            }
         }
         return null;
     }
@@ -514,30 +517,74 @@ const INJECT_SCRIPT = (promptText) => `
     const initialResponseCount = getResponseCount();
     const previousLatestText = getLatestResponseText() || '';
 
-    // Điền nội dung vào ô chat: Sử dụng execCommand để kích hoạt đầy đủ ProseMirror/Lexical editor
+    // Điền nội dung vào ô chat: Sử dụng Selection + execCommand / InputEvent / DOM Node API thuần
     inputEl.focus();
+
+    // 1. Chuẩn bị Selection & Range trên inputEl
+    try {
+        const range = document.createRange();
+        range.selectNodeContents(inputEl);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+    } catch(e) {}
+
+    // 2. Thử insertText qua execCommand (chuẩn cho rich editors)
+    let inserted = false;
     try {
         document.execCommand('selectAll', false, null);
         document.execCommand('delete', false, null);
-        document.execCommand('insertText', false, prompt);
+        inserted = document.execCommand('insertText', false, prompt);
     } catch(e) {}
 
-    // Fallback nếu execCommand không gán được text
+    // 3. Nếu execCommand chưa đặt được text, kích hoạt InputEvent trước
+    if (!inserted || !inputEl.innerText || !inputEl.innerText.trim()) {
+        try {
+            inputEl.dispatchEvent(new InputEvent('beforeinput', {
+                inputType: 'insertText',
+                data: prompt,
+                bubbles: true,
+                cancelable: true
+            }));
+        } catch(e) {}
+    }
+
+    // 4. Fallback DOM Nodes an toàn tuyệt đối (KHÔNG DÙNG innerHTML để tránh TrustedHTML violation trên Chrome)
     if (!inputEl.innerText || !inputEl.innerText.trim()) {
         if (inputEl.tagName === 'TEXTAREA' || inputEl.tagName === 'INPUT') {
             inputEl.value = prompt;
         } else {
-            inputEl.innerHTML = '<p>' + prompt.split('\\n').join('<br>') + '</p>';
+            // Xóa sạch con cũ qua DOM API an toàn
+            while (inputEl.firstChild) {
+                inputEl.removeChild(inputEl.firstChild);
+            }
+            // Tạo các phần tử và text nodes chuẩn (100% Trusted Types safe)
+            const p = document.createElement('p');
+            const lines = prompt.split('\\n');
+            lines.forEach((line, idx) => {
+                if (idx > 0) p.appendChild(document.createElement('br'));
+                p.appendChild(document.createTextNode(line));
+            });
+            inputEl.appendChild(p);
         }
     }
+
+    // 5. Kích hoạt toàn bộ sự kiện cần thiết để Gemini Web nhận diện text đã nhập
     inputEl.dispatchEvent(new Event('input', { bubbles: true }));
     inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+    try {
+        inputEl.dispatchEvent(new InputEvent('input', {
+            inputType: 'insertText',
+            data: prompt,
+            bubbles: true
+        }));
+    } catch(e) {}
 
     await new Promise(r => setTimeout(r, 600));
 
     // Bấm nút gửi hoặc dispatch phím Enter
     let sendBtn = findSendButton();
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 8; i++) {
         if (sendBtn) break;
         await new Promise(r => setTimeout(r, 200));
         sendBtn = findSendButton();
@@ -547,6 +594,8 @@ const INJECT_SCRIPT = (promptText) => `
         sendBtn.click();
     } else {
         inputEl.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13 }));
+        inputEl.dispatchEvent(new KeyboardEvent('keypress', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13 }));
+        inputEl.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13 }));
     }
 
     // Chờ phản hồi bắt đầu sinh và hoàn thành

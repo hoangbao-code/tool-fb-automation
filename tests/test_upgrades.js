@@ -53,7 +53,7 @@ async function runTests() {
     // 3. Kiểm thử Sao lưu & Phục hồi dữ liệu (Backup / Restore)
     console.log('\n3. Kiểm thử Sao lưu & Phục hồi dữ liệu (Backup / Restore):');
     const backup = await dbAsync.exportBackup();
-    assert.strictEqual(backup.version, '2.1.0');
+    assert.strictEqual(backup.version, '2.2.0');
     assert(Array.isArray(backup.settings), 'Settings phải là mảng');
     assert(Array.isArray(backup.fbGroups), 'fbGroups phải là mảng');
     assert(Array.isArray(backup.zaloGroups), 'zaloGroups phải là mảng');
@@ -146,6 +146,11 @@ async function runTests() {
     const allFbOn = await dbAsync.all(`SELECT is_active FROM fb_groups WHERE is_active = 0`);
     assert.strictEqual(allFbOn.length, 0, 'Tất cả nhóm FB phải được bật khi chọn tất cả');
     console.log('  ✓ Bulk Toggle Nhóm FB (Bật/Tắt tất cả) hoạt động chính xác 100%!');
+
+    // Dọn dẹp dữ liệu test
+    await dbAsync.run(`DELETE FROM settings WHERE key = 'test_backup_key'`);
+    await dbAsync.run(`DELETE FROM fb_groups WHERE url = 'https://facebook.com/groups/test_import_unique/'`);
+    await dbAsync.run(`DELETE FROM zalo_groups WHERE name = 'Nhóm Test Import Zalo'`);
 
     console.log('\n========================================================');
     console.log('🎉 TẤT CẢ CÁC BÀI TEST TÍNH NĂNG V2.1 ĐỀU THÀNH CÔNG 100%!');
