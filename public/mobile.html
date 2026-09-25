@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>PostHub Mobile - Đăng Tin BĐS Đa Kênh</title>
+    <!-- PWA Settings -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#020617">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PostHub">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
+        .pb-safe { padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
+        .pt-safe { padding-top: calc(1rem + env(safe-area-inset-top, 0px)); }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col select-none antialiased">
+
+    <!-- TOP HEADER (CỐ ĐỊNH TRÊN ĐỈNH) -->
+    <header class="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-4 py-3 flex items-center justify-between pt-safe">
+        <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+                <i data-lucide="zap" class="w-4 h-4"></i>
+            </div>
+            <div>
+                <h1 class="font-extrabold text-sm leading-tight text-white tracking-wide">POSTHUB MOBILE</h1>
+                <span class="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Cloud SaaS
+                </span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <!-- Nút tài khoản -->
+            <button onclick="openAuthModal()" id="btn-user-profile" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white transition-all">
+                <i data-lucide="user" class="w-3.5 h-3.5 text-indigo-400"></i>
+                <span id="header-username">Đăng Nhập</span>
+            </button>
+            <!-- Nút làm mới -->
+            <button onclick="refreshMobileData()" class="p-2 text-slate-400 hover:text-white hover:bg-slate-900 rounded-xl transition-all" title="Làm mới">
+                <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT (CONTAINER CÁC TAB) -->
+    <main class="flex-1 overflow-y-auto px-4 py-4 pb-safe space-y-4">
+
+        <!-- TAB 1: TRANG CHỦ & HƯỚNG DẪN (HOME) -->
+        <section id="tab-home" class="tab-pane active space-y-4">
+            <!-- Hero Card -->
+            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-950/80 via-slate-900 to-slate-950 border border-indigo-500/20 p-5 shadow-xl">
+                <div class="space-y-2">
+                    <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">
+                        Đa Nền Tảng • iOS & Android
+                    </span>
+                    <h2 class="text-xl font-black text-white leading-tight">
+                        Tự Động Hóa Đăng Tin BĐS & Phòng Trọ
+                    </h2>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        Nhận bài từ Discord ➔ AI Gemini tối ưu SEO ➔ Quét & Đăng bài tự động lên Nhóm Facebook theo Cụm Khu Vực ngay trên điện thoại của bạn.
+                    </p>
+                </div>
+                <div class="grid grid-cols-2 gap-2 pt-3">
+                    <button onclick="switchMobileTab('feed')" class="px-3 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 font-bold text-xs text-white shadow-md shadow-emerald-950/40 flex items-center justify-center gap-1.5">
+                        <i data-lucide="layout-grid" class="w-4 h-4"></i> Bảng Tin Duyệt
+                    </button>
+                    <button onclick="switchMobileTab('groups')" class="px-3 py-2.5 rounded-xl bg-slate-800 text-indigo-300 border border-indigo-700/40 font-semibold text-xs flex items-center justify-center gap-1.5">
+                        <i data-lucide="users" class="w-4 h-4"></i> Cụm Nhóm FB
+                    </button>
+                </div>
+            </div>
+
+            <!-- Thống kê nhanh của bạn -->
+            <div class="grid grid-cols-3 gap-2">
+                <div class="bg-slate-900/90 p-3 rounded-xl border border-slate-800 text-center space-y-1">
+                    <span class="text-[10px] text-slate-400 font-semibold">Chờ Duyệt</span>
+                    <div class="text-lg font-bold text-amber-400 font-mono" id="stat-pending">0</div>
+                </div>
+                <div class="bg-slate-900/90 p-3 rounded-xl border border-slate-800 text-center space-y-1">
+                    <span class="text-[10px] text-slate-400 font-semibold">Đã Đăng</span>
+                    <div class="text-lg font-bold text-blue-400 font-mono" id="stat-posted">0</div>
+                </div>
+                <div class="bg-slate-900/90 p-3 rounded-xl border border-slate-800 text-center space-y-1">
+                    <span class="text-[10px] text-slate-400 font-semibold">Cụm Nhóm</span>
+                    <div class="text-lg font-bold text-emerald-400 font-mono" id="stat-clusters">0</div>
+                </div>
+            </div>
+
+            <!-- Hướng dẫn 3 bước thao tác trên điện thoại -->
+            <div class="bg-slate-900/80 rounded-2xl p-4 border border-slate-800 space-y-3">
+                <h3 class="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-1.5 text-indigo-400">
+                    <i data-lucide="compass" class="w-4 h-4"></i> Hướng Dẫn Nhanh Dành Cho Nhân Viên
+                </h3>
+                <div class="space-y-2.5 text-xs text-slate-300">
+                    <div class="flex items-start gap-2.5">
+                        <span class="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">1</span>
+                        <p class="leading-relaxed"><b>Kết nối Facebook:</b> Vào tab <b>Facebook</b> dán cookie hoặc phiên đăng nhập để hệ thống nhận diện nick đăng tin của bạn.</p>
+                    </div>
+                    <div class="flex items-start gap-2.5">
+                        <span class="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">2</span>
+                        <p class="leading-relaxed"><b>Gom Cụm Nhóm:</b> Vào tab <b>Cụm Nhóm</b> để tạo các cụm (vd: <i>BĐS Quận 7, Tân Bình</i>) giúp chọn 1 phát là đăng cả cụm.</p>
+                    </div>
+                    <div class="flex items-start gap-2.5">
+                        <span class="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">3</span>
+                        <p class="leading-relaxed"><b>Gửi bài qua Discord & Duyệt:</b> Thả bài + ảnh vào kênh Discord của bạn ➔ Qua tab <b>Bảng Tin</b> bấm Duyệt là tool tự động đăng!</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: BẢNG TIN & DUYỆT BÀI (FEED) -->
+        <section id="tab-feed" class="tab-pane space-y-3">
+            <!-- Filter buttons -->
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-1" id="mobile-filter-bar">
+                <button onclick="setMobileFilter('all')" class="mobile-filter-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow-sm" id="mfilter-all">
+                    Tất cả (<span id="mcount-all">0</span>)
+                </button>
+                <button onclick="setMobileFilter('pending')" class="mobile-filter-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-slate-300 border border-slate-800" id="mfilter-pending">
+                    Chờ duyệt (<span id="mcount-pending">0</span>)
+                </button>
+                <button onclick="setMobileFilter('approved')" class="mobile-filter-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-slate-300 border border-slate-800" id="mfilter-approved">
+                    Đã duyệt (<span id="mcount-approved">0</span>)
+                </button>
+                <button onclick="setMobileFilter('posted')" class="mobile-filter-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-slate-300 border border-slate-800" id="mfilter-posted">
+                    Đã đăng (<span id="mcount-posted">0</span>)
+                </button>
+            </div>
+
+            <!-- Danh sách bài đăng -->
+            <div id="mobile-posts-container" class="space-y-3">
+                <div class="p-8 text-center text-slate-500 text-xs">
+                    Đang nạp bài viết từ hệ thống...
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: QUẢN LÝ CỤM NHÓM FACEBOOK (GROUPS) -->
+        <section id="tab-groups" class="tab-pane space-y-3">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="font-bold text-white text-sm">Cụm Nhóm Facebook</h3>
+                    <p class="text-[11px] text-slate-400">Gom nhóm theo khu vực để chọn nhanh khi đăng</p>
+                </div>
+                <button onclick="openCreateClusterModal()" class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i> Tạo Cụm
+                </button>
+            </div>
+
+            <!-- Danh sách cụm nhóm -->
+            <div id="mobile-clusters-list" class="space-y-2.5">
+                <div class="p-6 text-center text-slate-500 text-xs">Đang tải danh sách cụm...</div>
+            </div>
+
+            <!-- Danh sách nhóm lẻ -->
+            <div class="pt-4 border-t border-slate-800/80 space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Danh Sách Tất Cả Nhóm FB (<span id="total-fb-groups-count">0</span>)</span>
+                    <button onclick="openAddFbGroupModal()" class="text-[11px] text-indigo-400 font-semibold underline">Thêm nhóm ➔</button>
+                </div>
+                <input type="text" id="fb-groups-search-input" oninput="filterMobileFbGroups(this.value)" placeholder="Tìm kiếm tên nhóm..." class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <div id="mobile-fb-groups-container" class="space-y-2 max-h-60 overflow-y-auto"></div>
+            </div>
+        </section>
+
+        <!-- TAB 4: KẾT NỐI FACEBOOK (FB SESSION) -->
+        <section id="tab-fb" class="tab-pane space-y-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div class="flex items-center gap-2.5">
+                        <span class="p-2 rounded-xl bg-blue-600/20 text-blue-400">
+                            <i data-lucide="facebook" class="w-5 h-5"></i>
+                        </span>
+                        <div>
+                            <h3 class="font-bold text-white text-sm">Tài Khoản Facebook Cá Nhân</h3>
+                            <p class="text-[11px] text-slate-400" id="mobile-fb-status-label">Đang kiểm tra...</p>
+                        </div>
+                    </div>
+                    <span id="mobile-fb-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400">Chưa kết nối</span>
+                </div>
+
+                <!-- Form nhập Cookie Facebook -->
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Dán Cookie Facebook (Khuyên Dùng):</label>
+                        <textarea id="fb-cookies-input" rows="4" placeholder="Dán chuỗi cookie (có chứa c_user=... và xs=...)..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-600"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Tên Gọi Gợi Nhớ (Tùy chọn):</label>
+                        <input type="text" id="fb-account-name-input" placeholder="Ví dụ: Nick BĐS Chính, Nick Clone 1..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="saveMobileFbCookies()" class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md">
+                            <i data-lucide="save" class="w-4 h-4"></i> Lưu Phiên Đăng Nhập
+                        </button>
+                        <button onclick="disconnectMobileFb()" class="px-3.5 py-2.5 rounded-xl bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/60 font-semibold text-xs flex items-center gap-1">
+                            <i data-lucide="log-out" class="w-3.5 h-3.5"></i> Ngắt
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-slate-950 border border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
+                    💡 <b>Cách lấy cookie nhanh trên điện thoại:</b> Đăng nhập Facebook trên trình duyệt máy tính hoặc tiện ích Cookie Editor, copy cookie và dán vào ô trên. Phiên đăng nhập được lưu riêng biệt trên máy chủ cho tài khoản của bạn.
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 5: CÀI ĐẶT & DISCORD (SETTINGS) -->
+        <section id="tab-settings" class="tab-pane space-y-4">
+            <!-- Cài đặt kênh Discord -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <div class="flex items-center gap-2 text-violet-400">
+                    <i data-lucide="bot" class="w-4 h-4"></i>
+                    <h3 class="font-bold text-white text-xs uppercase tracking-wider">Kênh Discord Của Bạn</h3>
+                </div>
+                <p class="text-[11px] text-slate-400">Nhập ID Kênh Discord riêng để nhận bài đăng độc lập, không lẫn với nhân viên khác.</p>
+                <div class="flex gap-2">
+                    <input type="text" id="mobile-discord-channel-input" placeholder="Ví dụ: 1353282928372..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    <button onclick="saveMobileDiscordChannel()" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs">
+                        Lưu Kênh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Hướng dẫn Cài App vào màn hình chính -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2.5">
+                <h3 class="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-1.5 text-emerald-400">
+                    <i data-lucide="smartphone" class="w-4 h-4"></i> Cài App Vào Màn Hình Chính
+                </h3>
+                <div class="space-y-1.5 text-xs text-slate-300">
+                    <p>• <b>Trên iPhone (Safari):</b> Bấm nút Chia sẻ (biểu tượng mũi tên hướng lên) ➔ Chọn <b>"Thêm vào Màn hình chính" (Add to Home Screen)</b>.</p>
+                    <p>• <b>Trên Android (Chrome):</b> Bấm dấu 3 chấm góc trên bên phải ➔ Chọn <b>"Cài đặt ứng dụng"</b> hoặc <b>"Thêm vào Màn hình chính"</b>.</p>
+                </div>
+            </div>
+
+            <!-- Nút đăng xuất -->
+            <button onclick="logoutMobile()" class="w-full py-3 rounded-2xl bg-rose-950/40 border border-rose-800/60 text-rose-300 font-bold text-xs flex items-center justify-center gap-2">
+                <i data-lucide="log-out" class="w-4 h-4"></i> Đăng Xuất Tài Khoản
+            </button>
+        </section>
+    </main>
+
+    <!-- BOTTOM NAVIGATION BAR (THANH ĐIỀU HƯỚNG DƯỚI ĐÁY - FIXED MOBILE) -->
+    <nav class="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-lg border-t border-slate-800/90 px-2 py-2 flex items-center justify-around shadow-2xl pb-safe">
+        <button onclick="switchMobileTab('home')" id="nav-btn-home" class="mobile-nav-btn active flex flex-col items-center gap-1 text-emerald-400 py-1 px-2.5 rounded-xl transition-all">
+            <i data-lucide="home" class="w-5 h-5"></i>
+            <span class="text-[10px] font-bold">Trang chủ</span>
+        </button>
+        <button onclick="switchMobileTab('feed')" id="nav-btn-feed" class="mobile-nav-btn flex flex-col items-center gap-1 text-slate-400 py-1 px-2.5 rounded-xl transition-all relative">
+            <i data-lucide="layout-grid" class="w-5 h-5"></i>
+            <span class="text-[10px] font-bold">Bảng tin</span>
+            <span id="nav-badge-pending" class="hidden absolute top-0.5 right-1 w-2 h-2 rounded-full bg-amber-400"></span>
+        </button>
+        <button onclick="switchMobileTab('groups')" id="nav-btn-groups" class="mobile-nav-btn flex flex-col items-center gap-1 text-slate-400 py-1 px-2.5 rounded-xl transition-all">
+            <i data-lucide="users" class="w-5 h-5"></i>
+            <span class="text-[10px] font-bold">Cụm nhóm</span>
+        </button>
+        <button onclick="switchMobileTab('fb')" id="nav-btn-fb" class="mobile-nav-btn flex flex-col items-center gap-1 text-slate-400 py-1 px-2.5 rounded-xl transition-all">
+            <i data-lucide="facebook" class="w-5 h-5"></i>
+            <span class="text-[10px] font-bold">Facebook</span>
+        </button>
+        <button onclick="switchMobileTab('settings')" id="nav-btn-settings" class="mobile-nav-btn flex flex-col items-center gap-1 text-slate-400 py-1 px-2.5 rounded-xl transition-all">
+            <i data-lucide="settings" class="w-5 h-5"></i>
+            <span class="text-[10px] font-bold">Cài đặt</span>
+        </button>
+    </nav>
+
+    <!-- MODAL ĐĂNG NHẬP / ĐĂNG KÝ TÀI KHOẢN -->
+    <div id="modal-auth" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-extrabold text-white text-base" id="auth-title">Đăng Nhập Nhân Viên</h3>
+                <button onclick="closeAuthModal()" class="text-slate-400 hover:text-white p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Tên đăng nhập:</label>
+                    <input type="text" id="auth-username" placeholder="Ví dụ: nhanvien1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Mật khẩu:</label>
+                    <input type="password" id="auth-password" placeholder="Nhập mật khẩu..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div id="auth-reg-extra" class="hidden space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Họ tên hiển thị:</label>
+                        <input type="text" id="auth-display-name" placeholder="Ví dụ: Nguyễn Văn A (Môi Giới)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-2 pt-2">
+                <button onclick="submitAuthForm()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-bold text-xs shadow-md">
+                    Xác Nhận
+                </button>
+                <div class="text-center">
+                    <button onclick="toggleAuthMode()" id="btn-toggle-auth" class="text-xs text-indigo-400 underline font-semibold">
+                        Chưa có tài khoản? Đăng ký ngay
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL TẠO / SỬA CỤM NHÓM -->
+    <div id="modal-cluster" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-5 space-y-4 shadow-2xl max-h-[85vh] flex flex-col">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-white text-sm" id="cluster-modal-title">Tạo Cụm Nhóm Mới</h3>
+                <button onclick="closeClusterModal()" class="text-slate-400 hover:text-white p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <input type="hidden" id="cluster-edit-id">
+            <div class="space-y-2">
+                <input type="text" id="cluster-name-input" placeholder="Tên cụm (vd: BĐS Quận 7 - Nhà Bè)..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold">
+                <!-- Search nhóm trong cụm -->
+                <div class="relative">
+                    <i data-lucide="search" class="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                    <input type="text" id="cluster-groups-search" oninput="filterClusterPickerGroups(this.value)" placeholder="Tìm nhóm để chọn..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                    <span>Đã chọn: <b id="cluster-selected-count" class="text-emerald-400 font-mono">0</b> nhóm</span>
+                    <div class="flex gap-2">
+                        <button onclick="toggleAllClusterPicker(true)" class="text-indigo-400 font-semibold underline">Chọn hết</button>
+                        <button onclick="toggleAllClusterPicker(false)" class="text-slate-400 underline">Bỏ chọn</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- List nhóm dạng checkbox -->
+            <div id="cluster-picker-list" class="flex-1 overflow-y-auto space-y-1.5 border border-slate-800 rounded-xl p-2 bg-slate-950 max-h-56"></div>
+
+            <div class="flex gap-2 pt-2 border-t border-slate-800">
+                <button onclick="closeClusterModal()" class="flex-1 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold text-xs">Hủy</button>
+                <button onclick="saveClusterSubmit()" class="flex-1 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs">Lưu Cụm Nhóm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL XEM & DUYỆT BÀI ĐĂNG -->
+    <div id="modal-post-review" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-5 space-y-3.5 shadow-2xl max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <h3 class="font-bold text-white text-sm flex items-center gap-1.5">
+                    <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i> Xem & Duyệt Bài Viết
+                </h3>
+                <button onclick="closePostReviewModal()" class="text-slate-400 hover:text-white p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <input type="hidden" id="review-post-id">
+            <div class="flex-1 overflow-y-auto space-y-3 pr-1">
+                <!-- Nội dung đã viết lại -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-400 mb-1">Nội dung bài viết (Chỉnh sửa trực tiếp):</label>
+                    <textarea id="review-text-input" rows="7" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500 font-sans"></textarea>
+                </div>
+
+                <!-- Chọn Cụm Nhóm Đăng -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-400 mb-1">Chọn Cụm Nhóm Facebook Mục Tiêu:</label>
+                    <select id="review-cluster-select" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-400">
+                        <option value="">-- Đăng tất cả nhóm đã chọn --</option>
+                    </select>
+                </div>
+
+                <!-- Xem ảnh đính kèm -->
+                <div id="review-images-container" class="grid grid-cols-3 gap-2"></div>
+            </div>
+
+            <div class="flex gap-2 pt-2 border-t border-slate-800">
+                <button onclick="deletePostFromReview()" class="px-3 py-2 rounded-xl bg-rose-950/60 text-rose-300 border border-rose-800/60 text-xs font-semibold">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+                <button onclick="approvePostFromReview()" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md">
+                    <i data-lucide="check" class="w-4 h-4"></i> Duyệt Bài Sẵn Sàng Đăng
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="mobile-toast" class="hidden fixed top-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold shadow-2xl flex items-center gap-2 max-w-xs transition-all">
+        <i data-lucide="info" class="w-4 h-4 text-blue-400"></i>
+        <span id="mobile-toast-text">Thông báo</span>
+    </div>
+
+    <!-- LOGIC CLIENT MOBILE APP -->
+    <script>
+        const mState = {
+            currentTab: 'home',
+            token: localStorage.getItem('posthub_token') || '1',
+            user: JSON.parse(localStorage.getItem('posthub_user') || 'null'),
+            posts: [],
+            clusters: [],
+            fbGroups: [],
+            filter: 'all',
+            isRegisterMode: false
+        };
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            updateUserDisplay();
+            await refreshMobileData();
+        });
+
+        function showMobileToast(text, type = 'info') {
+            const toast = document.getElementById('mobile-toast');
+            document.getElementById('mobile-toast-text').innerText = text;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+
+        function switchMobileTab(tabId) {
+            mState.currentTab = tabId;
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            const target = document.getElementById(`tab-${tabId}`);
+            if (target) target.classList.add('active');
+
+            document.querySelectorAll('.mobile-nav-btn').forEach(b => {
+                b.classList.remove('active', 'text-emerald-400');
+                b.classList.add('text-slate-400');
+            });
+            const activeBtn = document.getElementById(`nav-btn-${tabId}`);
+            if (activeBtn) {
+                activeBtn.classList.add('active', 'text-emerald-400');
+                activeBtn.classList.remove('text-slate-400');
+            }
+            lucide.createIcons();
+            if (tabId === 'feed') renderMobilePosts();
+            else if (tabId === 'groups') renderMobileClusters();
+            else if (tabId === 'fb') loadMobileFbStatus();
+        }
+
+        async function fetchApi(url, options = {}) {
+            const headers = options.headers || {};
+            headers['Authorization'] = `Bearer ${mState.token}`;
+            headers['Content-Type'] = 'application/json';
+            const res = await fetch(url, { ...options, headers });
+            return await res.json();
+        }
+
+        async function refreshMobileData() {
+            try {
+                const [postsRes, clustersRes, groupsRes, fbStatusRes] = await Promise.all([
+                    fetchApi('/api/posts'),
+                    fetchApi('/api/clusters'),
+                    fetchApi('/api/fb/groups'),
+                    fetchApi('/api/fb/status')
+                ]);
+
+                if (postsRes.success) mState.posts = postsRes.posts || [];
+                if (clustersRes.success) mState.clusters = clustersRes.clusters || [];
+                if (groupsRes.success) mState.fbGroups = groupsRes.groups || [];
+
+                updateMetrics();
+                renderMobilePosts();
+                renderMobileClusters();
+                renderMobileFbGroups();
+                updateFbStatusUI(fbStatusRes);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function updateMetrics() {
+            const pending = mState.posts.filter(p => p.status === 'pending').length;
+            const posted = mState.posts.filter(p => p.status === 'posted').length;
+            const approved = mState.posts.filter(p => p.status === 'approved').length;
+
+            document.getElementById('stat-pending').innerText = pending;
+            document.getElementById('stat-posted').innerText = posted;
+            document.getElementById('stat-clusters').innerText = mState.clusters.length;
+
+            document.getElementById('mcount-all').innerText = mState.posts.length;
+            document.getElementById('mcount-pending').innerText = pending;
+            document.getElementById('mcount-approved').innerText = approved;
+            document.getElementById('mcount-posted').innerText = posted;
+
+            const badge = document.getElementById('nav-badge-pending');
+            if (pending > 0) badge.classList.remove('hidden');
+            else badge.classList.add('hidden');
+        }
+
+        function setMobileFilter(filter) {
+            mState.filter = filter;
+            document.querySelectorAll('.mobile-filter-btn').forEach(b => {
+                b.classList.remove('bg-indigo-600', 'text-white');
+                b.classList.add('bg-slate-900', 'text-slate-300');
+            });
+            const btn = document.getElementById(`mfilter-${filter}`);
+            if (btn) {
+                btn.classList.add('bg-indigo-600', 'text-white');
+                btn.classList.remove('bg-slate-900', 'text-slate-300');
+            }
+            renderMobilePosts();
+        }
+
+        function renderMobilePosts() {
+            const container = document.getElementById('mobile-posts-container');
+            const filtered = mState.filter === 'all' ? mState.posts : mState.posts.filter(p => p.status === mState.filter);
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="p-8 text-center bg-slate-900/60 rounded-2xl border border-slate-800/80 space-y-2">
+                        <i data-lucide="inbox" class="w-8 h-8 text-slate-600 mx-auto"></i>
+                        <p class="text-xs text-slate-400">Chưa có bài viết nào trong mục này.</p>
+                    </div>`;
+                lucide.createIcons();
+                return;
+            }
+
+            container.innerHTML = filtered.map(p => {
+                const statusBadge = p.status === 'posted'
+                    ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400">Đã đăng</span>'
+                    : p.status === 'approved'
+                    ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400">Đã duyệt</span>'
+                    : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400">Chờ duyệt</span>';
+
+                const imagesHtml = Array.isArray(p.images) && p.images.length > 0
+                    ? `<div class="flex gap-1.5 overflow-x-auto py-1">
+                        ${p.images.slice(0, 4).map(img => `<img src="${img}" class="w-14 h-14 object-cover rounded-lg border border-slate-700 shrink-0">`).join('')}
+                        ${p.images.length > 4 ? `<div class="w-14 h-14 rounded-lg bg-slate-800 text-[10px] font-bold text-slate-400 flex items-center justify-center shrink-0">+${p.images.length - 4}</div>` : ''}
+                       </div>`
+                    : '';
+
+                return `
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2.5 shadow-sm">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="font-bold text-white">#${p.id} • ${p.group_name || 'Nguồn Tin'}</span>
+                            ${statusBadge}
+                        </div>
+                        <p class="text-xs text-slate-300 line-clamp-3 leading-relaxed whitespace-pre-line">${p.rewritten_text || p.original_text || ''}</p>
+                        ${imagesHtml}
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
+                            <button onclick="openPostReviewModal(${p.id})" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 text-xs font-semibold flex items-center gap-1">
+                                <i data-lucide="edit" class="w-3.5 h-3.5"></i> Xem & Sửa
+                            </button>
+                            ${p.status === 'pending' ? `
+                                <button onclick="quickApprovePost(${p.id})" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-sm">
+                                    <i data-lucide="check" class="w-3.5 h-3.5"></i> Duyệt Đăng
+                                </button>
+                            ` : p.status === 'approved' ? `
+                                <button onclick="quickPublishPost(${p.id})" class="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1 shadow-sm">
+                                    <i data-lucide="send" class="w-3.5 h-3.5"></i> Đăng Lên FB
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function renderMobileClusters() {
+            const list = document.getElementById('mobile-clusters-list');
+            if (mState.clusters.length === 0) {
+                list.innerHTML = `
+                    <div class="p-6 text-center bg-slate-900/60 rounded-2xl border border-slate-800 text-xs text-slate-400">
+                        Chưa có cụm nhóm nào. Bấm <b>"Tạo Cụm"</b> để gom các nhóm theo khu vực!
+                    </div>`;
+                return;
+            }
+
+            list.innerHTML = mState.clusters.map(c => `
+                <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+                    <div class="space-y-0.5">
+                        <h4 class="font-bold text-white text-xs">${c.name}</h4>
+                        <span class="text-[11px] text-emerald-400 font-semibold font-mono">${c.group_count || 0} nhóm Facebook</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="editClusterModal(${c.id})" class="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white">
+                            <i data-lucide="edit-3" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="deleteClusterAction(${c.id})" class="p-1.5 rounded-lg bg-rose-950/60 text-rose-300 hover:bg-rose-900">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function renderMobileFbGroups() {
+            document.getElementById('total-fb-groups-count').innerText = mState.fbGroups.length;
+            const container = document.getElementById('mobile-fb-groups-container');
+            if (mState.fbGroups.length === 0) {
+                container.innerHTML = `<div class="p-4 text-center text-xs text-slate-500">Chưa có nhóm nào được lưu.</div>`;
+                return;
+            }
+            container.innerHTML = mState.fbGroups.map(g => `
+                <div class="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs">
+                    <div class="truncate pr-2">
+                        <span class="font-semibold text-white truncate block">${g.name}</span>
+                        <span class="text-[10px] text-slate-500 truncate block">${g.url}</span>
+                    </div>
+                    <button onclick="toggleMobileGroup(${g.id})" class="p-1 rounded text-xs ${g.is_active ? 'text-emerald-400' : 'text-slate-600'}">
+                        <i data-lucide="${g.is_active ? 'check-circle' : 'circle'}" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function filterMobileFbGroups(query) {
+            const q = query.toLowerCase();
+            document.querySelectorAll('#mobile-fb-groups-container > div').forEach(el => {
+                const text = el.innerText.toLowerCase();
+                el.style.display = text.includes(q) ? 'flex' : 'none';
+            });
+        }
+
+        async function updateFbStatusUI(statusData) {
+            const label = document.getElementById('mobile-fb-status-label');
+            const badge = document.getElementById('mobile-fb-badge');
+            if (statusData && statusData.connected) {
+                label.innerText = `Đã kết nối: ${statusData.name || 'Nick Facebook'}`;
+                badge.innerText = '🟢 Hoạt động';
+                badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400';
+            } else {
+                label.innerText = 'Chưa lưu phiên Facebook';
+                badge.innerText = '🔴 Chưa kết nối';
+                badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400';
+            }
+        }
+
+        async function loadMobileFbStatus() {
+            const res = await fetchApi('/api/fb/status');
+            updateFbStatusUI(res);
+        }
+
+        async function saveMobileFbCookies() {
+            const cookies = document.getElementById('fb-cookies-input').value;
+            const name = document.getElementById('fb-account-name-input').value;
+            if (!cookies.trim()) return showMobileToast('Vui lòng dán cookie Facebook!', 'error');
+
+            const res = await fetchApi('/api/fb/save-cookies', {
+                method: 'POST',
+                body: JSON.stringify({ cookies, accountName: name })
+            });
+            if (res.success) {
+                showMobileToast('Đã lưu phiên Facebook thành công!', 'success');
+                document.getElementById('fb-cookies-input').value = '';
+                await loadMobileFbStatus();
+            } else {
+                showMobileToast(res.message || 'Lỗi lưu cookie', 'error');
+            }
+        }
+
+        async function disconnectMobileFb() {
+            if (!confirm('Bạn có chắc chắn muốn ngắt kết nối Facebook nick này?')) return;
+            await fetchApi('/api/fb/disconnect', { method: 'POST' });
+            showMobileToast('Đã ngắt kết nối Facebook', 'info');
+            await loadMobileFbStatus();
+        }
+
+        function openAuthModal() {
+            document.getElementById('modal-auth').classList.remove('hidden');
+            lucide.createIcons();
+        }
+        function closeAuthModal() {
+            document.getElementById('modal-auth').classList.add('hidden');
+        }
+        function toggleAuthMode() {
+            mState.isRegisterMode = !mState.isRegisterMode;
+            document.getElementById('auth-title').innerText = mState.isRegisterMode ? 'Đăng Ký Nhân Viên Mới' : 'Đăng Nhập Nhân Viên';
+            document.getElementById('auth-reg-extra').classList.toggle('hidden', !mState.isRegisterMode);
+            document.getElementById('btn-toggle-auth').innerText = mState.isRegisterMode ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có tài khoản? Đăng ký ngay';
+        }
+        async function submitAuthForm() {
+            const username = document.getElementById('auth-username').value;
+            const password = document.getElementById('auth-password').value;
+            const displayName = document.getElementById('auth-display-name')?.value || '';
+
+            const endpoint = mState.isRegisterMode ? '/api/auth/register' : '/api/auth/login';
+            const res = await fetchApi(endpoint, {
+                method: 'POST',
+                body: JSON.stringify({ username, password, displayName })
+            });
+
+            if (res.success) {
+                mState.token = res.token;
+                mState.user = res.user;
+                localStorage.setItem('posthub_token', res.token);
+                localStorage.setItem('posthub_user', JSON.stringify(res.user));
+                updateUserDisplay();
+                closeAuthModal();
+                showMobileToast(`Chào mừng ${res.user.displayName || res.user.username}!`, 'success');
+                await refreshMobileData();
+            } else {
+                showMobileToast(res.message || 'Lỗi đăng nhập', 'error');
+            }
+        }
+        function updateUserDisplay() {
+            const el = document.getElementById('header-username');
+            if (mState.user) el.innerText = mState.user.displayName || mState.user.username;
+            else el.innerText = 'Đăng Nhập';
+        }
+        function logoutMobile() {
+            localStorage.removeItem('posthub_token');
+            localStorage.removeItem('posthub_user');
+            mState.token = '1';
+            mState.user = null;
+            updateUserDisplay();
+            showMobileToast('Đã đăng xuất', 'info');
+            refreshMobileData();
+        }
+
+        // Post review modal
+        function openPostReviewModal(id) {
+            const post = mState.posts.find(p => p.id === id);
+            if (!post) return;
+            document.getElementById('review-post-id').value = post.id;
+            document.getElementById('review-text-input').value = post.rewritten_text || post.original_text || '';
+
+            // Populate cluster dropdown
+            const select = document.getElementById('review-cluster-select');
+            select.innerHTML = `<option value="">-- Đăng tất cả nhóm --</option>` +
+                mState.clusters.map(c => `<option value="${c.id}" ${post.target_cluster_id == c.id ? 'selected' : ''}>[Cụm] ${c.name} (${c.group_count} nhóm)</option>`).join('');
+
+            // Render images
+            const imgContainer = document.getElementById('review-images-container');
+            if (Array.isArray(post.images) && post.images.length > 0) {
+                imgContainer.innerHTML = post.images.map(img => `<img src="${img}" class="w-full h-20 object-cover rounded-xl border border-slate-700">`).join('');
+            } else {
+                imgContainer.innerHTML = '';
+            }
+
+            document.getElementById('modal-post-review').classList.remove('hidden');
+            lucide.createIcons();
+        }
+        function closePostReviewModal() {
+            document.getElementById('modal-post-review').classList.add('hidden');
+        }
+        async function approvePostFromReview() {
+            const id = document.getElementById('review-post-id').value;
+            const text = document.getElementById('review-text-input').value;
+            const clusterId = document.getElementById('review-cluster-select').value;
+
+            await fetchApi(`/api/posts/${id}/approve`, {
+                method: 'POST',
+                body: JSON.stringify({ rewritten_text: text, target_cluster_id: clusterId || null })
+            });
+            showMobileToast('Đã duyệt bài thành công!', 'success');
+            closePostReviewModal();
+            await refreshMobileData();
+        }
+        async function deletePostFromReview() {
+            const id = document.getElementById('review-post-id').value;
+            if (!confirm('Xóa bài viết này?')) return;
+            await fetchApi(`/api/posts/${id}`, { method: 'DELETE' });
+            showMobileToast('Đã xóa bài', 'info');
+            closePostReviewModal();
+            await refreshMobileData();
+        }
+        async function quickApprovePost(id) {
+            await fetchApi(`/api/posts/${id}/approve`, { method: 'POST', body: JSON.stringify({}) });
+            showMobileToast(`Đã duyệt bài #${id}!`, 'success');
+            await refreshMobileData();
+        }
+        async function quickPublishPost(id) {
+            showMobileToast(`Đang gửi lệnh xuất bản bài #${id}...`, 'info');
+            const res = await fetchApi(`/api/posts/${id}/publish`, { method: 'POST', body: JSON.stringify({}) });
+            if (res.success) {
+                showMobileToast(`Đã đăng bài #${id} thành công!`, 'success');
+                await refreshMobileData();
+            } else {
+                showMobileToast(res.message || 'Lỗi khi đăng bài', 'error');
+            }
+        }
+
+        // Cluster Modal
+        let clusterSelectedGids = new Set();
+        function openCreateClusterModal() {
+            document.getElementById('cluster-edit-id').value = '';
+            document.getElementById('cluster-name-input').value = '';
+            document.getElementById('cluster-modal-title').innerText = 'Tạo Cụm Nhóm Mới';
+            clusterSelectedGids.clear();
+            renderClusterPickerList();
+            document.getElementById('modal-cluster').classList.remove('hidden');
+            lucide.createIcons();
+        }
+        async function editClusterModal(id) {
+            const res = await fetchApi(`/api/clusters/${id}`);
+            if (!res.success) return;
+            const c = res.cluster;
+            document.getElementById('cluster-edit-id').value = c.id;
+            document.getElementById('cluster-name-input').value = c.name;
+            document.getElementById('cluster-modal-title').innerText = 'Chỉnh Sửa Cụm Nhóm';
+            clusterSelectedGids = new Set(c.group_ids || []);
+            renderClusterPickerList();
+            document.getElementById('modal-cluster').classList.remove('hidden');
+            lucide.createIcons();
+        }
+        function closeClusterModal() {
+            document.getElementById('modal-cluster').classList.add('hidden');
+        }
+        function renderClusterPickerList() {
+            const container = document.getElementById('cluster-picker-list');
+            document.getElementById('cluster-selected-count').innerText = clusterSelectedGids.size;
+
+            container.innerHTML = mState.fbGroups.map(g => {
+                const checked = clusterSelectedGids.has(g.id);
+                return `
+                    <label class="flex items-center justify-between p-2 rounded-lg bg-slate-900 text-xs cursor-pointer hover:bg-slate-800">
+                        <div class="flex items-center gap-2 truncate pr-2">
+                            <input type="checkbox" value="${g.id}" ${checked ? 'checked' : ''} onchange="onClusterGroupCheck(${g.id}, this.checked)" class="rounded text-indigo-600 focus:ring-0">
+                            <span class="truncate text-white font-medium">${g.name}</span>
+                        </div>
+                        <span class="text-[10px] text-slate-500 shrink-0 font-mono">${g.member_count || ''}</span>
+                    </label>
+                `;
+            }).join('');
+        }
+        function onClusterGroupCheck(gid, checked) {
+            if (checked) clusterSelectedGids.add(gid);
+            else clusterSelectedGids.delete(gid);
+            document.getElementById('cluster-selected-count').innerText = clusterSelectedGids.size;
+        }
+        function toggleAllClusterPicker(select) {
+            document.querySelectorAll('#cluster-picker-list input[type="checkbox"]').forEach(cb => {
+                const gid = parseInt(cb.value, 10);
+                cb.checked = select;
+                if (select) clusterSelectedGids.add(gid);
+                else clusterSelectedGids.delete(gid);
+            });
+            document.getElementById('cluster-selected-count').innerText = clusterSelectedGids.size;
+        }
+        function filterClusterPickerGroups(query) {
+            const q = query.toLowerCase();
+            document.querySelectorAll('#cluster-picker-list label').forEach(lbl => {
+                const text = lbl.innerText.toLowerCase();
+                lbl.style.display = text.includes(q) ? 'flex' : 'none';
+            });
+        }
+        async function saveClusterSubmit() {
+            const id = document.getElementById('cluster-edit-id').value;
+            const name = document.getElementById('cluster-name-input').value;
+            if (!name.trim()) return showMobileToast('Vui lòng nhập tên cụm!', 'error');
+
+            const res = await fetchApi('/api/clusters', {
+                method: 'POST',
+                body: JSON.stringify({
+                    id: id ? parseInt(id, 10) : undefined,
+                    name: name.trim(),
+                    groupIds: Array.from(clusterSelectedGids)
+                })
+            });
+
+            if (res.success) {
+                showMobileToast('Đã lưu cụm nhóm thành công!', 'success');
+                closeClusterModal();
+                await refreshMobileData();
+            } else {
+                showMobileToast(res.message || 'Lỗi khi lưu cụm', 'error');
+            }
+        }
+        async function deleteClusterAction(id) {
+            if (!confirm('Bạn có chắc chắn muốn xóa cụm nhóm này?')) return;
+            await fetchApi(`/api/clusters/${id}`, { method: 'DELETE' });
+            showMobileToast('Đã xóa cụm nhóm', 'info');
+            await refreshMobileData();
+        }
+
+        async function saveMobileDiscordChannel() {
+            const ch = document.getElementById('mobile-discord-channel-input').value;
+            await fetchApi('/api/settings', {
+                method: 'POST',
+                body: JSON.stringify({ discord_channel_id: ch.trim() })
+            });
+            showMobileToast('Đã cập nhật kênh Discord!', 'success');
+        }
+    </script>
+</body>
+</html>

@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('electronApi', {
 
     // 1. Trạng thái & Thống kê
     getStatus: () => ipcRenderer.invoke('get-status'),
+    getServerInfo: () => ipcRenderer.invoke('get-server-info'),
 
     // 2. Cài đặt hệ thống
     getSettings: () => ipcRenderer.invoke('get-settings'),

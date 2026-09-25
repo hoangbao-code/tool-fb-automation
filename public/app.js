@@ -187,6 +187,7 @@ async function loadInitialData() {
     checkChromeGeminiUI(true);
     await Promise.all([
         loadStatus(),
+        loadServerInfo(),
         loadPosts(),
         loadFbGroups(),
         loadDiscordSettingsUI(),
@@ -194,6 +195,29 @@ async function loadInitialData() {
         loadGeneralSettings(),
         loadLogs()
     ]);
+}
+
+async function loadServerInfo() {
+    try {
+        if (!window.electronApi || !window.electronApi.getServerInfo) return;
+        const info = await window.electronApi.getServerInfo();
+        if (info && info.mobileUrl) {
+            const urlEl = document.getElementById('desktop-mobile-url');
+            if (urlEl) urlEl.innerText = info.mobileUrl;
+            const linkEl = document.getElementById('desktop-mobile-link');
+            if (linkEl) linkEl.href = info.mobileUrl;
+        }
+    } catch (e) {
+        console.error('Error loadServerInfo:', e);
+    }
+}
+
+function copyMobileUrl() {
+    const el = document.getElementById('desktop-mobile-url');
+    if (el && el.innerText) {
+        navigator.clipboard.writeText(el.innerText.trim());
+        showToast('Đã sao chép link Web App điện thoại!', 'success');
+    }
 }
 
 async function refreshData() {

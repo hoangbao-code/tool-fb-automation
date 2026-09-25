@@ -1,0 +1,22 @@
+{
+  "name": "PostHub SaaS - Đăng Tin BĐS & Phòng Trọ",
+  "short_name": "PostHub",
+  "description": "Hệ thống tự động hóa đăng tin BĐS & Phòng Trọ đa kênh qua Discord Bot và Facebook Groups",
+  "start_url": "/mobile.html",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/assets/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

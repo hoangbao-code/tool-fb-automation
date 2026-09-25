@@ -25,6 +25,7 @@ const {
     setDiscordEventBroadcaster,
     sendDiscordTestMessage
 } = require('./services/discordEngine');
+const { startServer, getLocalIpAddresses } = require('./server');
 
 dotenv.config();
 
@@ -206,6 +207,13 @@ if (!gotTheLock) {
         setupTray();
         startFbPostWorker();
 
+        // Khởi động Web Server SaaS cho điện thoại và trình duyệt
+        try {
+            startServer(process.env.PORT || 3000);
+        } catch (serverErr) {
+            console.error('[Web Server SaaS] Lỗi khởi động:', serverErr.message);
+        }
+
         // Tự động khởi động Discord Bot nếu đã bật trước đó
         setTimeout(async () => {
             try {
@@ -248,6 +256,19 @@ app.on('window-all-closed', () => {
 // ==========================================
 // ĐĂNG KÝ CÁC IPC HANDLERS GIAO TIẾP VỚI UI
 // ==========================================
+
+// 0. Thông tin Web Server SaaS & Link Mobile
+ipcMain.handle('get-server-info', async () => {
+    const port = process.env.PORT || 3000;
+    const localIps = getLocalIpAddresses();
+    return {
+        success: true,
+        port: port,
+        localIps: localIps,
+        mobileUrl: `http://${localIps[0] || 'localhost'}:${port}/mobile.html`,
+        desktopWebUrl: `http://localhost:${port}`
+    };
+});
 
 // 1. Trạng thái & Thống kê
 ipcMain.handle('get-status', async () => {

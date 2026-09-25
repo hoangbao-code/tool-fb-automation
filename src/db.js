@@ -47,7 +47,7 @@ db.serialize(() => {
     db.run(`
         CREATE TABLE IF NOT EXISTS fb_clusters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
             description TEXT DEFAULT '',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
@@ -64,10 +64,37 @@ db.serialize(() => {
         )
     `);
 
+    // 3.3 Bảng Người Dùng & Nhân Viên (Multi-User SaaS)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            display_name TEXT DEFAULT '',
+            discord_channel_id TEXT DEFAULT '',
+            fb_status TEXT DEFAULT 'disconnected',
+            fb_name TEXT DEFAULT '',
+            fb_cookies TEXT DEFAULT '',
+            role TEXT DEFAULT 'staff',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
     // Tự động nâng cấp cột bảng posts nếu thiếu
     db.run(`ALTER TABLE posts ADD COLUMN target_cluster_id INTEGER`, () => {});
     db.run(`ALTER TABLE posts ADD COLUMN images TEXT`, () => {});
     db.run(`ALTER TABLE posts ADD COLUMN post_links TEXT`, () => {});
+    db.run(`ALTER TABLE posts ADD COLUMN user_id INTEGER DEFAULT 1`, () => {});
+
+    // Tự động nâng cấp cột user_id cho fb_groups và fb_clusters
+    db.run(`ALTER TABLE fb_groups ADD COLUMN user_id INTEGER DEFAULT 1`, () => {});
+    db.run(`ALTER TABLE fb_clusters ADD COLUMN user_id INTEGER DEFAULT 1`, () => {});
+
+    // Tạo tài khoản admin mặc định nếu chưa có
+    db.run(`
+        INSERT OR IGNORE INTO users (id, username, password, display_name, role)
+        VALUES (1, 'admin', 'admin123', 'Quản Trị Viên (Admin)', 'admin')
+    `, () => {});
 
     // 4. Tin nhắn Zalo đã bắt được
     db.run(`
@@ -168,8 +195,59 @@ const dbAsync = {
             console.error('Log error:', e);
         }
     },
-    // QUẢN LÝ CỤM NHÓM FACEBOOK (GROUP CLUSTERS)
-    getClusters: async () => {
+    // QUẢN LÝ NGƯỜI DÙNG & NHÂN VIÊN (MULTI-USER SAAS)
+    getUserById: async (id) => {
+        return await dbAsync.get(`SELECT id, username, display_name, discord_channel_id, fb_status, fb_name, role, created_at FROM users WHERE id = ?`, [id]);
+    },
+    getUserByUsername: async (username) => {
+        return await dbAsync.get(`SELECT * FROM users WHERE username = ?`, [username.trim().toLowerCase()]);
+    },
+    createUser: async ({ username, password, displayName = '', role = 'staff', discordChannelId = '' }) => {
+        const u = username.trim().toLowerCase();
+        const existing = await dbAsync.getUserByUsername(u);
+        if (existing) {
+            throw new Error(`Tài khoản "${username}" đã tồn tại trên hệ thống!`);
+        }
+        const res = await dbAsync.run(`
+            INSERT INTO users (username, password, display_name, role, discord_channel_id)
+            VALUES (?, ?, ?, ?, ?)
+        `, [u, password, displayName || u, role, discordChannelId || '']);
+        return await dbAsync.getUserById(res.id);
+    },
+    updateUser: async (id, fields = {}) => {
+        const allowed = ['display_name', 'password', 'discord_channel_id', 'fb_status', 'fb_name', 'fb_cookies', 'role'];
+        const setClauses = [];
+        const values = [];
+        for (const [k, v] of Object.entries(fields)) {
+            if (allowed.includes(k)) {
+                setClauses.push(`${k} = ?`);
+                values.push(v);
+            }
+        }
+        if (setClauses.length === 0) return await dbAsync.getUserById(id);
+        values.push(id);
+        await dbAsync.run(`UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`, values);
+        return await dbAsync.getUserById(id);
+    },
+    getAllUsers: async () => {
+        return await dbAsync.all(`
+            SELECT id, username, display_name, discord_channel_id, fb_status, fb_name, role, created_at
+            FROM users ORDER BY id ASC
+        `);
+    },
+
+    // QUẢN LÝ CỤM NHÓM FACEBOOK (GROUP CLUSTERS - CÓ LỌC THEO USER_ID)
+    getClusters: async (userId = null) => {
+        if (userId) {
+            return await dbAsync.all(`
+                SELECT c.*, COUNT(cg.group_id) as group_count
+                FROM fb_clusters c
+                LEFT JOIN fb_cluster_groups cg ON c.id = cg.cluster_id
+                WHERE c.user_id = ? OR c.user_id IS NULL
+                GROUP BY c.id
+                ORDER BY c.name ASC
+            `, [userId]);
+        }
         return await dbAsync.all(`
             SELECT c.*, COUNT(cg.group_id) as group_count
             FROM fb_clusters c
@@ -189,13 +267,13 @@ const dbAsync = {
         `, [clusterId]);
         return { ...cluster, groups, group_ids: (groups || []).map(g => g.id) };
     },
-    saveCluster: async ({ id, name, description = '', groupIds = [], group_ids = [] }) => {
+    saveCluster: async ({ id, name, description = '', groupIds = [], group_ids = [], userId = 1 }) => {
         let clusterId = id;
         const finalGroupIds = (Array.isArray(groupIds) && groupIds.length > 0) ? groupIds : (Array.isArray(group_ids) ? group_ids : []);
         if (clusterId) {
             await dbAsync.run(`UPDATE fb_clusters SET name = ?, description = ? WHERE id = ?`, [name.trim(), description.trim(), clusterId]);
         } else {
-            const res = await dbAsync.run(`INSERT INTO fb_clusters (name, description) VALUES (?, ?)`, [name.trim(), description.trim()]);
+            const res = await dbAsync.run(`INSERT INTO fb_clusters (name, description, user_id) VALUES (?, ?, ?)`, [name.trim(), description.trim(), userId || 1]);
             clusterId = res.id;
         }
         await dbAsync.run(`DELETE FROM fb_cluster_groups WHERE cluster_id = ?`, [clusterId]);
@@ -204,15 +282,18 @@ const dbAsync = {
                 await dbAsync.run(`INSERT OR IGNORE INTO fb_cluster_groups (cluster_id, group_id) VALUES (?, ?)`, [clusterId, gid]);
             }
         }
-        return { id: clusterId, name, description, groupCount: finalGroupIds.length, group_ids: finalGroupIds };
+        return { id: clusterId, name, description, groupCount: finalGroupIds.length, group_ids: finalGroupIds, user_id: userId };
     },
     deleteCluster: async (clusterId) => {
         await dbAsync.run(`DELETE FROM fb_cluster_groups WHERE cluster_id = ?`, [clusterId]);
         await dbAsync.run(`DELETE FROM fb_clusters WHERE id = ?`, [clusterId]);
         return { success: true };
     },
-    getGroupsForCluster: async (clusterId) => {
+    getGroupsForCluster: async (clusterId, userId = null) => {
         if (!clusterId || clusterId === 'all' || clusterId === 0) {
+            if (userId) {
+                return await dbAsync.all(`SELECT * FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id IS NULL)`, [userId]);
+            }
             return await dbAsync.all(`SELECT * FROM fb_groups WHERE is_active = 1`);
         }
         return await dbAsync.all(`

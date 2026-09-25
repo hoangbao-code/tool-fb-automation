@@ -11,8 +11,10 @@
   },
   "dependencies": {
     "adm-zip": "^0.6.1",
+    "cors": "^2.8.6",
     "discord.js": "^14.27.0",
     "dotenv": "^16.4.5",
+    "express": "^5.2.1",
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
