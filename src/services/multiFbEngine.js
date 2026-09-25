@@ -118,6 +118,49 @@ async function saveUserScannedGroups(userId, groupsList) {
     return { count: groupsList.length, added: addedCount };
 }
 
+const { loginToFacebook, fetchUserJoinedFbGroups } = require('./fbAuth');
+
+/**
+ * Đăng nhập Facebook bằng Email/SĐT + Password (+ 2FA) cho nhân viên
+ */
+async function loginUserWithCredentials(userId, email, password, twoFactorCode = '', accountName = '') {
+    const loginResult = await loginToFacebook({ email, password, twoFactorCode });
+    if (!loginResult.success) {
+        return loginResult;
+    }
+
+    const saved = await saveUserFbCookies(userId, loginResult.cookies, accountName || loginResult.name);
+    return {
+        success: true,
+        name: saved.name || loginResult.name,
+        uid: loginResult.uid,
+        message: 'Đăng nhập Facebook thành công!'
+    };
+}
+
+/**
+ * Quét danh sách nhóm Facebook từ tài khoản đã đăng nhập của nhân viên
+ */
+async function scanUserFbGroups(userId) {
+    const userRow = await dbAsync.get(`SELECT fb_cookies, fb_status FROM users WHERE id = ?`, [userId]);
+    if (!userRow || !userRow.fb_cookies || userRow.fb_cookies.trim().length < 10) {
+        throw new Error('Chưa kết nối Facebook! Vui lòng đăng nhập tài khoản Facebook trước khi quét nhóm.');
+    }
+
+    const scanResult = await fetchUserJoinedFbGroups(userRow.fb_cookies);
+    if (!scanResult.groups || scanResult.groups.length === 0) {
+        return { success: true, count: 0, added: 0, groups: [] };
+    }
+
+    const saved = await saveUserScannedGroups(userId, scanResult.groups);
+    return {
+        success: true,
+        count: scanResult.groups.length,
+        added: saved.added,
+        groups: scanResult.groups
+    };
+}
+
 /**
  * Đăng bài cho người dùng cụ thể
  */
@@ -140,5 +183,8 @@ module.exports = {
     saveUserFbCookies,
     disconnectUserFb,
     saveUserScannedGroups,
+    loginUserWithCredentials,
+    scanUserFbGroups,
     publishPostForUser
 };
+

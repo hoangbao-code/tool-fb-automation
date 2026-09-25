@@ -75,6 +75,13 @@
                     <span id="badge-health-dot" class="ml-auto w-2 h-2 rounded-full bg-emerald-400"></span>
                 </button>
 
+                <!-- Tab: Quản Lý & Cấp Tài Khoản Nhân Viên -->
+                <button onclick="switchTab('staff')" id="tab-btn-staff" class="nav-btn">
+                    <i data-lucide="user-check" class="w-4 h-4 text-cyan-400"></i>
+                    <span>Cấp Nick Nhân Viên</span>
+                    <span id="badge-staff-count" class="ml-auto bg-cyan-950 text-cyan-300 border border-cyan-800 text-[10px] font-bold px-2 py-0.5 rounded-full">0</span>
+                </button>
+
                 <!-- Tab 6: Settings -->
                 <button onclick="switchTab('settings')" id="tab-btn-settings" class="nav-btn">
                     <i data-lucide="settings" class="w-4 h-4"></i>
@@ -1208,6 +1215,68 @@
                     </div>
                 </div>
             </section>
+ 
+            <!-- TAB: QUẢN LÝ & CẤP TÀI KHOẢN NHÂN VIÊN -->
+            <section id="tab-staff" class="tab-pane tab-block h-full overflow-y-auto p-6 space-y-6">
+                <!-- Banner Web Mobile & Nút tạo -->
+                <div class="bg-gradient-to-r from-slate-900 via-cyan-950/40 to-slate-900 border border-cyan-800/40 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+                    <div class="space-y-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="p-2 rounded-xl bg-cyan-500/20 text-cyan-400">
+                                <i data-lucide="user-check" class="w-5 h-5"></i>
+                            </span>
+                            <h3 class="font-extrabold text-white text-base">Cấp Tài Khoản & Mật Khẩu Cho Nhân Viên</h3>
+                        </div>
+                        <p class="text-xs text-slate-300">
+                            Mỗi nhân viên được cấp 1 tài khoản đăng nhập riêng trên điện thoại để tự kết nối nick Facebook, quản lý cụm nhóm và kênh Discord độc lập.
+                        </p>
+                        <div class="flex items-center gap-2 pt-1 text-xs">
+                            <span class="text-slate-400">🔗 Link Web App Mobile cho nhân viên:</span>
+                            <code class="bg-slate-950 px-2.5 py-1 rounded-md text-cyan-300 font-mono text-[11px] border border-cyan-900/60" id="staff-mobile-url-display">Đang nạp...</code>
+                            <button onclick="copyStaffMobileUrl()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold flex items-center gap-1 transition-all">
+                                <i data-lucide="copy" class="w-3 h-3"></i> Sao chép link
+                            </button>
+                        </div>
+                    </div>
+                    <button onclick="openCreateStaffModal()" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-cyan-950/50 shrink-0">
+                        <i data-lucide="user-plus" class="w-4 h-4"></i> Cấp Tài Khoản Mới
+                    </button>
+                </div>
+
+                <!-- Bảng danh sách tài khoản nhân viên -->
+                <div class="bg-slate-950/80 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+                    <div class="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="shield-check" class="w-4 h-4 text-cyan-400"></i>
+                            <span class="font-bold text-xs uppercase tracking-wider text-white">Danh Sách Nhân Viên Đã Cấp Quyền (<span id="staff-table-count">0</span>)</span>
+                        </div>
+                        <button onclick="loadStaffUsers()" class="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition-colors">
+                            <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Làm mới
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-900/80 text-slate-400 border-b border-slate-800 text-[11px] uppercase">
+                                <tr>
+                                    <th class="p-3.5">ID</th>
+                                    <th class="p-3.5">Tài Khoản (Username)</th>
+                                    <th class="p-3.5">Họ Tên Nhân Viên</th>
+                                    <th class="p-3.5">Kênh Discord Riêng</th>
+                                    <th class="p-3.5">Trạng Thái Facebook</th>
+                                    <th class="p-3.5">Vai Trò</th>
+                                    <th class="p-3.5 text-right">Thao Tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="staff-table-body" class="divide-y divide-slate-800/60">
+                                <tr>
+                                    <td colspan="7" class="p-8 text-center text-slate-500">Đang tải danh sách nhân viên...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
 
             <!-- TAB 7: NHẬT KÝ (LOGS) -->
             <section id="tab-logs" class="tab-pane h-full flex-col p-6 space-y-4">
@@ -1392,6 +1461,90 @@
                 <span>Mỗi bài viết khi gửi từ Discord sẽ cho phép chọn 1 Cụm để đăng</span>
                 <button onclick="closeClusterModal()" class="px-4 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700">
                     Đóng
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CẤP TÀI KHOẢN NHÂN VIÊN MỚI -->
+    <div id="modal-create-staff" class="hidden fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400">
+                        <i data-lucide="user-plus" class="w-4 h-4"></i>
+                    </span>
+                    <h3 class="font-bold text-white text-sm">Cấp Tài Khoản Mới Cho Nhân Viên</h3>
+                </div>
+                <button onclick="closeCreateStaffModal()" class="text-slate-400 hover:text-white p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Tên đăng nhập (Username): <span class="text-rose-400">*</span></label>
+                    <input type="text" id="staff-input-username" placeholder="Ví dụ: nhanvien1, sales_nam..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs font-semibold text-slate-300">Mật khẩu khởi tạo: <span class="text-rose-400">*</span></label>
+                        <button type="button" onclick="generateRandomStaffPassword()" class="text-[11px] text-cyan-400 hover:underline flex items-center gap-1">
+                            <i data-lucide="refresh-cw" class="w-3 h-3"></i> Tạo ngẫu nhiên
+                        </button>
+                    </div>
+                    <input type="text" id="staff-input-password" placeholder="Nhập mật khẩu (vd: 123456)..." value="123456" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Họ tên nhân viên / Bộ phận:</label>
+                    <input type="text" id="staff-input-name" placeholder="Ví dụ: Nguyễn Văn An - Đội BĐS Thủ Đức..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">ID Kênh Discord Riêng (Tùy chọn):</label>
+                    <input type="text" id="staff-input-discord" placeholder="Ví dụ: 1353282928372... (để trống nếu nhập sau)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                    <span class="text-[10px] text-slate-500">Nhân viên cũng có thể tự cài ID kênh Discord trong ứng dụng điện thoại.</span>
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-2 border-t border-slate-800">
+                <button type="button" onclick="closeCreateStaffModal()" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors">
+                    Hủy
+                </button>
+                <button type="button" onclick="submitCreateStaff()" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all">
+                    <i data-lucide="check" class="w-4 h-4"></i> Tạo & Copy Gửi NV
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL ĐẶT LẠI MẬT KHẨU NHÂN VIÊN -->
+    <div id="modal-reset-staff-pass" class="hidden fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
+                        <i data-lucide="key" class="w-4 h-4"></i>
+                    </span>
+                    <h3 class="font-bold text-white text-sm">Đặt Lại Mật Khẩu</h3>
+                </div>
+                <button onclick="closeResetStaffPassModal()" class="text-slate-400 hover:text-white p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <input type="hidden" id="reset-pass-user-id">
+            <div>
+                <p class="text-xs text-slate-400 mb-2">Đang đổi mật khẩu cho tài khoản: <b id="reset-pass-username" class="text-white"></b></p>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">Mật khẩu mới:</label>
+                <input type="text" id="reset-pass-new-password" placeholder="Nhập mật khẩu mới..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:ring-2 focus:ring-cyan-500">
+            </div>
+
+            <div class="flex gap-2 pt-2 border-t border-slate-800">
+                <button type="button" onclick="closeResetStaffPassModal()" class="flex-1 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold">
+                    Hủy
+                </button>
+                <button type="button" onclick="submitResetStaffPassword()" class="flex-1 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold shadow-md">
+                    Lưu Mật Khẩu
                 </button>
             </div>
         </div>

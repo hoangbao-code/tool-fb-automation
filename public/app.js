@@ -164,6 +164,7 @@ function switchTab(tabId) {
         discord: { title: 'NGUỒN TIN DISCORD BOT', sub: 'Nhận bài + ảnh từ Discord, gom sau 1 phút, biên tập Gemini Web và duyệt bài tương tác' },
         ai: { title: 'GEMINI WEB TRỰC TIẾP', sub: 'Tự động gửi tin vào cuộc trò chuyện & trích xuất bài đăng' },
         health: { title: 'TRUNG TÂM KIỂM TRA HỆ THỐNG & API', sub: 'Giám sát thời gian thực: Gemini Web, Bot Discord, Facebook Webview và Database' },
+        staff: { title: 'QUẢN LÝ & CẤP TÀI KHOẢN NHÂN VIÊN', sub: 'Cấp tài khoản, mật khẩu và kênh Discord độc lập cho nhân viên truy cập trên điện thoại' },
         settings: { title: 'CÀI ĐẶT HỆ THỐNG', sub: 'Cấu hình thời gian giãn cách chống spam và tự động hóa' },
         logs: { title: 'NHẬT KÝ HOẠT ĐỘNG', sub: 'Theo dõi tiến trình hệ thống theo thời gian thực' }
     };
@@ -179,6 +180,7 @@ function switchTab(tabId) {
     else if (tabId === 'discord') loadDiscordSettingsUI();
     else if (tabId === 'ai') { loadAiSettings(); checkChromeGeminiUI(true); }
     else if (tabId === 'health') runFullSystemHealthCheckUI();
+    else if (tabId === 'staff') loadStaffUsers();
     else if (tabId === 'settings') loadGeneralSettings();
     else if (tabId === 'logs') loadLogs();
 }
@@ -188,6 +190,7 @@ async function loadInitialData() {
     await Promise.all([
         loadStatus(),
         loadServerInfo(),
+        loadStaffUsers(),
         loadPosts(),
         loadFbGroups(),
         loadDiscordSettingsUI(),
@@ -204,6 +207,8 @@ async function loadServerInfo() {
         if (info && info.mobileUrl) {
             const urlEl = document.getElementById('desktop-mobile-url');
             if (urlEl) urlEl.innerText = info.mobileUrl;
+            const staffUrlEl = document.getElementById('staff-mobile-url-display');
+            if (staffUrlEl) staffUrlEl.innerText = info.mobileUrl;
             const linkEl = document.getElementById('desktop-mobile-link');
             if (linkEl) linkEl.href = info.mobileUrl;
         }
@@ -3824,5 +3829,224 @@ async function runFullSystemHealthCheckUI() {
         }
     }
 }
+
+// ==============================================================
+// QUẢN LÝ & CẤP TÀI KHOẢN NHÂN VIÊN (STAFF MANAGEMENT)
+// ==============================================================
+state.staffUsers = [];
+
+async function loadStaffUsers() {
+    try {
+        if (!window.electronApi || !window.electronApi.getAllUsers) return;
+        const users = await window.electronApi.getAllUsers();
+        state.staffUsers = users || [];
+
+        const countEl = document.getElementById('staff-table-count');
+        if (countEl) countEl.innerText = state.staffUsers.length;
+        const badgeEl = document.getElementById('badge-staff-count');
+        if (badgeEl) badgeEl.innerText = state.staffUsers.length;
+
+        renderStaffTable();
+    } catch (e) {
+        console.error('Lỗi loadStaffUsers:', e);
+    }
+}
+
+function renderStaffTable() {
+    const tbody = document.getElementById('staff-table-body');
+    if (!tbody) return;
+
+    if (!state.staffUsers || state.staffUsers.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="p-8 text-center text-slate-500 text-xs">
+                    Chưa có tài khoản nhân viên nào. Bấm "Cấp Tài Khoản Mới" để tạo ngay!
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = state.staffUsers.map(u => {
+        const isAdmin = u.id === 1 || u.role === 'admin';
+        const roleBadge = isAdmin 
+            ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">Quản Trị Viên</span>`
+            : `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">Nhân Viên</span>`;
+
+        const isFbConnected = u.fb_status === 'connected';
+        const fbBadge = isFbConnected
+            ? `<span class="text-emerald-400 font-semibold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ${escapeHtml(u.fb_name || 'Đã kết nối')}</span>`
+            : `<span class="text-slate-500 italic">Chưa kết nối</span>`;
+
+        const discordChannel = u.discord_channel_id 
+            ? `<code class="bg-slate-900 px-2 py-0.5 rounded font-mono text-[11px] text-violet-300 border border-violet-900/50">${escapeHtml(u.discord_channel_id)}</code>`
+            : `<span class="text-slate-600 italic">Tự cài trong App</span>`;
+
+        return `
+            <tr class="hover:bg-slate-900/40 transition-colors">
+                <td class="p-3.5 font-mono text-slate-400 font-bold">#${u.id}</td>
+                <td class="p-3.5 font-bold text-white">
+                    <div class="flex items-center gap-1.5">
+                        <i data-lucide="user" class="w-3.5 h-3.5 text-cyan-400"></i>
+                        <span>${escapeHtml(u.username)}</span>
+                    </div>
+                </td>
+                <td class="p-3.5 font-semibold text-slate-200">${escapeHtml(u.display_name || u.username)}</td>
+                <td class="p-3.5">${discordChannel}</td>
+                <td class="p-3.5 text-xs">${fbBadge}</td>
+                <td class="p-3.5">${roleBadge}</td>
+                <td class="p-3.5 text-right">
+                    <div class="flex items-center justify-end gap-1.5">
+                        <button onclick="copyStaffCredentials(${u.id})" class="px-2.5 py-1.5 rounded-lg bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 border border-cyan-800/60 font-semibold text-[11px] flex items-center gap-1 transition-all" title="Sao chép thông tin gửi nhân viên">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy Tin Nhắn
+                        </button>
+                        <button onclick="openResetStaffPassModal(${u.id}, '${escapeHtml(u.username)}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all" title="Đổi mật khẩu">
+                            <i data-lucide="key" class="w-3.5 h-3.5"></i>
+                        </button>
+                        ${!isAdmin ? `
+                            <button onclick="deleteStaffUser(${u.id}, '${escapeHtml(u.username)}')" class="p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 transition-all" title="Xóa tài khoản nhân viên này">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    if (window.lucide) lucide.createIcons();
+}
+
+function openCreateStaffModal() {
+    document.getElementById('modal-create-staff')?.classList.remove('hidden');
+    document.getElementById('staff-input-username').value = '';
+    document.getElementById('staff-input-password').value = '123456';
+    document.getElementById('staff-input-name').value = '';
+    document.getElementById('staff-input-discord').value = '';
+    if (window.lucide) lucide.createIcons();
+}
+
+function closeCreateStaffModal() {
+    document.getElementById('modal-create-staff')?.classList.add('hidden');
+}
+
+function generateRandomStaffPassword() {
+    const num = Math.floor(100000 + Math.random() * 900000);
+    const passInput = document.getElementById('staff-input-password');
+    if (passInput) passInput.value = String(num);
+}
+
+async function submitCreateStaff() {
+    const username = document.getElementById('staff-input-username')?.value.trim();
+    const password = document.getElementById('staff-input-password')?.value.trim();
+    const displayName = document.getElementById('staff-input-name')?.value.trim();
+    const discordChannelId = document.getElementById('staff-input-discord')?.value.trim();
+
+    if (!username || !password) {
+        return showToast('Vui lòng nhập Tên đăng nhập và Mật khẩu!', 'error');
+    }
+
+    try {
+        const newUser = await window.electronApi.createUser({
+            username,
+            password,
+            displayName,
+            discordChannelId,
+            role: 'staff'
+        });
+
+        closeCreateStaffModal();
+        await loadStaffUsers();
+
+        // Tự động sao chép thông tin gửi nhân viên vào Clipboard
+        const mobileUrl = document.getElementById('desktop-mobile-url')?.innerText || 'http://192.168.1.xxx:3000';
+        const msg = 
+`🎉 THÔNG TIN TÀI KHOẢN APP POSTHUB DÀNH CHO BẠN:
+-------------------------------------------
+🔗 Link truy cập trên điện thoại: ${mobileUrl}
+👤 Tên đăng nhập: ${username}
+🔑 Mật khẩu: ${password}
+${displayName ? `📌 Tên nhân viên: ${displayName}\n` : ''}${discordChannelId ? `🤖 Kênh Discord riêng: ${discordChannelId}\n` : ''}-------------------------------------------
+👉 Hãy mở đường link trên trình duyệt điện thoại (Safari hoặc Chrome), đăng nhập nick và bắt đầu sử dụng!`;
+
+        await navigator.clipboard.writeText(msg);
+        showToast(`✅ Đã tạo tài khoản "${username}" thành công & Copy thông tin vào Clipboard!`, 'success');
+        alert(`✅ CẤP TÀI KHOẢN THÀNH CÔNG!\n\nĐã tự động sao chép nội dung tin nhắn gửi nhân viên vào Clipboard. Bạn chỉ cần bấm "Dán" (Ctrl+V) qua Zalo/Discord để gửi cho nhân viên.`);
+
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
+    }
+}
+
+async function copyStaffCredentials(userId) {
+    const user = state.staffUsers.find(u => u.id === userId);
+    if (!user) return;
+
+    const mobileUrl = document.getElementById('desktop-mobile-url')?.innerText || 'http://192.168.1.xxx:3000';
+    const msg = 
+`🎉 THÔNG TIN TÀI KHOẢN APP POSTHUB DÀNH CHO BẠN:
+-------------------------------------------
+🔗 Link truy cập trên điện thoại: ${mobileUrl}
+👤 Tên đăng nhập: ${user.username}
+🔑 Mật khẩu: (Mật khẩu bạn đã được cấp hoặc liên hệ Quản lý để đặt lại)
+${user.display_name ? `📌 Tên nhân viên: ${user.display_name}\n` : ''}${user.discord_channel_id ? `🤖 Kênh Discord riêng: ${user.discord_channel_id}\n` : ''}-------------------------------------------
+👉 Hãy mở đường link trên trình duyệt điện thoại (Safari hoặc Chrome), đăng nhập nick và bắt đầu sử dụng!`;
+
+    await navigator.clipboard.writeText(msg);
+    showToast(`Đã sao chép thông tin tài khoản "${user.username}" vào Clipboard!`, 'success');
+}
+
+function copyStaffMobileUrl() {
+    const el = document.getElementById('staff-mobile-url-display');
+    if (el && el.innerText) {
+        navigator.clipboard.writeText(el.innerText.trim());
+        showToast('Đã sao chép link Web App điện thoại!', 'success');
+    }
+}
+
+function openResetStaffPassModal(id, username) {
+    document.getElementById('reset-pass-user-id').value = id;
+    document.getElementById('reset-pass-username').innerText = username;
+    document.getElementById('reset-pass-new-password').value = '';
+    document.getElementById('modal-reset-staff-pass')?.classList.remove('hidden');
+    document.getElementById('reset-pass-new-password')?.focus();
+}
+
+function closeResetStaffPassModal() {
+    document.getElementById('modal-reset-staff-pass')?.classList.add('hidden');
+}
+
+async function submitResetStaffPassword() {
+    const id = document.getElementById('reset-pass-user-id').value;
+    const newPassword = document.getElementById('reset-pass-new-password').value.trim();
+
+    if (!newPassword) {
+        return showToast('Vui lòng nhập mật khẩu mới!', 'error');
+    }
+
+    try {
+        await window.electronApi.updateUser(id, { password: newPassword });
+        closeResetStaffPassModal();
+        showToast('Đã đổi mật khẩu nhân viên thành công!', 'success');
+    } catch (e) {
+        showToast('Lỗi đổi mật khẩu: ' + e.message, 'error');
+    }
+}
+
+async function deleteStaffUser(id, username) {
+    if (id === 1) return showToast('Không thể xóa Quản trị viên chính!', 'error');
+    if (!confirm(`Bạn có chắc chắn muốn xóa tài khoản nhân viên "${username}" (#${id})?\nToàn bộ dữ liệu phiên Facebook và nhóm của nhân viên này sẽ bị xóa khỏi hệ thống.`)) {
+        return;
+    }
+
+    try {
+        await window.electronApi.deleteUser(id);
+        showToast(`Đã xóa tài khoản "${username}" thành công!`, 'info');
+        await loadStaffUsers();
+    } catch (e) {
+        showToast('Lỗi khi xóa nhân viên: ' + e.message, 'error');
+    }
+}
+
 
 

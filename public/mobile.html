@@ -168,10 +168,15 @@
             <div class="pt-4 border-t border-slate-800/80 space-y-2">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Danh Sách Tất Cả Nhóm FB (<span id="total-fb-groups-count">0</span>)</span>
-                    <button onclick="openAddFbGroupModal()" class="text-[11px] text-indigo-400 font-semibold underline">Thêm nhóm ➔</button>
+                    <div class="flex items-center gap-2">
+                        <button onclick="scanMobileFbGroups()" id="btn-scan-fb-groups" class="px-2.5 py-1 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-[11px] flex items-center gap-1 shadow-sm">
+                            <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét từ FB
+                        </button>
+                        <button onclick="openAddFbGroupModal()" class="text-[11px] text-indigo-400 font-semibold underline">Thêm nhóm</button>
+                    </div>
                 </div>
                 <input type="text" id="fb-groups-search-input" oninput="filterMobileFbGroups(this.value)" placeholder="Tìm kiếm tên nhóm..." class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <div id="mobile-fb-groups-container" class="space-y-2 max-h-60 overflow-y-auto"></div>
+                <div id="mobile-fb-groups-container" class="space-y-2 max-h-72 overflow-y-auto"></div>
             </div>
         </section>
 
@@ -191,10 +196,61 @@
                     <span id="mobile-fb-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400">Chưa kết nối</span>
                 </div>
 
-                <!-- Form nhập Cookie Facebook -->
-                <div class="space-y-3">
+                <!-- Thao tác nhanh khi nick đã kết nối -->
+                <div id="mobile-fb-connected-actions" class="hidden p-3 rounded-xl bg-slate-950 border border-emerald-800/40 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+                            <i data-lucide="check-circle-2" class="w-4 h-4"></i> Tài khoản đã sẵn sàng đăng bài
+                        </span>
+                        <button onclick="disconnectMobileFb()" class="text-[11px] text-rose-400 underline font-semibold">Đăng xuất</button>
+                    </div>
+                    <button onclick="scanMobileFbGroups()" class="w-full py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md">
+                        <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét Lại Danh Sách Nhóm Từ Nick Này
+                    </button>
+                </div>
+
+                <!-- Chuyển đổi phương thức đăng nhập -->
+                <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+                    <button onclick="switchFbLoginTab('direct')" id="tab-btn-fb-direct" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white transition-all">
+                        Đăng Nhập Trực Tiếp (Khuyên dùng)
+                    </button>
+                    <button onclick="switchFbLoginTab('cookie')" id="tab-btn-fb-cookie" class="flex-1 py-1.5 rounded-lg text-xs font-semibold text-slate-400 transition-all">
+                        Dán Cookie
+                    </button>
+                </div>
+
+                <!-- Form 1: Đăng nhập trực tiếp bằng Email & Mật khẩu -->
+                <div id="form-fb-direct" class="space-y-3">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-300 mb-1">Dán Cookie Facebook (Khuyên Dùng):</label>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Số điện thoại hoặc Email Facebook:</label>
+                        <input type="text" id="fb-direct-email" placeholder="Nhập SĐT hoặc email Facebook..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Mật khẩu Facebook:</label>
+                        <input type="password" id="fb-direct-pass" placeholder="Nhập mật khẩu..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div id="fb-2fa-container" class="space-y-1">
+                        <label class="block text-xs font-semibold text-amber-300 mb-1 flex items-center gap-1">
+                            <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Mã xác thực 2FA (Nếu nick bật 2 lớp):
+                        </label>
+                        <input type="text" id="fb-direct-2fa" placeholder="Mã 6 chữ số từ Google Authenticator hoặc SMS..." class="w-full bg-slate-950 border border-amber-900/60 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Tên Gợi Nhớ (Tùy chọn):</label>
+                        <input type="text" id="fb-direct-name" placeholder="Ví dụ: Nick BĐS Cá Nhân..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <button onclick="loginMobileFbDirect()" id="btn-fb-direct-login" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md">
+                        <i data-lucide="log-in" class="w-4 h-4"></i> Đăng Nhập Facebook Ngay
+                    </button>
+                    <p class="text-[11px] text-slate-400 text-center">
+                        🔒 Thông tin đăng nhập được chuyển thẳng đến máy chủ riêng của bạn để lấy phiên làm việc an toàn.
+                    </p>
+                </div>
+
+                <!-- Form 2: Nhập Cookie Facebook Thủ Công -->
+                <div id="form-fb-cookie" class="hidden space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Dán Chuỗi Cookie Facebook:</label>
                         <textarea id="fb-cookies-input" rows="4" placeholder="Dán chuỗi cookie (có chứa c_user=... và xs=...)..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-600"></textarea>
                     </div>
                     <div>
@@ -209,10 +265,6 @@
                             <i data-lucide="log-out" class="w-3.5 h-3.5"></i> Ngắt
                         </button>
                     </div>
-                </div>
-
-                <div class="p-3 rounded-xl bg-slate-950 border border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
-                    💡 <b>Cách lấy cookie nhanh trên điện thoại:</b> Đăng nhập Facebook trên trình duyệt máy tính hoặc tiện ích Cookie Editor, copy cookie và dán vào ô trên. Phiên đăng nhập được lưu riêng biệt trên máy chủ cho tài khoản của bạn.
                 </div>
             </div>
         </section>
@@ -603,21 +655,135 @@
             document.getElementById('total-fb-groups-count').innerText = mState.fbGroups.length;
             const container = document.getElementById('mobile-fb-groups-container');
             if (mState.fbGroups.length === 0) {
-                container.innerHTML = `<div class="p-4 text-center text-xs text-slate-500">Chưa có nhóm nào được lưu.</div>`;
+                container.innerHTML = `<div class="p-4 text-center text-xs text-slate-500">Chưa có nhóm nào được lưu. Bấm "Quét từ FB" hoặc "Thêm nhóm" để bắt đầu!</div>`;
                 return;
             }
             container.innerHTML = mState.fbGroups.map(g => `
                 <div class="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs">
-                    <div class="truncate pr-2">
-                        <span class="font-semibold text-white truncate block">${g.name}</span>
-                        <span class="text-[10px] text-slate-500 truncate block">${g.url}</span>
+                    <div class="truncate pr-2 flex-1">
+                        <span class="font-semibold text-white truncate block">${escapeHtml(g.name)}</span>
+                        <span class="text-[10px] text-slate-500 truncate block">${escapeHtml(g.url)}</span>
                     </div>
-                    <button onclick="toggleMobileGroup(${g.id})" class="p-1 rounded text-xs ${g.is_active ? 'text-emerald-400' : 'text-slate-600'}">
-                        <i data-lucide="${g.is_active ? 'check-circle' : 'circle'}" class="w-4 h-4"></i>
-                    </button>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button onclick="toggleMobileGroup(${g.id})" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs ${g.is_active ? 'text-emerald-400' : 'text-slate-600'}" title="${g.is_active ? 'Đang bật đăng' : 'Đang tắt'}">
+                            <i data-lucide="${g.is_active ? 'check-circle' : 'circle'}" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="deleteMobileGroup(${g.id})" class="p-1.5 rounded-lg bg-rose-950/40 text-rose-400 hover:bg-rose-900/60 transition-colors" title="Xóa nhóm này">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
                 </div>
             `).join('');
             lucide.createIcons();
+        }
+
+        async function deleteMobileGroup(id) {
+            if (!confirm('Bạn có chắc chắn muốn xóa nhóm này khỏi danh sách?')) return;
+            try {
+                const res = await fetchApi(`/api/fb/groups/${id}`, { method: 'DELETE' });
+                if (res.success) {
+                    mState.fbGroups = mState.fbGroups.filter(g => g.id !== id);
+                    renderMobileFbGroups();
+                    showMobileToast('Đã xóa nhóm thành công!', 'info');
+                } else {
+                    showMobileToast(res.message || 'Lỗi khi xóa nhóm', 'error');
+                }
+            } catch (e) {
+                showMobileToast('Lỗi: ' + e.message, 'error');
+            }
+        }
+
+        async function scanMobileFbGroups() {
+            const btn = document.getElementById('btn-scan-fb-groups');
+            const oldHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Đang quét...`;
+                btn.disabled = true;
+            }
+            showMobileToast('Đang kết nối Facebook và quét nhóm đã tham gia...', 'info');
+
+            try {
+                const res = await fetchApi('/api/fb/scan-groups', { method: 'POST' });
+                if (res.success) {
+                    showMobileToast(`✅ Đã quét thành công ${res.count || 0} nhóm (Thêm mới: ${res.added || 0})!`, 'success');
+                    await loadMobileFbGroups();
+                } else {
+                    showMobileToast(res.message || 'Không thể quét nhóm từ Facebook. Vui lòng kiểm tra lại tài khoản FB!', 'error');
+                }
+            } catch (e) {
+                showMobileToast('Lỗi khi quét nhóm: ' + e.message, 'error');
+            } finally {
+                if (btn) {
+                    btn.innerHTML = oldHtml;
+                    btn.disabled = false;
+                }
+                lucide.createIcons();
+            }
+        }
+
+        function switchFbLoginTab(tab) {
+            const btnDirect = document.getElementById('tab-btn-fb-direct');
+            const btnCookie = document.getElementById('tab-btn-fb-cookie');
+            const formDirect = document.getElementById('form-fb-direct');
+            const formCookie = document.getElementById('form-fb-cookie');
+
+            if (tab === 'direct') {
+                btnDirect.className = 'flex-1 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white transition-all';
+                btnCookie.className = 'flex-1 py-1.5 rounded-lg text-xs font-semibold text-slate-400 transition-all';
+                formDirect.classList.remove('hidden');
+                formCookie.classList.add('hidden');
+            } else {
+                btnCookie.className = 'flex-1 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white transition-all';
+                btnDirect.className = 'flex-1 py-1.5 rounded-lg text-xs font-semibold text-slate-400 transition-all';
+                formCookie.classList.remove('hidden');
+                formDirect.classList.add('hidden');
+            }
+            lucide.createIcons();
+        }
+
+        async function loginMobileFbDirect() {
+            const email = document.getElementById('fb-direct-email').value;
+            const password = document.getElementById('fb-direct-pass').value;
+            const twoFactorCode = document.getElementById('fb-direct-2fa').value;
+            const accountName = document.getElementById('fb-direct-name').value;
+
+            if (!email.trim() || !password.trim()) {
+                return showMobileToast('Vui lòng nhập Email/SĐT và Mật khẩu Facebook!', 'error');
+            }
+
+            const btn = document.getElementById('btn-fb-direct-login');
+            const oldHtml = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Đang xác thực...`;
+            btn.disabled = true;
+
+            try {
+                const res = await fetchApi('/api/fb/login-credentials', {
+                    method: 'POST',
+                    body: JSON.stringify({ email, password, twoFactorCode, accountName })
+                });
+
+                if (res.require2FA) {
+                    document.getElementById('fb-2fa-container').classList.remove('hidden');
+                    document.getElementById('fb-direct-2fa').focus();
+                    showMobileToast('⚠️ Nick có bật 2FA. Vui lòng nhập mã xác thực 6 số!', 'warning');
+                } else if (res.success) {
+                    showMobileToast(`✅ Đăng nhập Facebook thành công (${res.name})!`, 'success');
+                    document.getElementById('fb-direct-pass').value = '';
+                    document.getElementById('fb-direct-2fa').value = '';
+                    await loadMobileFbStatus();
+                    if (confirm('Đăng nhập thành công! Bạn có muốn quét danh sách nhóm từ nick này ngay bây giờ?')) {
+                        await scanMobileFbGroups();
+                    }
+                } else {
+                    showMobileToast(res.message || 'Đăng nhập Facebook thất bại!', 'error');
+                }
+            } catch (e) {
+                showMobileToast('Lỗi: ' + e.message, 'error');
+            } finally {
+                btn.innerHTML = oldHtml;
+                btn.disabled = false;
+                lucide.createIcons();
+            }
         }
 
         function filterMobileFbGroups(query) {
@@ -631,15 +797,20 @@
         async function updateFbStatusUI(statusData) {
             const label = document.getElementById('mobile-fb-status-label');
             const badge = document.getElementById('mobile-fb-badge');
+            const connectedBox = document.getElementById('mobile-fb-connected-actions');
+
             if (statusData && statusData.connected) {
                 label.innerText = `Đã kết nối: ${statusData.name || 'Nick Facebook'}`;
                 badge.innerText = '🟢 Hoạt động';
                 badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400';
+                if (connectedBox) connectedBox.classList.remove('hidden');
             } else {
                 label.innerText = 'Chưa lưu phiên Facebook';
                 badge.innerText = '🔴 Chưa kết nối';
                 badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400';
+                if (connectedBox) connectedBox.classList.add('hidden');
             }
+            lucide.createIcons();
         }
 
         async function loadMobileFbStatus() {

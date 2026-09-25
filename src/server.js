@@ -8,6 +8,8 @@ const {
     saveUserFbCookies,
     disconnectUserFb,
     saveUserScannedGroups,
+    loginUserWithCredentials,
+    scanUserFbGroups,
     publishPostForUser
 } = require('./services/multiFbEngine');
 const { getDiscordBotStatus, startDiscordBot, stopDiscordBot } = require('./services/discordEngine');
@@ -165,6 +167,39 @@ function createServer() {
         }
     });
 
+    app.post('/api/users', async (req, res) => {
+        try {
+            const { username, password, displayName, discordChannelId, role } = req.body;
+            if (!username || !password) {
+                return res.status(400).json({ success: false, message: 'Tên đăng nhập và mật khẩu là bắt buộc!' });
+            }
+            const newUser = await dbAsync.createUser({ username, password, displayName, discordChannelId, role: role || 'staff' });
+            res.json({ success: true, user: newUser });
+        } catch (e) {
+            res.status(400).json({ success: false, message: e.message });
+        }
+    });
+
+    app.put('/api/users/:id', async (req, res) => {
+        try {
+            const { id } = req.params;
+            const updated = await dbAsync.updateUser(id, req.body);
+            res.json({ success: true, user: updated });
+        } catch (e) {
+            res.status(400).json({ success: false, message: e.message });
+        }
+    });
+
+    app.delete('/api/users/:id', async (req, res) => {
+        try {
+            const { id } = req.params;
+            await dbAsync.deleteUser(id);
+            res.json({ success: true });
+        } catch (e) {
+            res.status(400).json({ success: false, message: e.message });
+        }
+    });
+
     // 3. QUẢN LÝ PHIÊN FACEBOOK CỦA TỪNG NHÂN VIÊN
     app.get('/api/fb/status', async (req, res) => {
         try {
@@ -172,6 +207,28 @@ function createServer() {
             res.json({ success: true, ...status });
         } catch (e) {
             res.status(500).json({ success: false, message: e.message });
+        }
+    });
+
+    app.post('/api/fb/login-credentials', async (req, res) => {
+        try {
+            const { email, password, twoFactorCode, accountName } = req.body;
+            const result = await loginUserWithCredentials(req.userId, email, password, twoFactorCode, accountName);
+            if (!result.success) {
+                return res.status(result.require2FA ? 200 : 400).json(result);
+            }
+            res.json(result);
+        } catch (e) {
+            res.status(400).json({ success: false, message: e.message });
+        }
+    });
+
+    app.post('/api/fb/scan-groups', async (req, res) => {
+        try {
+            const result = await scanUserFbGroups(req.userId);
+            res.json(result);
+        } catch (e) {
+            res.status(400).json({ success: false, message: e.message });
         }
     });
 

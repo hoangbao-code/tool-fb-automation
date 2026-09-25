@@ -80,9 +80,14 @@ contextBridge.exposeInMainWorld('electronApi', {
     // 8. Sao lưu & Phục hồi dữ liệu
     exportBackup: () => ipcRenderer.invoke('export-backup'),
     importBackup: (backupData) => ipcRenderer.invoke('import-backup', backupData),
-    showNotification: (title, body) => ipcRenderer.invoke('show-notification', { title, body }),
     selectDirectory: (defaultPath) => ipcRenderer.invoke('select-directory', defaultPath),
     openDirectory: (dirPath) => ipcRenderer.invoke('open-directory', dirPath),
+
+    // 8.1 Quản lý & Cấp tài khoản nhân viên (Multi-User)
+    getAllUsers: () => ipcRenderer.invoke('get-all-users'),
+    createUser: (data) => ipcRenderer.invoke('create-user', data),
+    updateUser: (id, fields) => ipcRenderer.invoke('update-user', { id, fields }),
+    deleteUser: (id) => ipcRenderer.invoke('delete-user', id),
 
     // 9. Lắng nghe các sự kiện hệ thống thời gian thực
     on: (channel, callback) => {

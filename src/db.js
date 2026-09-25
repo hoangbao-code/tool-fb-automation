@@ -237,6 +237,16 @@ const dbAsync = {
             FROM users ORDER BY id ASC
         `);
     },
+    deleteUser: async (id) => {
+        if (Number(id) === 1) {
+            throw new Error('Không thể xóa tài khoản Quản trị viên chính (Admin ID: 1)!');
+        }
+        await dbAsync.run(`DELETE FROM fb_cluster_groups WHERE cluster_id IN (SELECT id FROM fb_clusters WHERE user_id = ?)`, [id]);
+        await dbAsync.run(`DELETE FROM fb_clusters WHERE user_id = ?`, [id]);
+        await dbAsync.run(`DELETE FROM fb_groups WHERE user_id = ?`, [id]);
+        await dbAsync.run(`DELETE FROM posts WHERE user_id = ?`, [id]);
+        return await dbAsync.run(`DELETE FROM users WHERE id = ?`, [id]);
+    },
 
     // QUẢN LÝ CỤM NHÓM FACEBOOK (GROUP CLUSTERS - CÓ LỌC THEO USER_ID)
     getClusters: async (userId = null) => {

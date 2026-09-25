@@ -857,6 +857,24 @@ ipcMain.handle('open-directory', async (event, dirPath) => {
     }
 });
 
+// QUẢN LÝ & CẤP TÀI KHOẢN NHÂN VIÊN (MULTI-USER)
+ipcMain.handle('get-all-users', async () => {
+    return await dbAsync.getAllUsers();
+});
+
+ipcMain.handle('create-user', async (event, data) => {
+    return await dbAsync.createUser(data);
+});
+
+ipcMain.handle('update-user', async (event, { id, fields }) => {
+    return await dbAsync.updateUser(id, fields);
+});
+
+ipcMain.handle('delete-user', async (event, id) => {
+    return await dbAsync.deleteUser(id);
+});
+
+
 // ==============================================================
 // XỬ LÝ SỰ KIỆN TỪ WEBVIEW ZALO VÀ FACEBOOK QUA IPC TỪ RENDERER
 // ==============================================================
