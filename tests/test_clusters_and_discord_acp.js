@@ -177,6 +177,7 @@ async function runClusterAndDiscordACPTests() {
 
         // Dọn dẹp dữ liệu test
         await dbAsync.run(`DELETE FROM posts WHERE id = ?`, [testPostId]);
+        await dbAsync.run(`DELETE FROM fb_groups WHERE url IN (?, ?, ?)`, [sampleUrl1, sampleUrl2, sampleUrl3]);
         if (fs.existsSync(dummyImgFile)) fs.unlinkSync(dummyImgFile);
 
         console.log('\n========================================================');

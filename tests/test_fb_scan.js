@@ -64,6 +64,9 @@ async function testFbScan() {
         const toggled = await dbAsync.get('SELECT is_active FROM fb_groups WHERE id = ?', [groupsInDb[0].id]);
         console.log(`   - Trạng thái is_active sau toggle: ${toggled.is_active}`);
 
+        // Dọn dẹp dữ liệu test khỏi cơ sở dữ liệu
+        await dbAsync.run("DELETE FROM fb_groups WHERE url IN ('https://www.facebook.com/groups/nhadathcm/', 'https://www.facebook.com/groups/phongtrosaigon/', 'https://www.facebook.com/groups/batdongsanmienbac/')");
+
         console.log('\n✅ KẾT QUẢ: TẤT CẢ CÁC BƯỚC XỬ LÝ QUÉT NHÓM FACEBOOK ĐỀU THÀNH CÔNG 100%!');
         process.exit(0);
 

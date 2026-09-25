@@ -166,6 +166,12 @@ async function runTests() {
         throw new Error('Lỗi lấy danh sách cụm');
     }
 
+    // 8. Dọn dẹp dữ liệu kiểm thử
+    await dbAsync.run(`DELETE FROM fb_clusters WHERE user_id = ?`, [staffToken]);
+    await dbAsync.run(`DELETE FROM fb_groups WHERE user_id = ?`, [staffToken]);
+    await dbAsync.run(`DELETE FROM users WHERE id = ?`, [staffToken]);
+    console.log('  ✓ Đã dọn dẹp sạch tài khoản, cụm nhóm và dữ liệu test.');
+
     console.log('\n========================================================');
     console.log('🎉 TẤT CẢ 7 HẠNG MỤC KIỂM THỬ SAAS WEB APP ĐÃ VƯỢT QUA 100%!');
     console.log('========================================================');
