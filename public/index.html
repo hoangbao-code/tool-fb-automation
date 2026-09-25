@@ -1336,15 +1336,29 @@
 
                 <div>
                     <div class="flex items-center justify-between mb-1.5">
-                        <label class="text-[11px] text-slate-400 font-semibold">Tích chọn các nhóm FB thuộc Cụm này:</label>
-                        <div class="flex gap-2 text-[11px]">
-                            <button type="button" onclick="selectAllClusterGroups(true)" class="text-emerald-400 hover:underline">Chọn hết</button>
+                        <label class="text-[11px] text-slate-400 font-semibold flex items-center gap-1.5">
+                            <span>Tích chọn các nhóm FB thuộc Cụm này:</span>
+                            <span id="cluster-selected-badge" class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold">Đã chọn: 0</span>
+                        </label>
+                        <div class="flex items-center gap-2 text-[11px]">
+                            <button type="button" onclick="selectAllClusterGroups(true)" class="text-emerald-400 hover:underline" title="Chọn các nhóm đang hiển thị">Chọn hết</button>
                             <span class="text-slate-600">|</span>
-                            <button type="button" onclick="selectAllClusterGroups(false)" class="text-slate-400 hover:underline">Bỏ chọn</button>
+                            <button type="button" onclick="selectAllClusterGroups(false)" class="text-slate-400 hover:underline" title="Bỏ chọn các nhóm đang hiển thị">Bỏ chọn</button>
                         </div>
                     </div>
-                    <div id="cluster-groups-picker" class="max-h-48 overflow-y-auto bg-slate-900 border border-slate-800 rounded-lg p-2.5 space-y-1.5 text-xs divide-y divide-slate-800/40">
+
+                    <!-- Thanh tìm kiếm nhóm trong Cụm -->
+                    <div class="relative mb-2">
+                        <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"></i>
+                        <input type="text" id="cluster-group-search" oninput="filterClusterGroups()" placeholder="🔍 Tìm kiếm nhóm theo tên (VD: Bình Thạnh, Gò Vấp, Quận 7...)" class="w-full bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-8 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <button type="button" id="cluster-search-clear" onclick="clearClusterGroupSearch()" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white text-xs px-1" title="Xóa tìm kiếm">✕</button>
+                    </div>
+
+                    <div id="cluster-groups-picker" class="max-h-52 overflow-y-auto bg-slate-900 border border-slate-800 rounded-lg p-2.5 space-y-1.5 text-xs divide-y divide-slate-800/40">
                         <!-- Dynamic group checkboxes -->
+                    </div>
+                    <div id="cluster-search-empty" class="hidden text-center py-4 text-xs text-slate-500">
+                        Không tìm thấy nhóm Facebook nào khớp với từ khóa tìm kiếm.
                     </div>
                 </div>
 

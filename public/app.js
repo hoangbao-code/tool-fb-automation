@@ -2685,22 +2685,82 @@ async function showCreateClusterForm(clusterId = null) {
         formDesc.value = '';
     }
 
-    // Hiển thị danh sách toàn bộ nhóm Facebook kèm checkbox
+    // Reset ô tìm kiếm nhóm khi mở form
+    const searchInput = document.getElementById('cluster-group-search');
+    if (searchInput) searchInput.value = '';
+    const clearBtn = document.getElementById('cluster-search-clear');
+    if (clearBtn) clearBtn.classList.add('hidden');
+    const emptyNotice = document.getElementById('cluster-search-empty');
+    if (emptyNotice) emptyNotice.classList.add('hidden');
+
+    // Hiển thị danh sách toàn bộ nhóm Facebook kèm checkbox và data-name phục vụ tìm kiếm
     const groups = state.fbGroups || [];
     if (groups.length === 0) {
         picker.innerHTML = '<div class="text-slate-500 text-center py-3">Chưa có nhóm Facebook nào trong danh sách. Hãy quét nhóm trước.</div>';
     } else {
         picker.innerHTML = groups.map(g => `
-            <label class="flex items-center gap-2 p-1 rounded hover:bg-slate-800/60 cursor-pointer">
-                <input type="checkbox" value="${g.id}" ${assignedGroupIds.has(g.id) ? 'checked' : ''} class="cluster-group-cb w-3.5 h-3.5 rounded text-emerald-600 bg-slate-950 border-slate-700 cursor-pointer">
-                <span class="text-white text-xs truncate flex-1">${escapeHtml(g.name)}</span>
+            <label class="cluster-group-item flex items-center gap-2 p-1.5 rounded hover:bg-slate-800/60 cursor-pointer transition-colors" data-name="${escapeHtml(g.name || '').toLowerCase()}">
+                <input type="checkbox" value="${g.id}" ${assignedGroupIds.has(g.id) ? 'checked' : ''} onchange="updateClusterSelectedCount()" class="cluster-group-cb w-3.5 h-3.5 rounded text-emerald-600 bg-slate-950 border-slate-700 cursor-pointer accent-emerald-500">
+                <span class="text-white text-xs truncate flex-1 font-medium">${escapeHtml(g.name)}</span>
                 <span class="text-[10px] text-slate-500 font-mono">${g.is_active ? '🟢 Bật' : '⚪ Tắt'}</span>
             </label>
         `).join('');
     }
 
+    updateClusterSelectedCount();
     if (window.lucide) lucide.createIcons();
     formName.focus();
+}
+
+// Cập nhật số lượng nhóm đang được tích chọn trong Cụm
+function updateClusterSelectedCount() {
+    const checkedCount = document.querySelectorAll('.cluster-group-cb:checked').length;
+    const totalCount = document.querySelectorAll('.cluster-group-cb').length;
+    const badge = document.getElementById('cluster-selected-badge');
+    if (badge) {
+        badge.textContent = `Đã chọn: ${checkedCount}/${totalCount}`;
+    }
+}
+
+// Lọc danh sách nhóm trong form Cụm theo từ khóa tìm kiếm (realtime)
+function filterClusterGroups() {
+    const searchInput = document.getElementById('cluster-group-search');
+    const clearBtn = document.getElementById('cluster-search-clear');
+    const emptyNotice = document.getElementById('cluster-search-empty');
+    const query = (searchInput?.value || '').trim().toLowerCase();
+
+    if (clearBtn) {
+        if (query) clearBtn.classList.remove('hidden');
+        else clearBtn.classList.add('hidden');
+    }
+
+    const items = document.querySelectorAll('.cluster-group-item');
+    let visibleCount = 0;
+
+    items.forEach(item => {
+        const name = item.getAttribute('data-name') || '';
+        const match = !query || name.includes(query);
+        item.style.display = match ? 'flex' : 'none';
+        if (match) visibleCount++;
+    });
+
+    if (emptyNotice) {
+        if (visibleCount === 0 && items.length > 0) {
+            emptyNotice.classList.remove('hidden');
+        } else {
+            emptyNotice.classList.add('hidden');
+        }
+    }
+}
+
+// Xóa trắng ô tìm kiếm nhóm
+function clearClusterGroupSearch() {
+    const searchInput = document.getElementById('cluster-group-search');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+        filterClusterGroups();
+    }
 }
 
 function hideClusterForm() {
@@ -2709,9 +2769,17 @@ function hideClusterForm() {
 }
 
 function selectAllClusterGroups(select) {
-    document.querySelectorAll('.cluster-group-cb').forEach(cb => {
-        cb.checked = select;
+    const searchInput = document.getElementById('cluster-group-search');
+    const query = (searchInput?.value || '').trim();
+
+    document.querySelectorAll('.cluster-group-item').forEach(item => {
+        // Nếu đang có từ khóa tìm kiếm thì chỉ chọn/bỏ chọn các nhóm đang hiển thị khớp tìm kiếm
+        if (!query || item.style.display !== 'none') {
+            const cb = item.querySelector('.cluster-group-cb');
+            if (cb) cb.checked = select;
+        }
     });
+    updateClusterSelectedCount();
 }
 
 async function saveClusterAction() {
