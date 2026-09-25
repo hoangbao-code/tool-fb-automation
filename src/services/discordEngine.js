@@ -531,6 +531,9 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
 
         // Xử lý khi người dùng tương tác trên Discord (Select Menu chọn nhóm/cụm, Nút bấm Xác nhận/ACP, Viết lại, Hủy)
         client.on('interactionCreate', async (interaction) => {
+            // Chỉ xử lý tương tác diễn ra trên đúng Kênh Discord được cấu hình cho máy này (tránh xung đột giữa các nhân viên)
+            if (interaction.channelId !== currentConfig.channelId) return;
+
             // A. XỬ LÝ CHỌN NHÓM TỪ SELECT MENU -> HIỂN THỊ EMBED KIỂM TRA LẠI (CONFIRM REVIEW)
             if (interaction.isStringSelectMenu() && (interaction.customId.startsWith('discord_select_cluster_') || interaction.customId.startsWith('discord_select_target_'))) {
                 const rawId = interaction.customId.replace('discord_select_cluster_', '').replace('discord_select_target_', '');
