@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PostHub Desktop - Tự Động Hóa Zalo sang Facebook</title>
+    <title>PostHub Desktop v2.0 - Tự Động Hóa Facebook & Discord Bot</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -13,7 +13,7 @@
 </head>
 <body class="bg-slate-900 text-slate-100 font-['Inter'] antialiased h-screen flex flex-row overflow-hidden select-none">
 
-    <!-- SIDEBAR NAVIGATION (7 TABS CHÍNH) -->
+    <!-- SIDEBAR NAVIGATION -->
     <aside class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col justify-between shrink-0 shadow-2xl z-30">
         <div>
             <!-- Brand / Logo -->
@@ -29,27 +29,27 @@
 
             <!-- Navigation Tabs -->
             <nav class="p-3 space-y-1.5" id="nav-tabs">
+                <!-- Tab 0: Hướng Dẫn & Giới Thiệu (Mặc định khi mở tool) -->
+                <button onclick="switchTab('home')" id="tab-btn-home" class="nav-btn active">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-emerald-400"></i>
+                    <span>Hướng Dẫn & Giới Thiệu</span>
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 ml-auto animate-pulse"></span>
+                </button>
+
                 <!-- Tab 1: Feed & Review -->
-                <button onclick="switchTab('feed')" id="tab-btn-feed" class="nav-btn active">
-                    <i data-lucide="layout-grid" class="w-4 h-4"></i>
+                <button onclick="switchTab('feed')" id="tab-btn-feed" class="nav-btn">
+                    <i data-lucide="layout-grid" class="w-4 h-4 text-amber-400"></i>
                     <span>Bảng Tin & Duyệt</span>
                     <span id="badge-pending-count" class="ml-auto bg-amber-500/20 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full hidden">0</span>
                 </button>
 
-                <!-- Tab 2: Zalo Web -->
-                <button onclick="switchTab('zalo')" id="tab-btn-zalo" class="nav-btn">
-                    <i data-lucide="message-square-share" class="w-4 h-4 text-blue-400"></i>
-                    <span>Zalo Web (Nhúng)</span>
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 ml-auto animate-pulse"></span>
-                </button>
-
-                <!-- Tab 3: Facebook -->
+                <!-- Tab 2: Facebook -->
                 <button onclick="switchTab('fb')" id="tab-btn-fb" class="nav-btn">
                     <i data-lucide="facebook" class="w-4 h-4 text-indigo-400"></i>
                     <span>Facebook (Nhúng)</span>
                 </button>
 
-                <!-- Tab 4: Groups FB -->
+                <!-- Tab 3: Groups FB -->
                 <button onclick="switchTab('groups')" id="tab-btn-groups" class="nav-btn">
                     <i data-lucide="users" class="w-4 h-4 text-indigo-400"></i>
                     <span>Nhóm Facebook</span>
@@ -136,8 +136,8 @@
                 </div>
 
                 <div class="flex items-center gap-1.5 bg-slate-900 px-3 py-1 rounded-lg border border-slate-800">
-                    <span class="text-slate-400">Tin Zalo:</span>
-                    <b id="head-stat-zalo" class="text-blue-400 font-bold">0</b>
+                    <span class="text-slate-400">Bot Discord:</span>
+                    <b id="head-stat-discord" class="text-violet-400 font-bold">🟢 Sẵn sàng</b>
                 </div>
                 <div class="flex items-center gap-1.5 bg-slate-900 px-3 py-1 rounded-lg border border-slate-800">
                     <span class="text-slate-400">Chờ duyệt:</span>
@@ -156,8 +156,246 @@
         <!-- CONTAINER CÁC MÀN HÌNH CHỨC NĂNG -->
         <div class="flex-1 overflow-hidden relative">
 
+            <!-- TAB 0: HƯỚNG DẪN SỬ DỤNG & GIỚI THIỆU TOOL (MẶC ĐỊNH MỞ ĐẦU) -->
+            <section id="tab-home" class="tab-pane active tab-block h-full overflow-y-auto p-6 space-y-6">
+                <!-- 1. Hero Card: Giới thiệu & Thao tác nhanh -->
+                <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950/70 border border-slate-800 p-8 shadow-2xl">
+                    <div class="absolute -right-10 -top-10 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                    <div class="absolute -left-10 -bottom-10 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <div class="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                        <div class="space-y-3 max-w-2xl">
+                            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold tracking-wide">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                PostHub Desktop v2.0 • Tự Động Hóa Đăng Tin BĐS & Phòng Trọ
+                            </div>
+                            <h2 class="text-3xl font-black text-white tracking-tight leading-tight">
+                                Hệ Thống Tự Động Hóa Đa Kênh <br/>
+                                <span class="bg-gradient-to-r from-emerald-400 via-teal-300 to-indigo-400 bg-clip-text text-transparent">Bot Discord ➔ AI Gemini ➔ Nhóm Facebook</span>
+                            </h2>
+                            <p class="text-sm text-slate-300/90 leading-relaxed">
+                                Giải pháp tối ưu quy trình đăng tin dành riêng cho nhân viên và đội nhóm môi giới. Tự động nhận bài viết kèm ảnh từ Discord, AI định dạng chuẩn SEO thu hút khách thuê, quét và phân loại nhóm Facebook theo cụm khu vực và xuất bản bài đăng an toàn không lo checkpoint.
+                            </p>
+                        </div>
+                        <div class="flex flex-col sm:flex-row lg:flex-col gap-3 shrink-0">
+                            <button onclick="switchTab('feed')" class="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-sm shadow-lg shadow-emerald-950/50 hover:scale-[1.02] transition-all">
+                                <i data-lucide="layout-grid" class="w-4 h-4"></i> Mở Bảng Tin & Duyệt Bài
+                            </button>
+                            <button onclick="switchTab('discord')" class="inline-flex items-center justify-center gap-2.5 px-6 py-3 rounded-2xl bg-slate-800/90 hover:bg-slate-700 text-violet-300 border border-violet-700/40 font-semibold text-xs transition-all">
+                                <i data-lucide="bot" class="w-4 h-4"></i> Cấu Hình Kênh Discord
+                            </button>
+                            <button onclick="switchTab('groups')" class="inline-flex items-center justify-center gap-2.5 px-6 py-3 rounded-2xl bg-slate-800/90 hover:bg-slate-700 text-indigo-300 border border-indigo-700/40 font-semibold text-xs transition-all">
+                                <i data-lucide="users" class="w-4 h-4"></i> Quản Lý & Gom Cụm Nhóm FB
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Sơ đồ quy trình tự động 4 bước (Pipeline Workflow) -->
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-extrabold text-white text-base flex items-center gap-2">
+                            <i data-lucide="workflow" class="w-5 h-5 text-indigo-400"></i>
+                            Quy Trình Hoạt Động Tự Động Hóa 4 Bước
+                        </h3>
+                        <span class="text-xs text-slate-400">Khép kín từ khâu nhận tin đến khi lên bài Facebook</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <!-- Bước 1 -->
+                        <div class="p-5 rounded-2xl bg-slate-950/70 border border-slate-800/80 hover:border-violet-500/50 transition-all space-y-3 relative group">
+                            <div class="flex items-center justify-between">
+                                <span class="w-9 h-9 rounded-xl bg-violet-600/20 text-violet-400 border border-violet-500/30 flex items-center justify-center font-bold text-sm">
+                                    01
+                                </span>
+                                <span class="p-2 rounded-lg bg-slate-900 text-violet-400 group-hover:scale-110 transition-transform">
+                                    <i data-lucide="download-cloud" class="w-5 h-5"></i>
+                                </span>
+                            </div>
+                            <h4 class="font-bold text-white text-sm">1. Nhận Tin Từ Discord</h4>
+                            <p class="text-xs text-slate-400 leading-relaxed">
+                                Thả bài viết + ảnh hoặc file ZIP vào kênh Discord của bạn. Bot gom bài sau 1 phút, tự động giải nén ảnh và lưu vào hàng đợi.
+                            </p>
+                        </div>
+
+                        <!-- Bước 2 -->
+                        <div class="p-5 rounded-2xl bg-slate-950/70 border border-slate-800/80 hover:border-amber-500/50 transition-all space-y-3 relative group">
+                            <div class="flex items-center justify-between">
+                                <span class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center font-bold text-sm">
+                                    02
+                                </span>
+                                <span class="p-2 rounded-lg bg-slate-900 text-amber-400 group-hover:scale-110 transition-transform">
+                                    <i data-lucide="sparkles" class="w-5 h-5"></i>
+                                </span>
+                            </div>
+                            <h4 class="font-bold text-white text-sm">2. AI Gemini Tối Ưu BĐS</h4>
+                            <p class="text-xs text-slate-400 leading-relaxed">
+                                AI tự động chuẩn hóa văn phong, giật tít hấp dẫn, trình bày bullet thông tin rõ ràng, bổ sung hashtag và giữ nguyên liên hệ Zalo/SĐT.
+                            </p>
+                        </div>
+
+                        <!-- Bước 3 -->
+                        <div class="p-5 rounded-2xl bg-slate-950/70 border border-slate-800/80 hover:border-emerald-500/50 transition-all space-y-3 relative group">
+                            <div class="flex items-center justify-between">
+                                <span class="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold text-sm">
+                                    03
+                                </span>
+                                <span class="p-2 rounded-lg bg-slate-900 text-emerald-400 group-hover:scale-110 transition-transform">
+                                    <i data-lucide="check-square" class="w-5 h-5"></i>
+                                </span>
+                            </div>
+                            <h4 class="font-bold text-white text-sm">3. Duyệt & Chọn Cụm Nhóm</h4>
+                            <p class="text-xs text-slate-400 leading-relaxed">
+                                Kiểm tra bài viết và bộ ảnh, chọn Cụm Nhóm Facebook mục tiêu (Quận 7, Bình Thạnh, Cầu Giấy...) rồi duyệt bài sang trạng thái sẵn sàng.
+                            </p>
+                        </div>
+
+                        <!-- Bước 4 -->
+                        <div class="p-5 rounded-2xl bg-slate-950/70 border border-slate-800/80 hover:border-blue-500/50 transition-all space-y-3 relative group">
+                            <div class="flex items-center justify-between">
+                                <span class="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-sm">
+                                    04
+                                </span>
+                                <span class="p-2 rounded-lg bg-slate-900 text-blue-400 group-hover:scale-110 transition-transform">
+                                    <i data-lucide="send" class="w-5 h-5"></i>
+                                </span>
+                            </div>
+                            <h4 class="font-bold text-white text-sm">4. Đăng Tự Động Lên FB</h4>
+                            <p class="text-xs text-slate-400 leading-relaxed">
+                                Đăng tuần tự qua Facebook Webview nhúng, kèm cơ chế giãn cách ngẫu nhiên chống checkpoint và trả link bài đăng trực tiếp về Discord.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Hướng dẫn thiết lập cho nhân viên mới (Setup Guide) -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Khung các bước cài đặt -->
+                    <div class="p-6 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-4">
+                        <div class="flex items-center gap-2.5 pb-2 border-b border-slate-800/80">
+                            <div class="p-2 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
+                                <i data-lucide="compass" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-white text-sm">Hướng Dẫn Thiết Lập Cho Nhân Viên Mới</h3>
+                                <p class="text-xs text-slate-400">Chỉ cần 3 phút hoàn tất cấu hình để bắt đầu làm việc</p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-3.5 text-xs text-slate-300">
+                            <!-- Bước 1 -->
+                            <div class="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-start gap-3">
+                                <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 flex items-center justify-center font-bold shrink-0 mt-0.5">1</span>
+                                <div class="space-y-1 flex-1">
+                                    <div class="font-bold text-white flex items-center justify-between">
+                                        <span>Đăng nhập nick Facebook cá nhân</span>
+                                        <button onclick="switchTab('fb')" class="text-indigo-400 hover:text-indigo-300 font-semibold underline text-[11px]">Đến Facebook ➔</button>
+                                    </div>
+                                    <p class="text-slate-400 leading-relaxed">
+                                        Vào tab <b>Facebook (Nhúng)</b> và đăng nhập tài khoản Facebook của bạn. Cookie đăng nhập được lưu riêng biệt trên máy bạn, an toàn tuyệt đối.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Bước 2 -->
+                            <div class="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-start gap-3">
+                                <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 flex items-center justify-center font-bold shrink-0 mt-0.5">2</span>
+                                <div class="space-y-1 flex-1">
+                                    <div class="font-bold text-white flex items-center justify-between">
+                                        <span>Quét nhóm & gom thành các Cụm Nhóm</span>
+                                        <button onclick="switchTab('groups')" class="text-indigo-400 hover:text-indigo-300 font-semibold underline text-[11px]">Đến Quản Lý Nhóm ➔</button>
+                                    </div>
+                                    <p class="text-slate-400 leading-relaxed">
+                                        Nhấn <b>Quét Nhóm Đã Tham Gia</b> để nạp toàn bộ group. Sau đó tạo các <b>Cụm Nhóm</b> (ví dụ: <i>Phòng Trọ Quận 10, Căn Hộ Bình Thạnh</i>) để chọn nhanh khi đăng.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Bước 3 -->
+                            <div class="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-start gap-3">
+                                <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 flex items-center justify-center font-bold shrink-0 mt-0.5">3</span>
+                                <div class="space-y-1 flex-1">
+                                    <div class="font-bold text-white flex items-center justify-between">
+                                        <span>Cài đặt Kênh Discord riêng của bạn</span>
+                                        <button onclick="switchTab('discord')" class="text-indigo-400 hover:text-indigo-300 font-semibold underline text-[11px]">Đến Cài Discord ➔</button>
+                                    </div>
+                                    <p class="text-slate-400 leading-relaxed">
+                                        Mọi nhân viên dùng chung 1 Bot Discord của cty. Bạn chỉ cần nhập <b>ID Kênh Discord (Channel ID)</b> được cấp để nhận bài riêng, hoàn toàn không bị lẫn lộn.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Bước 4 -->
+                            <div class="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-start gap-3">
+                                <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center font-bold shrink-0 mt-0.5">4</span>
+                                <div class="space-y-1 flex-1">
+                                    <div class="font-bold text-white flex items-center justify-between">
+                                        <span>Gửi bài, duyệt và bắt đầu xuất bản</span>
+                                        <button onclick="switchTab('feed')" class="text-emerald-400 hover:text-emerald-300 font-semibold underline text-[11px]">Đến Bảng Tin ➔</button>
+                                    </div>
+                                    <p class="text-slate-400 leading-relaxed">
+                                        Thả tin nhắn và ảnh vào Discord ➔ Tool nạp bài ➔ Bạn chọn cụm nhóm và nhấn Duyệt ➔ Tool sẽ tự động mở từng nhóm Facebook để đăng bài!
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Khung lưu ý an toàn & Mẹo chống checkpoint FB -->
+                    <div class="p-6 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-4 flex flex-col justify-between">
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-2.5 pb-2 border-b border-slate-800/80">
+                                <div class="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                    <i data-lucide="shield-alert" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-white text-sm">Kinh Nghiệm Vận Hành & Chống Checkpoint FB</h3>
+                                    <p class="text-xs text-slate-400">Quy tắc vàng giúp tài khoản Facebook sống khỏe và tương tác cao</p>
+                                </div>
+                            </div>
+
+                            <div class="space-y-3 text-xs text-slate-300">
+                                <div class="p-3 rounded-xl bg-amber-950/20 border border-amber-600/30 flex items-start gap-2.5">
+                                    <i data-lucide="clock" class="w-4 h-4 text-amber-400 shrink-0 mt-0.5"></i>
+                                    <div>
+                                        <b class="text-amber-300">Giãn cách đăng an toàn (45s - 90s):</b>
+                                        <p class="text-slate-400 mt-0.5">Luôn bật thời gian chờ ngẫu nhiên giữa các lần đăng nhóm tại tab Cài Đặt. Không nên chỉnh dưới 30 giây để tránh bị Facebook nghi ngờ bot.</p>
+                                    </div>
+                                </div>
+
+                                <div class="p-3 rounded-xl bg-indigo-950/20 border border-indigo-600/30 flex items-start gap-2.5">
+                                    <i data-lucide="layers" class="w-4 h-4 text-indigo-400 shrink-0 mt-0.5"></i>
+                                    <div>
+                                        <b class="text-indigo-300">Giới hạn số nhóm trong một đợt đăng:</b>
+                                        <p class="text-slate-400 mt-0.5">Mỗi bài nên chọn 1 cụm gồm 15 - 25 nhóm phù hợp nhất. Không nên đăng dồn dập vào 50+ nhóm cùng 1 thời điểm.</p>
+                                    </div>
+                                </div>
+
+                                <div class="p-3 rounded-xl bg-emerald-950/20 border border-emerald-600/30 flex items-start gap-2.5">
+                                    <i data-lucide="sparkles" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
+                                    <div>
+                                        <b class="text-emerald-300">Nội dung luôn được AI làm mới:</b>
+                                        <p class="text-slate-400 mt-0.5">AI Gemini tự động biên tập lại tiêu đề và câu từ, hạn chế tối đa việc Facebook quét trùng lặp nội dung spam giữa các tài khoản.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Trạng thái nhanh & nút kiểm tra -->
+                        <div class="pt-4 border-t border-slate-800/80 flex items-center justify-between">
+                            <span class="text-xs text-slate-400 flex items-center gap-1.5">
+                                <i data-lucide="info" class="w-4 h-4 text-blue-400"></i> Cần hỗ trợ kỹ thuật hoặc cấp token Discord?
+                            </span>
+                            <button onclick="switchTab('health')" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all">
+                                <i data-lucide="activity" class="w-3.5 h-3.5 text-emerald-400"></i> Kiểm Tra Hệ Thống
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- TAB 1: BẢNG TIN & HÀNG ĐỢI (FEED & REVIEW) -->
-            <section id="tab-feed" class="tab-pane active tab-block h-full overflow-y-auto p-6 space-y-5">
+            <section id="tab-feed" class="tab-pane tab-block h-full overflow-y-auto p-6 space-y-5">
                 <!-- 1. Thẻ tóm tắt thống kê hàng đợi (Metric Cards) -->
                 <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
                     <div class="bg-gradient-to-br from-slate-900/90 to-slate-950 p-4 rounded-2xl border border-slate-800 flex items-center justify-between shadow-md">
@@ -259,53 +497,7 @@
                 </div>
             </section>
 
-            <!-- TAB 2: ZALO WEB (NHÚNG TRỰC TIẾP TRONG APP) -->
-            <section id="tab-zalo" class="tab-pane webview-pane h-full flex-col">
-                <!-- Thanh công cụ điều khiển Zalo Web -->
-                <div class="h-12 bg-slate-950 border-b border-slate-800 px-4 flex items-center justify-between shrink-0">
-                    <div class="flex items-center gap-3 text-xs">
-                        <span class="text-slate-400">Đang mở:</span>
-                        <span id="zalo-active-group-name" class="font-bold text-blue-400 bg-blue-950/60 px-2.5 py-1 rounded-md border border-blue-800/50">
-                            Chưa phát hiện
-                        </span>
-                        <button onclick="triggerZaloKhacScan()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Chỉ quét các nhóm bạn đã đưa vào mục 'Khác'">
-                            <i data-lucide="folder-check" class="w-3.5 h-3.5 text-sky-200"></i> Quét Mục "Khác"
-                        </button>
-                        <button onclick="triggerZaloGroupScan()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Tự động quét toàn bộ danh sách nhóm từ Zalo Web">
-                            <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét Toàn Bộ Danh Bạ
-                        </button>
-                        <button onclick="openZaloHistoryModal()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Quét tin nhắn cũ trong 1-7 ngày và nạp vào hàng đợi đăng dần">
-                            <i data-lucide="history" class="w-3.5 h-3.5 text-amber-200"></i> Quét Lịch Sử (7 Ngày)
-                        </button>
-                        <button onclick="monitorCurrentZaloGroup()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 transition-all">
-                            <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-blue-400"></i> Theo dõi nhóm này
-                        </button>
-                        <button onclick="switchTab('zalo-groups')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 transition-all">
-                            <i data-lucide="list-checks" class="w-3.5 h-3.5 text-emerald-400"></i> DS Nhóm (<span id="zalo-groups-count">0</span>)
-                        </button>
-                        <button onclick="clearAllZaloGroupsUI()" class="bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800/60 px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition-all" title="Xóa sạch toàn bộ danh sách nhóm Zalo đang theo dõi">
-                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Xóa Hết DS
-                        </button>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="reloadZaloWebview()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all">
-                            <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Tải lại Zalo
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Webview nhúng Zalo Web -->
-                <div class="flex-1 w-full bg-slate-900 relative">
-                    <webview id="zalo-wv" 
-                             src="https://chat.zalo.me" 
-                             partition="persist:zalo"
-                             class="w-full h-full border-0"
-                             allowpopups>
-                    </webview>
-                </div>
-            </section>
-
-            <!-- TAB 3: FACEBOOK (NHÚNG TRỰC TIẾP TRONG APP) -->
+            <!-- TAB 2: FACEBOOK (NHÚNG TRỰC TIẾP TRONG APP) -->
             <section id="tab-fb" class="tab-pane webview-pane h-full flex-col">
                 <!-- Thanh công cụ điều khiển Facebook -->
                 <div class="h-12 bg-slate-950 border-b border-slate-800 px-4 flex items-center justify-between shrink-0">
@@ -382,66 +574,6 @@
                             </tr>
                         </thead>
                         <tbody id="fb-groups-table-body" class="divide-y divide-slate-800/60">
-                            <!-- Dynamic rows -->
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- TAB 5: QUẢN LÝ NHÓM ZALO (NGUỒN GOM TIN) -->
-            <section id="tab-zalo-groups" class="tab-pane tab-block h-full overflow-y-auto p-6 space-y-5">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
-                    <div>
-                        <h3 class="font-bold text-white text-base flex items-center gap-2">
-                            <i data-lucide="list-checks" class="w-5 h-5 text-blue-400"></i>
-                            Danh Sách Nhóm Zalo Theo Dõi (Nguồn Gom Tin)
-                        </h3>
-                        <p class="text-xs text-slate-400">Chỉ tự động gom tin từ các nhóm Zalo được BẬT dưới đây để gửi sang AI Gemini biên tập.</p>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <input type="text" id="zalo-group-search" oninput="filterZaloGroupsTable()" placeholder="Tìm kiếm tên nhóm Zalo..." class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-44">
-                        <button onclick="toggleAllZaloGroupsUI(true)" class="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all" title="Bật theo dõi tất cả nhóm Zalo">
-                            Chọn Tất Cả
-                        </button>
-                        <button onclick="toggleAllZaloGroupsUI(false)" class="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all" title="Tắt theo dõi tất cả nhóm Zalo">
-                            Bỏ Chọn
-                        </button>
-                        <button onclick="clearAllZaloGroupsUI()" class="bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800/60 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all" title="Xóa sạch toàn bộ nhóm Zalo trong danh sách ngay lập tức">
-                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Xóa Sạch DS
-                        </button>
-                        <button onclick="triggerZaloKhacScan()" class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md transition-all ring-1 ring-blue-400/50" title="Chỉ quét các nhóm bạn đã chuyển sang mục 'Khác'">
-                            <i data-lucide="folder-check" class="w-4 h-4 text-sky-200"></i> Quét Mục "Khác" Zalo
-                        </button>
-                        <button onclick="triggerZaloCurrentViewScan()" class="bg-teal-700/80 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Quét đúng danh sách nhóm trong thẻ phân loại hoặc mục bạn đang mở trên Zalo Web">
-                            <i data-lucide="filter" class="w-3.5 h-3.5"></i> Quét Thẻ / Mục Đang Mở
-                        </button>
-                        <button onclick="triggerZaloGroupScan()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Tự động quét toàn bộ danh bạ nhóm từ Zalo Web">
-                            <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét Danh Bạ
-                        </button>
-                        <button onclick="openZaloHistoryModal()" class="bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md transition-all ring-1 ring-amber-400/50" title="Quét tin nhắn cũ trong 1-7 ngày từ các nhóm đang theo dõi và nạp vào hàng đợi đăng dần">
-                            <i data-lucide="history" class="w-4 h-4 text-amber-200"></i> Quét Lịch Sử (7 Ngày)
-                        </button>
-                        <button onclick="openBulkAddZaloModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm" title="Dán danh sách nhiều tên nhóm (mỗi dòng một nhóm)">
-                            <i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i> Dán Nhiều Nhóm
-                        </button>
-                        <button onclick="openAddZaloGroupManual()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
-                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Thêm Thủ Công
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Bảng danh sách nhóm Zalo -->
-                <div class="bg-slate-950/60 rounded-xl border border-slate-800 overflow-hidden shadow-sm">
-                    <table class="w-full text-left text-xs">
-                        <thead class="bg-slate-900/90 text-slate-400 font-semibold uppercase tracking-wider border-b border-slate-800">
-                            <tr>
-                                <th class="p-3.5 w-12 text-center">Bật</th>
-                                <th class="p-3.5">Tên Nhóm Zalo</th>
-                                <th class="p-3.5 text-center w-40">Trạng Thái Theo Dõi</th>
-                                <th class="p-3.5 text-right w-24">Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody id="zalo-groups-main-table-body" class="divide-y divide-slate-800/60">
                             <!-- Dynamic rows -->
                         </tbody>
                     </table>
@@ -1082,7 +1214,7 @@
             <input type="hidden" id="modal-post-id">
 
             <div>
-                <label class="block text-xs font-semibold text-slate-400 mb-1">Nội dung gốc từ Zalo:</label>
+                <label class="block text-xs font-semibold text-slate-400 mb-1">Nội dung gốc (Nguồn tin):</label>
                 <div id="modal-orig-text" class="p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 max-h-32 overflow-y-auto whitespace-pre-wrap"></div>
             </div>
 
@@ -1101,80 +1233,6 @@
                     </button>
                     <button onclick="publishDirectFromModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
                         <i data-lucide="send" class="w-3.5 h-3.5"></i> Duyệt & Đăng Luôn
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL QUẢN LÝ NHÓM ZALO THEO DÕI -->
-    <div id="zalo-groups-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 class="font-bold text-white text-base flex items-center gap-2">
-                    <i data-lucide="list-checks" class="w-4 h-4 text-blue-400"></i>
-                    Quản Lý Danh Sách Nhóm Zalo Theo Dõi
-                </h3>
-                <button onclick="closeZaloGroupsModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-
-            <p class="text-xs text-slate-400">Chỉ những tin nhắn thuộc các nhóm Zalo được BẬT dưới đây mới được hệ thống tự động gom tin.</p>
-
-            <div class="flex gap-2">
-                <input type="text" id="add-zalo-group-name" placeholder="Nhập chính xác tên nhóm Zalo..." class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <button onclick="addNewZaloGroupManual()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1">
-                    <i data-lucide="plus" class="w-3.5 h-3.5"></i> Thêm
-                </button>
-                <button onclick="triggerZaloGroupScan()" class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Tự động quét toàn bộ nhóm từ Zalo Web">
-                    <i data-lucide="scan" class="w-3.5 h-3.5"></i> Quét Tự Động
-                </button>
-            </div>
-
-            <div class="bg-slate-950/60 rounded-xl border border-slate-800 max-h-64 overflow-y-auto">
-                <table class="w-full text-left text-xs">
-                    <thead class="bg-slate-900/90 text-slate-400 uppercase font-semibold border-b border-slate-800">
-                        <tr>
-                            <th class="p-3 w-12 text-center">Bật</th>
-                            <th class="p-3">Tên Nhóm Zalo</th>
-                            <th class="p-3 text-right w-16">Xóa</th>
-                        </tr>
-                    </thead>
-                    <tbody id="zalo-groups-table-body" class="divide-y divide-slate-800/60">
-                        <!-- Dynamic rows -->
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="flex justify-end pt-2">
-                <button onclick="closeZaloGroupsModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold">
-                    Đóng
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL DÁN DANH SÁCH NHÓM ZALO HÀNG LOẠT -->
-    <div id="zalo-bulk-add-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-        <div class="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 class="font-bold text-white text-sm flex items-center gap-2">
-                    <i data-lucide="clipboard-list" class="w-4 h-4 text-teal-400"></i>
-                    Dán Danh Sách Nhóm Zalo Hàng Loạt
-                </h3>
-                <button onclick="closeBulkAddZaloModal()" class="text-slate-400 hover:text-white">
-                    <i data-lucide="x" class="w-4 h-4"></i>
-                </button>
-            </div>
-            <p class="text-xs text-slate-400">Dán hoặc gõ danh sách tên nhóm Zalo bạn muốn theo dõi vào ô dưới (mỗi dòng 1 tên nhóm):</p>
-            <textarea id="bulk-zalo-groups-input" rows="8" placeholder="Nhóm Công Việc 1&#10;Bất Động Sản Sài Gòn&#10;Hội Việc Làm Tân Bình..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono"></textarea>
-            <div class="flex items-center justify-between pt-2 border-t border-slate-800">
-                <span class="text-[11px] text-slate-500">Mẹo: Tiện lợi và chính xác 100% không lo mạng lag.</span>
-                <div class="flex gap-2">
-                    <button onclick="closeBulkAddZaloModal()" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700">Hủy</button>
-                    <button onclick="submitBulkZaloGroups()" class="px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 flex items-center gap-1.5 shadow-sm">
-                        <i data-lucide="check" class="w-3.5 h-3.5"></i> Thêm Hàng Loạt
                     </button>
                 </div>
             </div>
@@ -1214,76 +1272,6 @@
                 <button onclick="stopScanning()" class="px-4 py-1.5 bg-rose-600/90 hover:bg-rose-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all">
                     <i data-lucide="square" class="w-3.5 h-3.5"></i> Dừng & Lưu kết quả
                 </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL QUÉT LỊCH SỬ TIN NHẮN ZALO (1-7 NGÀY) -->
-    <div id="zalo-history-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-        <div class="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 class="font-bold text-white text-base flex items-center gap-2">
-                    <i data-lucide="history" class="w-5 h-5 text-amber-400"></i>
-                    Quét Lịch Sử Tin Nhắn & Đăng Dần Lên FB
-                </h3>
-                <button onclick="closeZaloHistoryModal()" class="text-slate-400 hover:text-white">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-
-            <p class="text-xs text-slate-300 leading-relaxed">
-                Hệ thống sẽ quét tin nhắn trong lịch sử chat Zalo Web của các nhóm đang được <b>Bật theo dõi</b>, tự động lọc tin bài đăng chất lượng, gửi AI Gemini biên tập và nạp vào <b>Hàng đợi</b> để xuất bản dần lên Facebook theo cơ chế giãn cách an toàn.
-            </p>
-
-            <div class="space-y-3 bg-slate-950/60 p-4 rounded-xl border border-slate-800 text-xs">
-                <div class="flex items-center justify-between">
-                    <label class="font-semibold text-slate-300">Khoảng thời gian quét:</label>
-                    <select id="history-scan-days" class="bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500">
-                        <option value="1">24 giờ qua (1 ngày)</option>
-                        <option value="3">3 ngày gần nhất</option>
-                        <option value="7" selected>7 ngày qua (1 tuần)</option>
-                        <option value="14">14 ngày qua (2 tuần)</option>
-                    </select>
-                </div>
-
-                <div class="flex items-center justify-between">
-                    <label class="font-semibold text-slate-300">Phạm vi quét nhóm:</label>
-                    <select id="history-scan-scope" class="bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500">
-                        <option value="monitored" selected>Tất cả nhóm Zalo đang theo dõi</option>
-                        <option value="active">Chỉ nhóm Zalo đang mở hiện tại</option>
-                        <option value="all">Tất cả hội thoại tìm thấy trong Zalo</option>
-                    </select>
-                </div>
-
-                <div class="flex items-center justify-between">
-                    <label class="font-semibold text-slate-300">Giới hạn số bài nạp tối đa:</label>
-                    <input type="number" id="history-scan-limit" value="50" min="5" max="200" class="w-24 bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-1.5 text-center focus:outline-none focus:ring-2 focus:ring-amber-500">
-                </div>
-
-                <div class="p-2.5 rounded-lg bg-amber-950/30 border border-amber-800/40 text-[11px] text-amber-300/90 leading-normal">
-                    💡 <b>Đăng dần tự động:</b> Sau khi nạp, nếu bạn bật <i>Tự động đăng bài</i>, hệ thống sẽ đăng giãn cách mỗi bài cách nhau 3 - 8 phút (hoặc theo Khung giờ vàng) để tài khoản Facebook luôn an toàn tuyệt đối.
-                </div>
-            </div>
-
-            <!-- Tiến trình quét khi đang chạy -->
-            <div id="history-scan-progress-area" class="hidden space-y-2">
-                <div class="flex items-center justify-between text-xs text-slate-300">
-                    <span id="history-scan-status-text">Đang đọc tin nhắn từ Zalo...</span>
-                    <span id="history-scan-counter" class="font-bold text-amber-400">0 bài</span>
-                </div>
-                <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
-                    <div id="history-scan-progress-bar" class="bg-gradient-to-r from-amber-500 to-orange-500 h-2 rounded-full w-1/4 transition-all duration-300"></div>
-                </div>
-            </div>
-
-            <div class="flex items-center justify-between pt-2 border-t border-slate-800">
-                <span class="text-[11px] text-slate-500">Tự lọc tin rác & khử trùng lặp</span>
-                <div class="flex gap-2">
-                    <button onclick="closeZaloHistoryModal()" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700">Đóng</button>
-                    <button id="btn-start-history-scan" onclick="startZaloHistoryScanAction()" class="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 flex items-center gap-1.5 shadow-md transition-all">
-                        <i data-lucide="play" class="w-3.5 h-3.5"></i> Bắt Đầu Quét & Nạp
-                    </button>
-                </div>
             </div>
         </div>
     </div>

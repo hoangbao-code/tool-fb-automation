@@ -30,11 +30,39 @@ window.addEventListener('DOMContentLoaded', () => {
 
                 const rawText = a.innerText?.trim() || a.getAttribute('aria-label') || '';
                 const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
-                let name = lines[0] || `Nhóm FB (${groupId})`;
 
-                // Bỏ qua các liên kết điều hướng thông thường
-                if (name.includes('Xem tất cả') || name.includes('Tạo nhóm') || name.startsWith('http') || name.length < 2) {
-                    return;
+                let candidateName = '';
+                const spanEl = a.querySelector('span[dir="auto"]');
+                if (spanEl && spanEl.innerText && spanEl.innerText.trim().length >= 2) {
+                    candidateName = spanEl.innerText.trim();
+                }
+                if (!candidateName) {
+                    const strongEl = a.querySelector('strong, h2, h3, h4');
+                    if (strongEl && strongEl.innerText && strongEl.innerText.trim().length >= 2) {
+                        candidateName = strongEl.innerText.trim();
+                    }
+                }
+                if (!candidateName) {
+                    candidateName = lines[0] || '';
+                }
+
+                const badgeWords = ['Đã tham gia', 'Truy cập', 'Xem nhóm', 'Tham gia nhóm', 'Nhóm công khai', 'Nhóm riêng tư', 'Đang chờ'];
+                if (badgeWords.includes(candidateName) && lines.length > 1) {
+                    for (const l of lines) {
+                        if (!badgeWords.includes(l) && l.length >= 2 && !l.startsWith('http')) {
+                            candidateName = l;
+                            break;
+                        }
+                    }
+                }
+
+                let cleanName = candidateName
+                    .replace(/^(Đã tham gia|Nhóm|Xem nhóm|Truy cập|Tham gia nhóm|Đang chờ)\s*[:·-]?\s*/i, '')
+                    .replace(/\s*·\s*(Đã tham gia|Công khai|Riêng tư|Thành viên|Bài viết mới).*$/i, '')
+                    .trim();
+
+                if (!cleanName || cleanName.includes('Xem tất cả') || cleanName.includes('Tạo nhóm') || cleanName.startsWith('http') || cleanName.length < 2) {
+                    cleanName = `Nhóm FB (${groupId})`;
                 }
 
                 // Tìm thông tin thành viên nếu có
@@ -47,7 +75,7 @@ window.addEventListener('DOMContentLoaded', () => {
                 }
 
                 foundGroups.push({
-                    name: name,
+                    name: cleanName,
                     url: fullUrl,
                     memberCount: memberCount
                 });

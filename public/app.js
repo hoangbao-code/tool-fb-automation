@@ -1,6 +1,6 @@
 // State quản lý giao diện Desktop
 const state = {
-    currentTab: 'feed',
+    currentTab: 'home',
     status: {},
     settings: {},
     posts: [],
@@ -15,48 +15,52 @@ document.addEventListener('DOMContentLoaded', async () => {
     lucide.createIcons();
     setupWebviews();
     setupEventListeners();
-    switchTab('feed');
+    switchTab('home');
     await loadInitialData();
     checkChromeGeminiUI(true);
 });
 
-// Thiết lập Webview Zalo & Facebook với Preload chuyên dụng
+// Thiết lập Webview Facebook & AI với Preload chuyên dụng
 function setupWebviews() {
     const zaloWv = document.getElementById('zalo-wv');
     const fbWv = document.getElementById('fb-wv');
 
     if (window.electronApi) {
         // Gắn đường dẫn preload tuyệt đối đã resolve
-        if (window.electronApi.zaloPreloadPath) {
+        if (zaloWv && window.electronApi.zaloPreloadPath) {
             zaloWv.setAttribute('preload', window.electronApi.zaloPreloadPath);
         }
-        if (window.electronApi.fbPreloadPath) {
+        if (fbWv && window.electronApi.fbPreloadPath) {
             fbWv.setAttribute('preload', window.electronApi.fbPreloadPath);
         }
 
-        // Lắng nghe sự kiện từ Webview Zalo
-        zaloWv.addEventListener('ipc-message', (event) => {
-            if (event.channel === 'zalo-message-captured') {
-                window.electronApi.forwardZaloMessage(event.args[0]);
-            } else if (event.channel === 'current-group-response') {
-                state.activeZaloGroup = event.args[0]?.groupName || '';
-                updateZaloActiveGroupDisplay();
-            } else if (event.channel === 'zalo-groups-scanned') {
-                if (Array.isArray(event.args[0]) && event.args[0].length > 0) {
-                    window.electronApi.addZaloGroupsBulk(event.args[0]);
-                    loadZaloGroups();
+        // Lắng nghe sự kiện từ Webview Zalo (nếu còn cấu hình phụ trợ)
+        if (zaloWv) {
+            zaloWv.addEventListener('ipc-message', (event) => {
+                if (event.channel === 'zalo-message-captured') {
+                    window.electronApi.forwardZaloMessage(event.args[0]);
+                } else if (event.channel === 'current-group-response') {
+                    state.activeZaloGroup = event.args[0]?.groupName || '';
+                    updateZaloActiveGroupDisplay();
+                } else if (event.channel === 'zalo-groups-scanned') {
+                    if (Array.isArray(event.args[0]) && event.args[0].length > 0) {
+                        window.electronApi.addZaloGroupsBulk(event.args[0]);
+                        loadZaloGroups();
+                    }
                 }
-            }
-        });
+            });
+        }
 
         // Lắng nghe sự kiện từ Webview Facebook
-        fbWv.addEventListener('ipc-message', (event) => {
-            if (event.channel === 'fb-groups-scanned') {
-                window.electronApi.forwardFbGroups(event.args[0]);
-                showToast(`Đã nhận diện ${event.args[0]?.length || 0} nhóm Facebook!`, 'success');
-                loadFbGroups();
-            }
-        });
+        if (fbWv) {
+            fbWv.addEventListener('ipc-message', (event) => {
+                if (event.channel === 'fb-groups-scanned') {
+                    window.electronApi.forwardFbGroups(event.args[0]);
+                    showToast(`Đã nhận diện ${event.args[0]?.length || 0} nhóm Facebook!`, 'success');
+                    loadFbGroups();
+                }
+            });
+        }
 
         // Lắng nghe sự kiện từ Webview Gemini Web
         const geminiWv = document.getElementById('gemini-wv');
@@ -75,73 +79,6 @@ function setupWebviews() {
                 }
             });
         }
-
-        // Định kỳ đọc tên nhóm Zalo đang mở & tự động bắt tin mới bằng executeJavaScript
-        setInterval(async () => {
-            try {
-                // 1. Cập nhật tên nhóm đang mở
-                const activeName = await zaloWv.executeJavaScript(`
-                    (function() {
-                        var selectors = ['#header-title', '.header-title', '.chat-title', '[data-id="chat-title"]', '.conv-item.active .conv-item-title__more'];
-                        for (var i = 0; i < selectors.length; i++) {
-                            var el = document.querySelector(selectors[i]);
-                            if (el && el.innerText && el.innerText.trim()) return el.innerText.trim();
-                        }
-                        return '';
-                    })();
-                `);
-                if (activeName && activeName !== state.activeZaloGroup) {
-                    state.activeZaloGroup = activeName;
-                    updateZaloActiveGroupDisplay();
-                }
-
-                // 2. Tự động gom tin nhắn Zalo mới
-                const newMsgs = await zaloWv.executeJavaScript(`
-                    (function() {
-                        window.__seenZaloMsgs = window.__seenZaloMsgs || {};
-                        var newMessages = [];
-                        var selectors = ['#header-title', '.header-title', '.chat-title', '[data-id="chat-title"]', '.conv-item.active .conv-item-title__more'];
-                        var groupName = '';
-                        for (var i = 0; i < selectors.length; i++) {
-                            var el = document.querySelector(selectors[i]);
-                            if (el && el.innerText && el.innerText.trim()) { groupName = el.innerText.trim(); break; }
-                        }
-                        if (!groupName) return [];
-
-                        var msgElements = document.querySelectorAll('.chat-message, .msg-view, [id^="msg-"], div[class*="message-view"]');
-                        msgElements.forEach(function(el) {
-                            var msgId = el.getAttribute('id') || el.getAttribute('data-id') || (groupName + '_' + el.innerText.substring(0, 40));
-                            if (window.__seenZaloMsgs[msgId]) return;
-                            window.__seenZaloMsgs[msgId] = true;
-
-                            var senderEl = el.querySelector('.sender-name, [class*="sender"], [class*="author"]');
-                            var sender = senderEl ? senderEl.innerText.trim() : 'Thành viên';
-
-                            var textEl = el.querySelector('.content-text, .msg-text, [class*="content-text"], [class*="text-msg"]');
-                            var text = textEl ? textEl.innerText.trim() : '';
-
-                            var images = [];
-                            el.querySelectorAll('img').forEach(function(img) {
-                                var src = img.getAttribute('src');
-                                if (src && src.indexOf('avatar') === -1 && src.indexOf('icon') === -1 && src.indexOf('emoji') === -1) {
-                                    images.push(src);
-                                }
-                            });
-
-                            if (text || images.length > 0) {
-                                newMessages.push({ groupName: groupName, sender: sender, text: text, images: images });
-                            }
-                        });
-                        return newMessages;
-                    })();
-                `);
-                if (Array.isArray(newMsgs) && newMsgs.length > 0) {
-                    for (const m of newMsgs) {
-                        window.electronApi.forwardZaloMessage(m);
-                    }
-                }
-            } catch (e) {}
-        }, 2000);
     }
 }
 
@@ -220,11 +157,10 @@ function switchTab(tabId) {
 
     // 3. Cập nhật tiêu đề trang
     const titles = {
+        home: { title: 'HƯỚNG DẪN SỬ DỤNG & GIỚI THIỆU TOOL', sub: 'Hệ thống tự động hóa đăng tin BĐS & Phòng Trọ đa kênh' },
         feed: { title: 'BẢNG TIN & HÀNG ĐỢI DUYỆT', sub: 'Xem xét và xuất bản bài viết tự động' },
-        zalo: { title: 'ZALO WEB TRỰC TIẾP', sub: 'Đăng nhập 1 lần lưu vĩnh viễn - Tự động bắt tin ngầm' },
         fb: { title: 'FACEBOOK TRỰC TIẾP', sub: 'Tự động quét nhóm đã tham gia và xuất bản bài viết' },
         groups: { title: 'QUẢN LÝ NHÓM FACEBOOK', sub: 'Tích chọn các nhóm mục tiêu để đăng bài' },
-        'zalo-groups': { title: 'QUẢN LÝ NHÓM ZALO', sub: 'Tích chọn các nhóm Zalo cần tự động gom tin' },
         discord: { title: 'NGUỒN TIN DISCORD BOT', sub: 'Nhận bài + ảnh từ Discord, gom sau 1 phút, biên tập Gemini Web và duyệt bài tương tác' },
         ai: { title: 'GEMINI WEB TRỰC TIẾP', sub: 'Tự động gửi tin vào cuộc trò chuyện & trích xuất bài đăng' },
         health: { title: 'TRUNG TÂM KIỂM TRA HỆ THỐNG & API', sub: 'Giám sát thời gian thực: Gemini Web, Bot Discord, Facebook Webview và Database' },
@@ -240,7 +176,6 @@ function switchTab(tabId) {
 
     if (tabId === 'feed') loadPosts();
     else if (tabId === 'groups') loadFbGroups();
-    else if (tabId === 'zalo-groups') loadZaloGroups();
     else if (tabId === 'discord') loadDiscordSettingsUI();
     else if (tabId === 'ai') { loadAiSettings(); checkChromeGeminiUI(true); }
     else if (tabId === 'health') runFullSystemHealthCheckUI();
@@ -254,7 +189,6 @@ async function loadInitialData() {
         loadStatus(),
         loadPosts(),
         loadFbGroups(),
-        loadZaloGroups(),
         loadDiscordSettingsUI(),
         loadAiSettings(),
         loadGeneralSettings(),
@@ -2316,7 +2250,7 @@ async function executeScanOnFbWebview(wv) {
     try {
         const harvestedMap = {};
         let consecutiveNoChange = 0;
-        const maxSteps = 30;
+        const maxSteps = 45;
 
         for (let step = 1; step <= maxSteps; step++) {
             if (stopScanRequested) break;
@@ -2343,9 +2277,39 @@ async function executeScanOnFbWebview(wv) {
                         var fullUrl = 'https://www.facebook.com/groups/' + groupId + '/';
                         var rawText = (a.innerText || a.getAttribute('aria-label') || '').trim();
                         var lines = rawText.split('\\n').map(function(l) { return l.trim(); }).filter(Boolean);
-                        var name = lines[0] || '';
-                        if (!name || name.indexOf('Xem tất cả') !== -1 || name.indexOf('Tạo nhóm') !== -1 || name.indexOf('http') === 0 || name.length < 2) {
-                            name = 'Nhóm FB (' + groupId + ')';
+
+                        var candidateName = '';
+                        var spanEl = a.querySelector('span[dir="auto"]');
+                        if (spanEl && spanEl.innerText && spanEl.innerText.trim().length >= 2) {
+                            candidateName = spanEl.innerText.trim();
+                        }
+                        if (!candidateName) {
+                            var strongEl = a.querySelector('strong, h2, h3, h4');
+                            if (strongEl && strongEl.innerText && strongEl.innerText.trim().length >= 2) {
+                                candidateName = strongEl.innerText.trim();
+                            }
+                        }
+                        if (!candidateName) {
+                            candidateName = lines[0] || '';
+                        }
+
+                        var badgeWords = ['Đã tham gia', 'Truy cập', 'Xem nhóm', 'Tham gia nhóm', 'Nhóm công khai', 'Nhóm riêng tư', 'Đang chờ'];
+                        if (badgeWords.indexOf(candidateName) !== -1 && lines.length > 1) {
+                            for (var k = 0; k < lines.length; k++) {
+                                if (badgeWords.indexOf(lines[k]) === -1 && lines[k].length >= 2 && lines[k].indexOf('http') === -1) {
+                                    candidateName = lines[k];
+                                    break;
+                                }
+                            }
+                        }
+
+                        var cleanName = candidateName
+                            .replace(/^(Đã tham gia|Nhóm|Xem nhóm|Truy cập|Tham gia nhóm|Đang chờ)\\s*[:·-]?\\s*/i, '')
+                            .replace(/\\s*·\\s*(Đã tham gia|Công khai|Riêng tư|Thành viên|Bài viết mới).*$/i, '')
+                            .trim();
+
+                        if (!cleanName || cleanName.indexOf('Xem tất cả') !== -1 || cleanName.indexOf('Tạo nhóm') !== -1 || cleanName.indexOf('http') === 0 || cleanName.length < 2) {
+                            cleanName = 'Nhóm FB (' + groupId + ')';
                         }
 
                         var memberCount = '';
@@ -2357,13 +2321,13 @@ async function executeScanOnFbWebview(wv) {
                             }
                         }
 
-                        found.push({ groupId: groupId, name: name, url: fullUrl, memberCount: memberCount });
+                        found.push({ groupId: groupId, name: cleanName, url: fullUrl, memberCount: memberCount });
                     }
 
                     // Cuộn cả window, html và các scrollable containers trong Facebook DOM
                     window.scrollBy(0, 1200);
                     if (document.documentElement) document.documentElement.scrollTop += 1200;
-                    document.querySelectorAll('div[role="feed"], div[role="main"], div[data-pagelet*="Group"], div[aria-label*="nhóm"]').forEach(function(el) {
+                    document.querySelectorAll('div[role="feed"], div[role="main"], div[data-pagelet*="Group"], div[aria-label*="nhóm"], div[aria-label*="Groups"]').forEach(function(el) {
                         el.scrollTop += 1200;
                     });
 
@@ -2388,7 +2352,7 @@ async function executeScanOnFbWebview(wv) {
 
             if (newFoundInThisStep === 0) {
                 consecutiveNoChange++;
-                if (consecutiveNoChange >= 4) {
+                if (consecutiveNoChange >= 5) {
                     appendScanModalLog(`Đã cuộn đến đáy danh sách nhóm sau ${step} bước.`);
                     break;
                 }
