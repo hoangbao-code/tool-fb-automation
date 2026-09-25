@@ -101,10 +101,14 @@ async function publishPost(postId, clusterId = null) {
     } else if (actualTarget && actualTarget !== 'all') {
         const cluster = await dbAsync.get(`SELECT name FROM fb_clusters WHERE id = ?`, [actualTarget]);
         clusterLabel = cluster ? `Cụm [${cluster.name}]` : `Cụm #${actualTarget}`;
-        targetGroups = await dbAsync.getGroupsForCluster(actualTarget);
+        targetGroups = await dbAsync.getGroupsForCluster(actualTarget, post.user_id);
     } else {
         clusterLabel = 'Tất cả nhóm đã chọn';
-        targetGroups = await dbAsync.all(`SELECT * FROM fb_groups WHERE is_active = 1`);
+        if (post.user_id) {
+            targetGroups = await dbAsync.all(`SELECT * FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`, [post.user_id]);
+        } else {
+            targetGroups = await dbAsync.all(`SELECT * FROM fb_groups WHERE is_active = 1`);
+        }
     }
 
     if (targetGroups.length === 0) {

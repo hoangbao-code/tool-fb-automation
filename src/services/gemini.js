@@ -109,7 +109,6 @@ async function callGeminiApi(apiKey, requestedModel, prompt) {
 }
 
 /**
-/**
  * Gửi nội dung tin nhắn phòng thô trực tiếp vào Google Chrome Gemini Web
  * Chờ AI trên Chrome hoàn tất biên tập, làm sạch và trả về bài viết đã viết lại.
  * Tuyệt đối không bọc prompt template hay nạp tin thô khi AI chưa phản hồi.
@@ -137,6 +136,14 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
             // Chờ Chrome nạp trang và ổn định
             await new Promise(r => setTimeout(r, 4000));
         } else {
+            // Kiểm tra xem người dùng có API Key dự phòng không
+            const apiKeyRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_api_key'`);
+            if (apiKeyRow?.value && apiKeyRow.value.trim()) {
+                console.log('[Gemini Web] Không thể mở Chrome, tự động chuyển sang Gemini API dự phòng...');
+                const modelRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_model'`);
+                const apiRes = await callGeminiApi(apiKeyRow.value.trim(), modelRow?.value || 'gemini-3.7-flash', rawText);
+                return cleanGeminiOutput(apiRes.text);
+            }
             throw new Error(`Không thể khởi chạy Google Chrome: ${launchRes.message}. Vui lòng kiểm tra xem Chrome đã được cài đặt chưa.`);
         }
     }

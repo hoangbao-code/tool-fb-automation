@@ -32,6 +32,16 @@ function createServer() {
     app.use(express.json({ limit: '50mb' }));
     app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+    // Tự động chuyển hướng sang mobile.html nếu truy cập từ trình duyệt điện thoại (iOS / Android)
+    app.get('/', (req, res, next) => {
+        const ua = req.headers['user-agent'] || '';
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+        if (isMobile) {
+            return res.redirect('/mobile.html');
+        }
+        next();
+    });
+
     // Phục vụ giao diện Web tĩnh từ thư mục public
     const publicDir = path.join(__dirname, '..', 'public');
     app.use(express.static(publicDir));
@@ -294,11 +304,29 @@ function createServer() {
             query += ` ORDER BY id DESC LIMIT 100`;
 
             const rows = await dbAsync.all(query, params);
-            const parsed = rows.map(r => ({
-                ...r,
-                images: r.images ? JSON.parse(r.images) : [],
-                post_links: r.post_links ? JSON.parse(r.post_links) : []
-            }));
+            const parsed = rows.map(r => {
+                let images = [];
+                try {
+                    images = r.images ? JSON.parse(r.images) : [];
+                    if (!Array.isArray(images)) images = [images];
+                } catch (e) {
+                    images = r.images ? [r.images] : [];
+                }
+
+                let post_links = [];
+                try {
+                    post_links = r.post_links ? JSON.parse(r.post_links) : [];
+                    if (!Array.isArray(post_links)) post_links = [];
+                } catch (e) {
+                    post_links = [];
+                }
+
+                return {
+                    ...r,
+                    images,
+                    post_links
+                };
+            });
 
             res.json({ success: true, posts: parsed });
         } catch (e) {

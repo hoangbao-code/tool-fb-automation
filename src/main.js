@@ -434,6 +434,7 @@ ipcMain.handle('add-fb-group', async (event, { name, url }) => {
 
 ipcMain.handle('delete-fb-group', async (event, id) => {
     try {
+        await dbAsync.run(`DELETE FROM fb_cluster_groups WHERE group_id = ?`, [id]);
         await dbAsync.run(`DELETE FROM fb_groups WHERE id = ?`, [id]);
         return { success: true };
     } catch (e) {

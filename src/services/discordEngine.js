@@ -754,6 +754,13 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                             embeds: [successEmbed],
                             ephemeral: false
                         });
+                    } else {
+                        const errMsg = result?.stopped ? 'Quá trình đăng bài đã bị Dừng Khẩn Cấp từ Tool Desktop.' : (result?.error || 'Đăng bài không thành công hoặc không tìm thấy nhóm khả dụng.');
+                        await dbAsync.log('warn', `[Discord] Đăng bài #${postId} không hoàn thành: ${errMsg}`);
+                        await interaction.followUp({
+                            content: `⚠️ **Không thể hoàn tất đăng bài #${postId}:** ${errMsg}`,
+                            ephemeral: false
+                        });
                     }
                 } catch (pubErr) {
                     await dbAsync.log('error', `[Discord] Lỗi khi đăng bài #${postId} vào ${targetLabel}: ${pubErr.message}`);

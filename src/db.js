@@ -13,6 +13,8 @@ const db = new sqlite3.Database(dbPath);
 let logCallback = null;
 
 db.serialize(() => {
+    db.run("PRAGMA foreign_keys = ON;");
+
     // 1. Cài đặt hệ thống
     db.run(`
         CREATE TABLE IF NOT EXISTS settings (
@@ -277,12 +279,17 @@ const dbAsync = {
             clusterId = res.id;
         }
         await dbAsync.run(`DELETE FROM fb_cluster_groups WHERE cluster_id = ?`, [clusterId]);
+        let savedGroupCount = 0;
         if (finalGroupIds.length > 0) {
-            for (const gid of finalGroupIds) {
+            const placeholders = finalGroupIds.map(() => '?').join(',');
+            const validGroups = await dbAsync.all(`SELECT id FROM fb_groups WHERE id IN (${placeholders})`, finalGroupIds);
+            const validIds = validGroups.map(g => g.id);
+            for (const gid of validIds) {
                 await dbAsync.run(`INSERT OR IGNORE INTO fb_cluster_groups (cluster_id, group_id) VALUES (?, ?)`, [clusterId, gid]);
             }
+            savedGroupCount = validIds.length;
         }
-        return { id: clusterId, name, description, groupCount: finalGroupIds.length, group_ids: finalGroupIds, user_id: userId };
+        return { id: clusterId, name, description, groupCount: savedGroupCount, group_ids: finalGroupIds, user_id: userId };
     },
     deleteCluster: async (clusterId) => {
         await dbAsync.run(`DELETE FROM fb_cluster_groups WHERE cluster_id = ?`, [clusterId]);
@@ -292,9 +299,16 @@ const dbAsync = {
     getGroupsForCluster: async (clusterId, userId = null) => {
         if (!clusterId || clusterId === 'all' || clusterId === 0) {
             if (userId) {
-                return await dbAsync.all(`SELECT * FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id IS NULL)`, [userId]);
+                return await dbAsync.all(`SELECT * FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`, [userId]);
             }
             return await dbAsync.all(`SELECT * FROM fb_groups WHERE is_active = 1`);
+        }
+        if (userId) {
+            return await dbAsync.all(`
+                SELECT g.* FROM fb_groups g
+                JOIN fb_cluster_groups cg ON g.id = cg.group_id
+                WHERE cg.cluster_id = ? AND g.is_active = 1 AND (g.user_id = ? OR g.user_id = 1 OR g.user_id IS NULL)
+            `, [clusterId, userId]);
         }
         return await dbAsync.all(`
             SELECT g.* FROM fb_groups g
