@@ -109,16 +109,4 @@ window.addEventListener('DOMContentLoaded', () => {
             }
         }
     }, 4000);
-
-    // 4. Hỗ trợ tự động điền nội dung vào khung soạn bài
-    ipcRenderer.on('publish-to-fb', (event, { postId, content, groups }) => {
-        console.log('[PostHub FB] Nhận lệnh đăng bài:', postId, groups);
-        // Tự động tìm khung nhập bài đăng và dán nội dung
-        const postBox = document.querySelector('[role="textbox"], textarea, div[contenteditable="true"]');
-        if (postBox) {
-            postBox.focus();
-            document.execCommand('insertText', false, content);
-            ipcRenderer.sendToHost('fb-post-auto-filled', { postId, success: true });
-        }
-    });
 });

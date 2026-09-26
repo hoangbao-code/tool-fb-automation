@@ -208,33 +208,12 @@ async function publishPost(postId, clusterId = null) {
     const shuffledGroups = shuffleArray(targetGroups);
 
     const spinRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'ai_spin_enabled'`);
-    const isSpinEnabled = (spinRow?.value !== '0');
+    const isSpinEnabled = (spinRow?.value === '1');
 
     const baseText = post.rewritten_text || post.original_text;
 
     await dbAsync.run(`UPDATE posts SET status = 'publishing', target_fb_group = ? WHERE id = ?`, [clusterLabel, postId]);
     await dbAsync.log('info', `[Facebook] Bắt đầu đăng bài #${postId} rải rác lộn xộn vào ${shuffledGroups.length} nhóm (${clusterLabel} - Xáo trộn ngẫu nhiên & Spin content: ${isSpinEnabled ? 'BẬT' : 'TẮT'})...`);
-
-    // Gửi payload ban đầu vào FB Webview nếu có
-    if (fbWebviewRef && typeof fbWebviewRef.send === 'function') {
-        try {
-            const payloadGroups = shuffledGroups.map((group, idx) => ({
-                id: group.id,
-                name: group.name,
-                url: group.url,
-                content: isSpinEnabled ? spinPostForGroup(baseText, group.name, idx) : baseText
-            }));
-
-            fbWebviewRef.send('publish-to-fb', {
-                postId: post.id,
-                content: baseText,
-                images: post.images,
-                groups: payloadGroups
-            });
-        } catch (e) {
-            console.error('Lỗi gửi lệnh sang FB Webview:', e);
-        }
-    }
 
     // 2. TIẾN HÀNH ĐĂNG RẢI RÁC LẦN LƯỢT VÀO TỪNG NHÓM VỚI KHOẢNG NGHỈ NGẪU NHIÊN (JITTER DELAY)
     const delayMinRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'delay_min_seconds'`);

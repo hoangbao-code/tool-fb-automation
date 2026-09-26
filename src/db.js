@@ -147,7 +147,7 @@ db.serialize(() => {
         ['emergency_stop', '0'],
         ['custom_signature', ''],
         ['custom_hashtags', '#bds #nhadep #chothue #giatot'],
-        ['ai_spin_enabled', '1'],
+        ['ai_spin_enabled', '0'],
         ['smart_scheduler_enabled', '0'],
         ['smart_scheduler_slots', JSON.stringify([
             { start: "08:00", end: "09:30" },

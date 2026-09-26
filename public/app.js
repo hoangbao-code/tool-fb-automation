@@ -118,18 +118,8 @@ function setupEventListeners() {
     });
 
     window.electronApi.on('fb-publish-step', (stepData) => {
-        const fbWv = document.getElementById('fb-wv');
-        if (fbWv && stepData.groupUrl) {
-            fbWv.loadURL(stepData.groupUrl);
-            setTimeout(() => {
-                try {
-                    fbWv.send('publish-to-fb', {
-                        postId: stepData.postId,
-                        content: stepData.content,
-                        groups: [{ name: stepData.groupName, url: stepData.groupUrl, content: stepData.content }]
-                    });
-                } catch (e) {}
-            }, 3000);
+        if (stepData.groupName) {
+            showToast(`Đang đăng bài vào nhóm: ${stepData.groupName} (${stepData.step}/${stepData.total})`, 'info');
         }
     });
 

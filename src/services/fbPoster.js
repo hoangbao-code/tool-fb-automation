@@ -142,31 +142,48 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
             return { success: false, error: 'Không mở được khung soạn thảo bài viết của Facebook.' };
         }
 
-        // 4. Nhập nội dung bài viết vào editor
+        // 4. Nhập nội dung bài viết vào editor (Đảm bảo chính xác 1 bản duy nhất y như Gemini đưa ra)
         editor.focus();
         await new Promise(r => setTimeout(r, 200));
 
-        let inserted = false;
+        // Xóa sạch toàn bộ nội dung cũ trong editor nếu có (chống trùng lặp)
         try {
-            document.execCommand('selectAll', false, null);
+            const sel = window.getSelection();
+            if (sel) {
+                sel.selectAllChildren(editor);
+            }
             document.execCommand('delete', false, null);
-            inserted = document.execCommand('insertText', false, textToPost);
         } catch (e) {}
 
-        if (!inserted || !editor.innerText.trim()) {
+        // Ưu tiên phương thức Paste qua Clipboard/DataTransfer: Giữ trọn vẹn 100% xuống dòng, cấu trúc & emoji chuẩn xác của Gemini
+        let pasteSuccess = false;
+        try {
+            const dt = new DataTransfer();
+            dt.setData('text/plain', textToPost);
+            const pasteEvt = new ClipboardEvent('paste', {
+                clipboardData: dt,
+                bubbles: true,
+                cancelable: true
+            });
+            editor.dispatchEvent(pasteEvt);
+            // Kiểm tra xem editor đã nhận nội dung chưa
+            if (editor.innerText && editor.innerText.trim().length > 0) {
+                pasteSuccess = true;
+            }
+        } catch (e) {}
+
+        // Chỉ dùng execCommand dự phòng nếu Clipboard paste không ghi nhận nội dung
+        if (!pasteSuccess) {
             try {
-                const dt = new DataTransfer();
-                dt.setData('text/plain', textToPost);
-                const pasteEvt = new ClipboardEvent('paste', {
-                    clipboardData: dt,
-                    bubbles: true,
-                    cancelable: true
-                });
-                editor.dispatchEvent(pasteEvt);
+                document.execCommand('insertText', false, textToPost);
+                if (editor.innerText && editor.innerText.trim().length > 0) {
+                    pasteSuccess = true;
+                }
             } catch (e) {}
         }
 
-        if (!editor.innerText.trim()) {
+        // Dự phòng cuối cùng bằng textContent nếu vẫn hoàn toàn rỗng
+        if (!editor.innerText || !editor.innerText.trim()) {
             editor.textContent = textToPost;
         }
 
