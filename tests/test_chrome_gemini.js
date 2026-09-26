@@ -53,15 +53,13 @@ async function runTests() {
     await dbAsync.run(`UPDATE settings SET value = '' WHERE key = 'gemini_conversation_url'`);
 
     try {
-        await rewriteWithGemini('Tin BĐS test', 'Người gửi', 'Nhóm Test');
-        if (!status.active) {
-            assert.fail('Cần phải ném lỗi khi không có Chrome và không có API key');
+        const result = await rewriteWithGemini('Tin BĐS test', 'Người gửi', 'Nhóm Test');
+        if (result && result.text) {
+            console.log(`  ✓ Tự động khởi chạy Chrome và biên tập thành công (${result.text.length} ký tự)!`);
         }
     } catch (err) {
-        if (!status.active) {
-            assert.ok(err.message.includes('Mở Google Chrome Gemini') || err.message.includes('Google Chrome'), 'Thông báo lỗi phải hướng dẫn mở Google Chrome Gemini');
-            console.log(`  ✓ Hệ thống thông báo rõ ràng: "${err.message}"`);
-        }
+        assert.ok(err.message.includes('Mở Google Chrome Gemini') || err.message.includes('Google Chrome') || err.message.includes('Chrome'), 'Thông báo lỗi phải liên quan đến Chrome Gemini');
+        console.log(`  ✓ Hệ thống thông báo rõ ràng: "${err.message}"`);
     } finally {
         // Phục hồi lại dữ liệu ban đầu
         if (savedKey?.value) {

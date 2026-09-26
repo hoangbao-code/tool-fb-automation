@@ -236,25 +236,32 @@ async function loadStatus() {
         const res = await window.electronApi.getStatus();
         if (res.success) {
             state.status = res.stats;
-            document.getElementById('head-stat-zalo').innerText = res.stats.messagesToday;
-            document.getElementById('head-stat-pending').innerText = res.stats.pendingPosts;
-            document.getElementById('head-stat-posted').innerText = res.stats.postedPosts;
+            const discordStat = document.getElementById('head-stat-discord');
+            if (discordStat) discordStat.innerText = '🟢 Sẵn sàng';
+            const pendingStat = document.getElementById('head-stat-pending');
+            if (pendingStat) pendingStat.innerText = res.stats.pendingPosts;
+            const postedStat = document.getElementById('head-stat-posted');
+            if (postedStat) postedStat.innerText = res.stats.postedPosts;
 
             const badge = document.getElementById('badge-pending-count');
-            if (res.stats.pendingPosts > 0) {
-                badge.innerText = res.stats.pendingPosts;
-                badge.classList.remove('hidden');
-            } else {
-                badge.classList.add('hidden');
+            if (badge) {
+                if (res.stats.pendingPosts > 0) {
+                    badge.innerText = res.stats.pendingPosts;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
             }
 
             const autoBtn = document.getElementById('quick-auto-btn');
-            if (res.stats.autoPostEnabled) {
-                autoBtn.innerText = 'Đang bật';
-                autoBtn.className = 'px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-600 text-white transition-all';
-            } else {
-                autoBtn.innerText = 'Đang tắt';
-                autoBtn.className = 'px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400 hover:text-white transition-all';
+            if (autoBtn) {
+                if (res.stats.autoPostEnabled) {
+                    autoBtn.innerText = 'Đang bật';
+                    autoBtn.className = 'px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-600 text-white transition-all';
+                } else {
+                    autoBtn.innerText = 'Đang tắt';
+                    autoBtn.className = 'px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400 hover:text-white transition-all';
+                }
             }
         }
     } catch (e) {
@@ -3870,8 +3877,8 @@ function renderStaffTable() {
     tbody.innerHTML = state.staffUsers.map(u => {
         const isAdmin = u.id === 1 || u.role === 'admin';
         const roleBadge = isAdmin 
-            ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">Quản Trị Viên</span>`
-            : `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">Nhân Viên</span>`;
+            ? `<span class="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 whitespace-nowrap">Quản Trị Viên</span>`
+            : `<span class="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 whitespace-nowrap">Nhân Viên</span>`;
 
         const isFbConnected = u.fb_status === 'connected';
         const fbBadge = isFbConnected
