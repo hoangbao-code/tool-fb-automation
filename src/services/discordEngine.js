@@ -14,11 +14,37 @@ const {
 const { dbAsync } = require('../db');
 const { rewriteWithGemini } = require('./gemini');
 const { publishPost } = require('./fbEngine');
+const { publishPostForUser } = require('./multiFbEngine');
 const { isChromeDebuggingActive } = require('./chromeGemini');
 
 let discordClient = null;
 let currentConfig = null;
 let eventBroadcaster = null;
+
+/**
+ * Tìm thông tin User (Admin hoặc Nhân viên) tương ứng với Kênh Discord
+ * Cho phép 1 Bot phục vụ nhiều kênh độc lập cho từng nhân viên không bị xung đột
+ */
+async function getUserForDiscordChannel(channelId) {
+    if (!channelId) return null;
+    try {
+        // 1. Tìm nhân viên được gán kênh này trong bảng users
+        const user = await dbAsync.get(
+            `SELECT id, username, display_name, role, discord_channel_id FROM users WHERE discord_channel_id = ? AND discord_channel_id != ''`,
+            [channelId]
+        );
+        if (user) return user;
+
+        // 2. Nếu là kênh chính của Admin (cấu hình trong Tool Desktop)
+        if (currentConfig && channelId === currentConfig.channelId) {
+            const admin = await dbAsync.getUserById(1);
+            return admin || { id: 1, username: 'admin', role: 'admin', display_name: 'Quản Trị Viên' };
+        }
+    } catch (e) {
+        console.error('[Discord] Lỗi tìm user theo channelId:', e);
+    }
+    return null;
+}
 
 // Thư mục lưu trữ ảnh mặc định từ Discord
 const defaultImagesDir = path.join(__dirname, '..', '..', 'data', 'images');
@@ -241,7 +267,7 @@ async function processDiscordBuffer(channelId) {
     if (!buffer) return;
     channelBuffers.delete(channelId);
 
-    const { channel, texts, images, zips = [], username, userTag } = buffer;
+    const { channel, texts, images, zips = [], username, userTag, userId = 1 } = buffer;
     const combinedText = texts.filter(Boolean).join('\n\n').trim();
     const uniqueImages = [...new Set(images)];
 
@@ -263,7 +289,7 @@ async function processDiscordBuffer(channelId) {
     if (uniqueZips.length > 0) mediaDesc.push(`${uniqueZips.length} file zip`);
     const mediaDescStr = mediaDesc.length > 0 ? mediaDesc.join(' + ') : 'không có ảnh';
 
-    await dbAsync.log('info', `[Discord Bot] Đã hết thời gian chờ gom. Bắt đầu xử lý bài đăng từ ${userTag} (${combinedText.length} ký tự, ${mediaDescStr})...`);
+    await dbAsync.log('info', `[Discord Bot] Đã hết thời gian chờ gom (${userTag || username} - User #${userId}). Bắt đầu xử lý bài đăng (${combinedText.length} ký tự, ${mediaDescStr})...`);
 
     // Gửi thông báo đang xử lý vào Discord
     let statusMsg = null;
@@ -285,7 +311,7 @@ async function processDiscordBuffer(channelId) {
     try {
         msgRecord = await dbAsync.run(
             `INSERT INTO messages (group_name, sender, content, images) VALUES (?, ?, ?, ?)`,
-            [`Discord: #${channel.name || 'channel'}`, userTag || username, combinedText, JSON.stringify(allLocalImages)]
+            [`Discord: #${channel.name || 'channel'}`, `${userTag || username} (User #${userId})`, combinedText, JSON.stringify(allLocalImages)]
         );
     } catch (e) {
         console.error('[Discord] Lỗi lưu messages vào SQLite:', e);
@@ -302,16 +328,24 @@ async function processDiscordBuffer(channelId) {
         rewritten = combinedText;
     }
 
-    // 3. Lấy danh sách nhóm Facebook đang bật để chuẩn bị
-    const activeFbGroups = await dbAsync.all(`SELECT name FROM fb_groups WHERE is_active = 1`);
+    // 3. Lấy danh sách nhóm Facebook đang bật để chuẩn bị (lọc theo userId của nhân viên)
+    let activeFbGroups = [];
+    if (userId) {
+        activeFbGroups = await dbAsync.all(
+            `SELECT name FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
+            [userId]
+        );
+    } else {
+        activeFbGroups = await dbAsync.all(`SELECT name FROM fb_groups WHERE is_active = 1`);
+    }
     const targetFbStr = activeFbGroups.map(g => g.name).join(', ') || 'Tất cả nhóm đã chọn';
 
-    // 4. Lưu bài viết vào bảng posts (trạng thái pending)
+    // 4. Lưu bài viết vào bảng posts (trạng thái pending, gán user_id)
     let postRecord = null;
     try {
         postRecord = await dbAsync.run(
-            `INSERT INTO posts (message_id, group_name, original_text, rewritten_text, target_fb_group, status, images) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [msgRecord?.id || null, `Discord: #${channel.name || 'channel'}`, combinedText, rewritten, targetFbStr, 'pending', JSON.stringify(allLocalImages)]
+            `INSERT INTO posts (message_id, group_name, original_text, rewritten_text, target_fb_group, status, images, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [msgRecord?.id || null, `Discord: #${channel.name || 'channel'}`, combinedText, rewritten, targetFbStr, 'pending', JSON.stringify(allLocalImages), userId]
         );
     } catch (e) {
         console.error('[Discord] Lỗi lưu posts vào SQLite:', e);
@@ -326,6 +360,7 @@ async function processDiscordBuffer(channelId) {
     if (eventBroadcaster) {
         eventBroadcaster('new-post-ready', {
             id: postId,
+            userId: userId,
             groupName: `Discord: #${channel.name || 'channel'}`,
             originalText: combinedText,
             rewrittenText: rewritten,
@@ -438,16 +473,23 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                 // Bỏ qua tin nhắn từ chính bot
                 if (message.author.bot) return;
 
-                // Chỉ lắng nghe đúng kênh chỉ định
-                if (message.channelId !== currentConfig.channelId) return;
+                // Xác định kênh và người dùng tương ứng (Admin hoặc Nhân viên)
+                const matchedUser = await getUserForDiscordChannel(message.channelId);
+                if (!matchedUser) return; // Kênh không thuộc quản lý của hệ thống -> Bỏ qua
 
                 const text = message.content ? message.content.trim() : '';
                 const { images, zips } = extractMediaAttachments(message);
 
                 // Lệnh kiểm tra trạng thái qua Discord
                 if (text.toLowerCase() === '!status' || text.toLowerCase() === '!check') {
-                    const activeGroups = await dbAsync.all(`SELECT name FROM fb_groups WHERE is_active = 1`);
-                    const pendingPosts = await dbAsync.all(`SELECT id FROM posts WHERE status = 'pending'`);
+                    const activeGroups = await dbAsync.all(
+                        `SELECT name FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
+                        [matchedUser.id]
+                    );
+                    const pendingPosts = await dbAsync.all(
+                        `SELECT id FROM posts WHERE status = 'pending' AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
+                        [matchedUser.id]
+                    );
                     let chromeStatus = { active: false };
                     try {
                         chromeStatus = await isChromeDebuggingActive();
@@ -456,15 +498,16 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                     const statusEmbed = new EmbedBuilder()
                         .setColor(0x5865f2)
                         .setTitle('📊 BÁO CÁO HỆ THỐNG POSTHUB TOOL')
-                        .setDescription('Tình trạng hoạt động thời gian thực của Tool Desktop kết nối với Discord:')
+                        .setDescription(`Tình trạng hoạt động thời gian thực của Kênh: **#${message.channel.name || 'channel'}**`)
                         .addFields(
+                            { name: '👤 Tài khoản kết nối', value: `${matchedUser.display_name || matchedUser.username} (ID: #${matchedUser.id})`, inline: true },
                             { name: '🤖 Chrome Gemini', value: chromeStatus.active ? '🟢 Sẵn sàng' : '🔴 Chưa mở', inline: true },
                             { name: '👥 Nhóm FB Đã Chọn', value: `${activeGroups.length} nhóm`, inline: true },
                             { name: '📝 Bài Chờ Duyệt', value: `${pendingPosts.length} bài`, inline: true },
                             { name: '⏳ Thời Gian Gom', value: `${currentConfig.debounceSeconds} giây`, inline: true },
                             { name: '💻 Tool Desktop', value: '🟢 Đang chạy', inline: true }
                         )
-                        .setFooter({ text: 'Gửi nội dung & ảnh hoặc file zip vào kênh này. Bot sẽ gom sau 1 phút và gửi nút duyệt!' })
+                        .setFooter({ text: 'Gửi nội dung & ảnh hoặc file zip vào kênh này. Bot sẽ gom sau thời gian chờ và gửi nút duyệt!' })
                         .setTimestamp();
 
                     await message.reply({ embeds: [statusEmbed] });
@@ -473,14 +516,17 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
 
                 // Lệnh xem danh sách nhóm FB qua Discord
                 if (text.toLowerCase() === '!groups') {
-                    const activeGroups = await dbAsync.all(`SELECT name FROM fb_groups WHERE is_active = 1`);
+                    const activeGroups = await dbAsync.all(
+                        `SELECT name FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
+                        [matchedUser.id]
+                    );
                     if (activeGroups.length === 0) {
-                        await message.reply('⚠️ Hiện chưa có nhóm Facebook nào được chọn trong Tool Desktop. Hãy vào tab "Nhóm Facebook" trên tool để tích chọn!');
+                        await message.reply(`⚠️ Hiện chưa có nhóm Facebook nào được kích hoạt cho tài khoản [${matchedUser.username}] trong Tool Desktop. Hãy vào tab "Nhóm Facebook" trên tool để tích chọn!`);
                         return;
                     }
                     const listStr = activeGroups.slice(0, 15).map((g, i) => `${i + 1}. **${g.name}**`).join('\n');
                     const extra = activeGroups.length > 15 ? `\n... và ${activeGroups.length - 15} nhóm khác.` : '';
-                    await message.reply(`👥 **Danh sách ${activeGroups.length} nhóm Facebook đang kích hoạt để đăng bài:**\n\n${listStr}${extra}`);
+                    await message.reply(`👥 **Danh sách ${activeGroups.length} nhóm Facebook đang kích hoạt cho tài khoản ${matchedUser.username}:**\n\n${listStr}${extra}`);
                     return;
                 }
 
@@ -491,7 +537,7 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                 if (zips.length > 0) mediaDetails.push(`${zips.length} file zip`);
                 const mediaStr = mediaDetails.length > 0 ? ` (${mediaDetails.join(', ')})` : '';
 
-                await dbAsync.log('info', `[Discord Bot] Bắt được tin mới từ ${message.author.tag} (${text ? text.substring(0, 40) + '...' : ''}${mediaStr})`);
+                await dbAsync.log('info', `[Discord Bot] Bắt được tin mới từ ${message.author.tag} (${matchedUser.username} - #${message.channel.name || 'channel'}): ${text ? text.substring(0, 40) + '...' : ''}${mediaStr}`);
 
                 // Thêm phản ứng emoji để người dùng biết bot đã nhận
                 try {
@@ -500,16 +546,18 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                     // Ignore reaction permission errors
                 }
 
-                // Quản lý bộ đệm (Debounce 60 giây)
+                // Quản lý bộ đệm (Debounce) theo từng kênh riêng biệt
                 let buffer = channelBuffers.get(message.channelId);
                 if (buffer) {
                     clearTimeout(buffer.timer);
+                    buffer.userId = matchedUser.id;
                     if (text) buffer.texts.push(text);
                     if (images.length > 0) buffer.images.push(...images);
                     if (zips.length > 0) buffer.zips.push(...zips);
                 } else {
                     buffer = {
                         channel: message.channel,
+                        userId: matchedUser.id,
                         username: message.member?.displayName || message.author.username,
                         userTag: message.author.tag,
                         texts: text ? [text] : [],
@@ -531,15 +579,25 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
 
         // Xử lý khi người dùng tương tác trên Discord (Select Menu chọn nhóm/cụm, Nút bấm Xác nhận/ACP, Viết lại, Hủy)
         client.on('interactionCreate', async (interaction) => {
-            // Chỉ xử lý tương tác diễn ra trên đúng Kênh Discord được cấu hình cho máy này (tránh xung đột giữa các nhân viên)
-            if (interaction.channelId !== currentConfig.channelId) return;
+            // Xác định kênh và người dùng tương ứng (Admin hoặc Nhân viên)
+            const matchedUser = await getUserForDiscordChannel(interaction.channelId);
+            if (!matchedUser) return; // Không thuộc kênh quản lý -> Bỏ qua
+
+            // Helper an toàn để tránh xung đột double-click trên Discord API
+            const safeDeferUpdate = async () => {
+                try {
+                    if (!interaction.deferred && !interaction.replied) {
+                        await interaction.deferUpdate();
+                    }
+                } catch (e) {}
+            };
 
             // A. XỬ LÝ CHỌN NHÓM TỪ SELECT MENU -> HIỂN THỊ EMBED KIỂM TRA LẠI (CONFIRM REVIEW)
             if (interaction.isStringSelectMenu() && (interaction.customId.startsWith('discord_select_cluster_') || interaction.customId.startsWith('discord_select_target_'))) {
                 const rawId = interaction.customId.replace('discord_select_cluster_', '').replace('discord_select_target_', '');
                 const postId = parseInt(rawId, 10);
                 const selectedVal = interaction.values[0];
-                await interaction.deferUpdate();
+                await safeDeferUpdate();
 
                 const clusterId = parseInt(selectedVal.replace('target_cluster_', '').replace('cluster_', ''), 10);
                 const clusterDetails = await dbAsync.getClusterDetails(clusterId);
@@ -625,9 +683,14 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
             if (customId.startsWith('discord_choose_cluster_') || customId.startsWith('discord_approve_')) {
                 const idPart = customId.replace('discord_choose_cluster_', '').replace('discord_approve_', '');
                 const postId = parseInt(idPart, 10);
-                await interaction.deferUpdate();
+                await safeDeferUpdate();
 
-                const clusters = await dbAsync.getClusters();
+                // Lấy thông tin bài viết để biết user_id sở hữu
+                const post = await dbAsync.get(`SELECT user_id FROM posts WHERE id = ?`, [postId]);
+                const effectiveUserId = post?.user_id || matchedUser.id || 1;
+
+                // Lấy danh sách cụm nhóm được phân quyền cho user này
+                const clusters = await dbAsync.getClusters(effectiveUserId);
 
                 // Nếu chưa setting nhóm nào trong tool -> Không hiện danh sách chọn, thông báo người dùng vào setting
                 if (!clusters || clusters.length === 0) {
@@ -642,7 +705,7 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                             .setStyle(ButtonStyle.Danger)
                     );
                     await interaction.editReply({
-                        content: `⚠️ **Bạn chưa cài đặt (setting) nhóm nào trong Tool Desktop!**\n\n📌 *Mỗi nhóm trên bot sẽ bao gồm các group Facebook bạn chọn sẵn.* Hiện tại bạn chưa tạo nhóm nào.\n👉 Vui lòng mở Tool Desktop ➔ vào tab **"Quản Lý Nhóm FB"** ➔ bấm **"Tạo Cụm / Nhóm Mới"** để đặt tên nhóm và chọn sẵn các group Facebook trước khi duyệt đăng bài!`,
+                        content: `⚠️ **Bạn chưa cài đặt (setting) nhóm nào trong Tool Desktop!**\n\n📌 *Mỗi nhóm trên bot sẽ bao gồm các group Facebook bạn chọn sẵn.* Hiện tại tài khoản của bạn chưa tạo nhóm nào.\n👉 Vui lòng mở Tool Desktop ➔ vào tab **"Quản Lý Nhóm FB"** ➔ bấm **"Tạo Cụm / Nhóm Mới"** để đặt tên nhóm và chọn sẵn các group Facebook trước khi duyệt đăng bài!`,
                         embeds: [],
                         components: [noSettingRow]
                     });
@@ -686,7 +749,7 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
             // B2. Bấm NÚT QUAY LẠI TỪ BƯỚC CHỌN NHÓM
             if (customId.startsWith('discord_cancel_select_')) {
                 const postId = parseInt(customId.replace('discord_cancel_select_', ''), 10);
-                await interaction.deferUpdate();
+                await safeDeferUpdate();
                 await interaction.editReply({
                     content: `✨ **Bài viết #${postId} đã sẵn sàng!** Vui lòng kiểm tra và bấm nút bên dưới:`,
                     embeds: [],
@@ -701,14 +764,17 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                 const parts = customId.split('_');
                 const postId = parseInt(parts[2], 10);
                 const targetParam = parts.slice(3).join('_');
-                await interaction.deferUpdate();
+                await safeDeferUpdate();
+
+                const post = await dbAsync.get(`SELECT * FROM posts WHERE id = ?`, [postId]);
+                const effectiveUserId = post?.user_id || matchedUser.id || 1;
 
                 const clusterId = parseInt(targetParam, 10);
                 const targetClusterDbId = isNaN(clusterId) ? null : clusterId;
                 const c = await dbAsync.get(`SELECT name FROM fb_clusters WHERE id = ?`, [clusterId]);
                 const targetLabel = c ? c.name : (targetParam === 'all' ? 'Tất cả nhóm' : `Nhóm #${targetParam}`);
 
-                await dbAsync.log('info', `[Discord] Bạn đã xác nhận (ACP) đăng bài #${postId} vào Nhóm [${targetLabel}]!`);
+                await dbAsync.log('info', `[Discord] Người dùng #${effectiveUserId} (${matchedUser.username}) đã xác nhận (ACP) đăng bài #${postId} vào Nhóm [${targetLabel}]!`);
 
                 // Vô hiệu hóa nút và thông báo đang tiến hành đăng
                 await interaction.editReply({
@@ -720,9 +786,9 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                 // Cập nhật trạng thái post
                 await dbAsync.run(`UPDATE posts SET status = 'approved', target_cluster_id = ? WHERE id = ?`, [targetClusterDbId, postId]);
 
-                // Bắt đầu đăng bài
+                // Bắt đầu đăng bài theo phiên của đúng người dùng này
                 try {
-                    const result = await publishPost(postId, targetParam);
+                    const result = await publishPostForUser(effectiveUserId, postId, targetParam);
                     if (result?.success) {
                         const postedGroups = result.groups || [];
                         let linksListStr = '';
@@ -775,7 +841,7 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
             // 2. Bấm NÚT VIẾT LẠI AI
             if (customId.startsWith('discord_rewrite_')) {
                 const postId = parseInt(customId.replace('discord_rewrite_', ''), 10);
-                await interaction.deferUpdate();
+                await safeDeferUpdate();
 
                 await interaction.editReply({
                     content: `🔄 **Đang gửi bài #${postId} vào Gemini Web để viết phiên bản khác...** Vui lòng đợi trong giây lát...`,
@@ -812,7 +878,7 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
             // 3. Bấm NÚT HỦY BỎ
             if (customId.startsWith('discord_reject_')) {
                 const postId = parseInt(customId.replace('discord_reject_', ''), 10);
-                await interaction.deferUpdate();
+                await safeDeferUpdate();
 
                 await dbAsync.run(`UPDATE posts SET status = 'rejected' WHERE id = ?`, [postId]);
                 await interaction.editReply({
@@ -826,7 +892,13 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
 
             // 4. Bấm NÚT XEM NHÓM FB
             if (customId.startsWith('discord_groups_')) {
-                const activeFbGroups = await dbAsync.all(`SELECT name FROM fb_groups WHERE is_active = 1`);
+                const postId = parseInt(customId.replace('discord_groups_', ''), 10);
+                const post = await dbAsync.get(`SELECT user_id FROM posts WHERE id = ?`, [postId]);
+                const effectiveUserId = post?.user_id || matchedUser.id || 1;
+                const activeFbGroups = await dbAsync.all(
+                    `SELECT name FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
+                    [effectiveUserId]
+                );
                 if (activeFbGroups.length === 0) {
                     await interaction.reply({
                         content: '⚠️ Hiện tại chưa có nhóm Facebook nào được kích hoạt để đăng bài trong Tool Desktop.',
@@ -932,5 +1004,6 @@ module.exports = {
     extractImageUrls,
     extractImagesFromDiscordZips,
     downloadAndSaveDiscordImages,
-    getEffectiveImagesDir
+    getEffectiveImagesDir,
+    getUserForDiscordChannel
 };
