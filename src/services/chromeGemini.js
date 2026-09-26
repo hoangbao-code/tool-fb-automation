@@ -441,11 +441,7 @@ const INJECT_SCRIPT = (promptText) => `
             'button[aria-label*="Send message"]',
             'button[aria-label*="Gửi"]',
             'button[aria-label*="Send"]',
-            'button[aria-label*="gửi"]',
-            'button[aria-label*="send"]',
-            'button.send-button',
-            'button[mat-icon-button][aria-label*="Send"]',
-            '.send-button-container button'
+            'button.send-button'
         ];
         for (const s of sendSelectors) {
             try {
@@ -456,26 +452,32 @@ const INJECT_SCRIPT = (promptText) => `
         return null;
     }
 
-    // 3. Đếm số lượng phản hồi hiện có của model
+    // 3. Đếm số lượng phản hồi hiện có của model (mỗi phản hồi là 1 model-response duy nhất)
     function getResponseCount() {
-        const list = document.querySelectorAll('message-content, .model-response-text, model-response, [data-message-author-role="model"]');
-        return list.length;
+        return document.querySelectorAll('model-response').length;
     }
 
     // 4. Lấy nội dung phản hồi sạch (loại bỏ hoàn toàn các nút toolbar: Sao chép, Thích, Chia sẻ, Google...)
+    // Đồng thời định dạng chuẩn các thẻ đoạn văn <p> và <br> thành dấu xuống dòng hợp lệ
     function getCleanResponseText(el) {
         if (!el) return '';
-        const clone = el.cloneNode(true);
+        const md = el.querySelector ? (el.querySelector('.markdown') || el) : el;
+        const clone = md.cloneNode(true);
         const toRemove = clone.querySelectorAll('button, .response-actions, message-actions, .actions-container, mat-toolbar, .sources-container, .citation-tag, .feedback-container, .tool-call, .tool-result');
         toRemove.forEach(b => b.remove());
-        return (clone.innerText || clone.textContent || '').trim();
+        clone.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+        clone.querySelectorAll('p, li').forEach(p => p.appendChild(document.createTextNode('\n\n')));
+        return (clone.textContent || '').replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
     }
 
     function getLatestResponseText() {
-        const list = document.querySelectorAll('message-content, .model-response-text, model-response, [data-message-author-role="model"]');
-        if (list.length === 0) return null;
-        const last = list[list.length - 1];
-        return getCleanResponseText(last);
+        const list = document.querySelectorAll('model-response');
+        if (list.length === 0) {
+            const mds = document.querySelectorAll('.markdown');
+            if (mds.length === 0) return '';
+            return getCleanResponseText(mds[mds.length - 1]);
+        }
+        return getCleanResponseText(list[list.length - 1]);
     }
 
     // 5. Kiểm tra AI còn đang gõ/stream không
@@ -517,77 +519,36 @@ const INJECT_SCRIPT = (promptText) => `
     const initialResponseCount = getResponseCount();
     const previousLatestText = getLatestResponseText() || '';
 
-    // Điền nội dung vào ô chat: Sử dụng Selection + execCommand / InputEvent / DOM Node API thuần
-    inputEl.focus();
-
-    // 1. Chuẩn bị Selection & Range trên inputEl
-    try {
-        const range = document.createRange();
-        range.selectNodeContents(inputEl);
-        const sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
-    } catch(e) {}
-
-    // 2. Thử insertText qua execCommand (chuẩn cho rich editors)
-    let inserted = false;
-    try {
-        document.execCommand('selectAll', false, null);
-        document.execCommand('delete', false, null);
-        inserted = document.execCommand('insertText', false, prompt);
-    } catch(e) {}
-
-    // 3. Nếu execCommand chưa đặt được text, kích hoạt InputEvent trước
-    if (!inserted || !inputEl.innerText || !inputEl.innerText.trim()) {
+    // Điền nội dung vào ô chat: Ưu tiên cao nhất thông qua Quill Editor instance của Gemini Web
+    const richEl = document.querySelector('rich-textarea') || inputEl.closest('rich-textarea');
+    let textSet = false;
+    if (richEl && richEl.__quill) {
         try {
-            inputEl.dispatchEvent(new InputEvent('beforeinput', {
-                inputType: 'insertText',
-                data: prompt,
-                bubbles: true,
-                cancelable: true
-            }));
+            richEl.__quill.setText(prompt, 'user');
+            richEl.__quill.update();
+            textSet = true;
         } catch(e) {}
     }
 
-    // 4. Fallback DOM Nodes an toàn tuyệt đối (KHÔNG DÙNG innerHTML để tránh TrustedHTML violation trên Chrome)
-    if (!inputEl.innerText || !inputEl.innerText.trim()) {
-        if (inputEl.tagName === 'TEXTAREA' || inputEl.tagName === 'INPUT') {
-            inputEl.value = prompt;
-        } else {
-            // Xóa sạch con cũ qua DOM API an toàn
-            while (inputEl.firstChild) {
-                inputEl.removeChild(inputEl.firstChild);
-            }
-            // Tạo các phần tử và text nodes chuẩn (100% Trusted Types safe)
-            const p = document.createElement('p');
-            const lines = prompt.split('\\n');
-            lines.forEach((line, idx) => {
-                if (idx > 0) p.appendChild(document.createElement('br'));
-                p.appendChild(document.createTextNode(line));
-            });
-            inputEl.appendChild(p);
-        }
+    if (!textSet) {
+        inputEl.focus();
+        try {
+            document.execCommand('selectAll', false, null);
+            document.execCommand('delete', false, null);
+            document.execCommand('insertText', false, prompt);
+        } catch(e) {}
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+        inputEl.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    // 5. Kích hoạt toàn bộ sự kiện cần thiết để Gemini Web nhận diện text đã nhập
-    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-    inputEl.dispatchEvent(new Event('change', { bubbles: true }));
-    try {
-        inputEl.dispatchEvent(new InputEvent('input', {
-            inputType: 'insertText',
-            data: prompt,
-            bubbles: true
-        }));
-    } catch(e) {}
+    await new Promise(r => setTimeout(r, 400));
 
-    await new Promise(r => setTimeout(r, 600));
-
-    // Bấm nút gửi hoặc dispatch phím Enter
-    let sendBtn = findSendButton();
-    for (let i = 0; i < 8; i++) {
+    // Bấm nút gửi
+    let sendBtn = null;
+    for (let i = 0; i < 15; i++) {
+        sendBtn = findSendButton();
         if (sendBtn) break;
         await new Promise(r => setTimeout(r, 200));
-        sendBtn = findSendButton();
     }
 
     if (sendBtn) {
@@ -604,7 +565,7 @@ const INJECT_SCRIPT = (promptText) => `
     let lastLength = 0;
     let stableCount = 0;
 
-    while (Date.now() - startTime < 65000) {
+    while (Date.now() - startTime < 80000) {
         await new Promise(r => setTimeout(r, 1000));
         const currentCount = getResponseCount();
         const generating = isAiGenerating();
