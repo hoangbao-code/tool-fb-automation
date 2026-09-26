@@ -140,6 +140,7 @@ async function publishPost(postId, clusterId = null) {
             fbWebviewRef.send('publish-to-fb', {
                 postId: post.id,
                 content: baseText,
+                images: post.images,
                 groups: payloadGroups
             });
         } catch (e) {
@@ -179,6 +180,7 @@ async function publishPost(postId, clusterId = null) {
                 groupName: group.name,
                 groupUrl: group.url,
                 content: groupContent,
+                images: post.images,
                 step: i + 1,
                 total: shuffledGroups.length
             });
@@ -199,7 +201,8 @@ async function publishPost(postId, clusterId = null) {
                 cookies: userCookies,
                 groupUrl: group.url,
                 groupName: group.name,
-                content: groupContent
+                content: groupContent,
+                images: post.images
             });
         }
 

@@ -17,8 +17,14 @@ async function runTests() {
     assert.ok(script.includes(JSON.stringify(testContent)), 'Script phải chứa nội dung cần đăng đã được escape JSON');
     assert.ok(script.includes('extractLatestPostLink'), 'Script phải chứa hàm bóc tách link bài viết');
     assert.ok(script.includes('findComposerTrigger'), 'Script phải chứa hàm tìm nút mở khung soạn bài');
-    assert.ok(script.includes('findSubmitButton'), 'Script phải chứa hàm tìm nút Đăng');
-    console.log('  ✓ FB_DOM_POST_SCRIPT sinh mã an toàn, hỗ trợ bóc tách permalink và xử lý duyệt bài.');
+    assert.ok(script.includes('b64toFile'), 'Script phải chứa hàm chuyển đổi base64 sang File');
+    assert.ok(script.includes('DataTransfer'), 'Script phải sử dụng DataTransfer để gán File vào input');
+
+    // Kiểm tra nhúng dữ liệu ảnh vào script DOM
+    const testImages = [{ name: 'room1.jpg', mime: 'image/jpeg', base64: 'dGVzdGltYWdl' }];
+    const scriptWithImg = FB_DOM_POST_SCRIPT(testContent, testImages);
+    assert.ok(scriptWithImg.includes('room1.jpg'), 'Script phải chứa danh sách ảnh kèm theo');
+    console.log('  ✓ FB_DOM_POST_SCRIPT sinh mã an toàn, hỗ trợ đính kèm ảnh tự động và bóc tách permalink.');
 
     // 2. Kiểm thử quy trình publishPost với Webview giả lập trả về link bài viết thực tế
     console.log('\n2. Kiểm thử quy trình publishPost và lưu link bài viết thực tế:');
