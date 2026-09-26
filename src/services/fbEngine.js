@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const { dbAsync } = require('../db');
 const { spinPostForGroup } = require('./gemini');
 const { executeGroupPost } = require('./fbPoster');
@@ -77,6 +79,92 @@ function shuffleArray(arr) {
         [copy[i], copy[j]] = [copy[j], copy[i]];
     }
     return copy;
+}
+
+/**
+ * Tự động xóa / dọn dẹp các tệp ảnh tạm thời và ảnh đã giải nén sau khi bài viết được đăng lên Facebook
+ * Nhằm giải phóng dung lượng ổ cứng và tránh làm chậm / nặng máy tính
+ */
+async function cleanupPostImages(imagesInput, postId = null) {
+    if (!imagesInput) return { count: 0, freedBytes: 0 };
+    let list = [];
+    if (typeof imagesInput === 'string') {
+        try {
+            const parsed = JSON.parse(imagesInput);
+            list = Array.isArray(parsed) ? parsed : [parsed];
+        } catch (e) {
+            list = [imagesInput];
+        }
+    } else if (Array.isArray(imagesInput)) {
+        list = imagesInput;
+    }
+
+    let deletedCount = 0;
+    let totalFreedBytes = 0;
+    const deletedPaths = new Set();
+
+    // 1. Xóa các đường dẫn cụ thể được lưu trong post.images
+    for (const item of list) {
+        if (!item || typeof item !== 'string') continue;
+        try {
+            if (fs.existsSync(item)) {
+                const stat = fs.statSync(item);
+                if (stat.isFile()) {
+                    fs.unlinkSync(item);
+                    deletedCount++;
+                    totalFreedBytes += stat.size;
+                    deletedPaths.add(item);
+                }
+            }
+        } catch (err) {
+            console.warn(`[Cleanup] Lỗi khi xóa file ảnh ${item}:`, err.message);
+        }
+    }
+
+    // 2. Quét dọn thêm các file ảnh giải nén từ zip theo tiền tố post_${postId}_* trong thư mục images
+    if (postId) {
+        try {
+            const defaultImagesDir = path.join(__dirname, '..', '..', 'data', 'images');
+            const dirsToCheck = [defaultImagesDir];
+            const customRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'discord_image_save_dir'`);
+            if (customRow && customRow.value && customRow.value.trim().length > 0) {
+                dirsToCheck.push(customRow.value.trim());
+            }
+
+            for (const dir of dirsToCheck) {
+                if (fs.existsSync(dir)) {
+                    const files = fs.readdirSync(dir);
+                    const prefix = `post_${postId}_`;
+                    for (const file of files) {
+                        if (file.startsWith(prefix)) {
+                            const fullP = path.join(dir, file);
+                            if (!deletedPaths.has(fullP) && fs.existsSync(fullP)) {
+                                try {
+                                    const stat = fs.statSync(fullP);
+                                    if (stat.isFile()) {
+                                        fs.unlinkSync(fullP);
+                                        deletedCount++;
+                                        totalFreedBytes += stat.size;
+                                        deletedPaths.add(fullP);
+                                    }
+                                } catch (e) {}
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[Cleanup] Lỗi quét thư mục ảnh theo postId:', e.message);
+        }
+    }
+
+    if (deletedCount > 0) {
+        const freedMb = (totalFreedBytes / (1024 * 1024)).toFixed(2);
+        await dbAsync.log('info', `[Hệ thống] ✓ Đã tự động dọn dẹp ${deletedCount} file ảnh tạm (${freedMb} MB) của bài #${postId} để chống nặng máy.`);
+        console.log(`[Cleanup] ✓ Đã dọn dẹp ${deletedCount} ảnh tạm (${freedMb} MB) cho bài #${postId}.`);
+    }
+
+    return { count: deletedCount, freedBytes: totalFreedBytes };
 }
 
 /**
@@ -247,17 +335,27 @@ async function publishPost(postId, clusterId = null) {
             [JSON.stringify(postedResults), postId]
         );
 
+        // Tự động dọn dẹp các tệp ảnh đã giải nén & ảnh tạm thời của bài viết để chống nặng máy
+        const cleanupInfo = await cleanupPostImages(post.images, postId);
+
         if (eventBroadcaster) {
             eventBroadcaster('post-published', { 
                 id: postId, 
                 status: 'posted', 
                 groupCount: postedResults.length, 
-                groups: postedResults,
-                failedCount: failedResults.length
+                groups: postedResults, 
+                failedCount: failedResults.length,
+                cleanedImagesCount: cleanupInfo?.count || 0
             });
         }
         await dbAsync.log('info', `✓ Đã hoàn tất đăng bài #${postId}: Đăng thành công ${postedResults.length}/${shuffledGroups.length} nhóm và đã thu thập link bài viết!`);
-        return { success: true, groupCount: postedResults.length, groups: postedResults, failed: failedResults };
+        return { 
+            success: true, 
+            groupCount: postedResults.length, 
+            groups: postedResults, 
+            failed: failedResults,
+            cleanedImages: cleanupInfo
+        };
     } else {
         const firstError = failedResults[0]?.error || 'Không đăng được bài lên bất kỳ nhóm nào.';
         await dbAsync.run(
@@ -338,5 +436,6 @@ module.exports = {
     handleScannedGroups,
     publishPost,
     startFbPostWorker,
-    isWithinGoldenHours
+    isWithinGoldenHours,
+    cleanupPostImages
 };

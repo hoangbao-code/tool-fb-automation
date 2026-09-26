@@ -406,7 +406,7 @@ function renderPostImages(imagesData) {
                         : 'file:///' + src.replace(/\\/g, '/');
                     return `
                     <div class="relative group/img w-14 h-14 rounded-lg overflow-hidden bg-slate-950 border border-slate-800 shadow-sm cursor-pointer" onclick="window.open('${escapeHtml(displaySrc)}', '_blank')">
-                        <img src="${escapeHtml(displaySrc)}" class="w-full h-full object-cover group-hover/img:scale-110 transition-all duration-200" alt="Ảnh ${idx + 1}" />
+                        <img src="${escapeHtml(displaySrc)}" class="w-full h-full object-cover group-hover/img:scale-110 transition-all duration-200" alt="Ảnh ${idx + 1}" onerror="this.style.display='none'; if(!this.parentElement.querySelector('.cleaned-tag')) { const d=document.createElement('div'); d.className='cleaned-tag w-full h-full flex flex-col items-center justify-center text-[8px] text-slate-500 font-semibold bg-slate-900/90 text-center leading-tight p-0.5'; d.innerHTML='<span class=\\'text-emerald-400 font-bold\\'>✓ Đã up</span><span>đã dọn đĩa</span>'; this.parentElement.appendChild(d); }" />
                     </div>
                 `}).join('')}
                 ${imgs.length > 4 ? `

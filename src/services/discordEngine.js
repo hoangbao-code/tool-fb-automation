@@ -231,6 +231,111 @@ async function downloadAndSaveDiscordImages(imageUrls, postId) {
     return savedPaths;
 }
 
+// Bộ nhớ tạm lưu các postId vừa phản hồi qua interaction Discord để tránh gửi đúp
+const notifiedInteractionPostIds = new Set();
+
+/**
+ * Tạo Discord Embed hiển thị kết quả xuất bản bài viết
+ * Tự động phân loại: Đang chờ duyệt (cam) vs Đã đăng công khai (xanh) vs Hỗn hợp (lam)
+ */
+function buildPublishResultEmbed(postId, targetLabel, postedGroups = [], failedGroups = []) {
+    const pendingGroups = (postedGroups || []).filter(g => g.status === 'pending_approval');
+    const directGroups = (postedGroups || []).filter(g => g.status === 'posted');
+
+    let title = '';
+    let color = 0x2ecc71;
+    let introText = '';
+
+    if (directGroups.length === 0 && pendingGroups.length > 0) {
+        // TẤT CẢ VÀO HÀNG CHỜ PHÊ DUYỆT
+        title = `⏳ BÀI VIẾT #${postId} ĐANG CHỜ PHÊ DUYỆT!`;
+        color = 0xf39c12; // Màu vàng cam cảnh báo
+        introText = `⚠️ Bài viết đã được gửi vào **Nhóm [${targetLabel}]** (${pendingGroups.length} group) nhưng **đang nằm trong hàng chờ Quản trị viên phê duyệt** (do nhóm bật kiểm duyệt bài đăng)!\n\n👉 Bạn hãy bấm vào liên kết bên dưới để xem bài viết đang chờ duyệt trên Facebook:`;
+    } else if (pendingGroups.length > 0) {
+        // HỖN HỢP: VỪA CÓ NHÓM ĐĂNG NGAY, VỪA CÓ NHÓM CHỜ DUYỆT
+        title = `📢 BÀI VIẾT #${postId} ĐÃ XUẤT BẢN (${directGroups.length} đã đăng, ${pendingGroups.length} chờ duyệt)`;
+        color = 0x3498db; // Xanh lam
+        introText = `Bài viết đã xuất bản vào **Nhóm [${targetLabel}]** (${postedGroups.length} group):\n- ✅ **${directGroups.length}** nhóm đã đăng công khai trực tiếp\n- ⏳ **${pendingGroups.length}** nhóm đang chờ Quản trị viên duyệt\n\n👉 Bấm vào liên kết bên dưới để xem bài viết:`;
+    } else {
+        // TẤT CẢ ĐÃ ĐĂNG TRỰC TIẾP
+        title = `🎉 ĐÃ ĐĂNG BÀI #${postId} THÀNH CÔNG!`;
+        color = 0x2ecc71; // Xanh lá
+        introText = `✅ Bài viết đã hoàn tất đăng trực tiếp vào **Nhóm [${targetLabel}]** (${directGroups.length} group) an toàn!\n\n🔗 **LINK BÀI VIẾT ĐÃ ĐĂNG (BẤM VÀO ĐỂ XEM):**`;
+    }
+
+    let linksListStr = '';
+    if (postedGroups.length > 0) {
+        linksListStr = postedGroups.map((g, idx) => {
+            const isPending = (g.status === 'pending_approval');
+            const targetLink = g.postUrl || g.url || 'https://www.facebook.com/groups';
+            const icon = isPending ? '⏳' : '✅';
+            const statusLabel = isPending ? '**ĐANG CHỜ PHÊ DUYỆT**' : '**ĐÃ ĐĂNG CÔNG KHAI**';
+            const actionText = isPending ? 'Xem bài đang chờ duyệt' : 'Xem bài viết trực tiếp';
+            return `${idx + 1}. ${icon} **[${g.name}](${targetLink})** — ${statusLabel}\n   ↳ 🔗 [${actionText}](${targetLink})`;
+        }).join('\n\n');
+    } else {
+        linksListStr = '*(Không tìm thấy danh sách link group)*';
+    }
+
+    if (failedGroups.length > 0) {
+        linksListStr += '\n\n❌ **Nhóm đăng thất bại:**\n';
+        linksListStr += failedGroups.map(f => `- **${f.name}**: ${f.error}`).join('\n');
+    }
+
+    if (linksListStr.length > 3800) {
+        linksListStr = linksListStr.substring(0, 3800) + '\n... và một số group khác.';
+    }
+
+    return new EmbedBuilder()
+        .setColor(color)
+        .setTitle(title)
+        .setDescription(`${introText}\n\n${linksListStr}`)
+        .setFooter({ text: 'Bấm thẳng vào link từng group ở trên để mở Facebook và kiểm tra bài viết!' })
+        .setTimestamp();
+}
+
+/**
+ * Gửi thông báo kết quả đăng bài trực tiếp vào Kênh Discord tương ứng
+ * Tự động nhận diện bài chờ phê duyệt hay đã đăng thành công
+ */
+async function notifyDiscordPostResult(postId, result) {
+    if (!discordClient || !discordClient.isReady()) return;
+    if (notifiedInteractionPostIds.has(postId)) return;
+
+    try {
+        const post = await dbAsync.get(`SELECT * FROM posts WHERE id = ?`, [postId]);
+        if (!post) return;
+
+        // Xác định channelId cần gửi
+        let targetChannelId = null;
+        if (post.user_id) {
+            const user = await dbAsync.getUserById(post.user_id);
+            if (user?.discord_channel_id) {
+                targetChannelId = user.discord_channel_id;
+            }
+        }
+
+        if (!targetChannelId && currentConfig?.channelId) {
+            targetChannelId = currentConfig.channelId;
+        }
+
+        if (!targetChannelId) return;
+
+        const channel = await discordClient.channels.fetch(targetChannelId).catch(() => null);
+        if (!channel || !channel.isTextBased()) return;
+
+        const postedGroups = result.groups || [];
+        const failedGroups = result.failed || [];
+        const targetLabel = post.target_fb_group || 'Nhóm Facebook';
+        const embed = buildPublishResultEmbed(postId, targetLabel, postedGroups, failedGroups);
+
+        await channel.send({ embeds: [embed] });
+        console.log(`[DiscordEngine] Đã gửi thông báo xuất bản bài #${postId} tới kênh Discord #${channel.name || targetChannelId}`);
+    } catch (err) {
+        console.warn(`[DiscordEngine] Lỗi gửi thông báo xuất bản bài #${postId} vào Discord:`, err.message);
+    }
+}
+
 /**
  * Tạo giao diện nút bấm duyệt bài cho Discord
  */
@@ -790,34 +895,15 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                 try {
                     const result = await publishPostForUser(effectiveUserId, postId, targetParam);
                     if (result?.success) {
+                        notifiedInteractionPostIds.add(postId);
+                        setTimeout(() => notifiedInteractionPostIds.delete(postId), 30000);
+
                         const postedGroups = result.groups || [];
-                        let linksListStr = '';
-                        if (postedGroups.length > 0) {
-                            linksListStr = postedGroups.map((g, idx) => {
-                                const directUrl = g.url || 'https://www.facebook.com/groups';
-                                return `${idx + 1}. 🔗 **[${g.name}](${directUrl})**`;
-                            }).join('\n');
-                        } else {
-                            linksListStr = '*(Không tìm thấy danh sách link group)*';
-                        }
-
-                        // Giới hạn độ dài để không vượt quá giới hạn 4096 ký tự của Discord Embed
-                        if (linksListStr.length > 3800) {
-                            linksListStr = linksListStr.substring(0, 3800) + '\n... và một số group khác nữa.';
-                        }
-
-                        const successEmbed = new EmbedBuilder()
-                            .setColor(0x2ecc71)
-                            .setTitle(`🎉 ĐÃ ĐĂNG BÀI #${postId} THÀNH CÔNG!`)
-                            .setDescription(
-                                `✅ Bài viết đã hoàn tất đăng vào **Nhóm [${targetLabel}]** (${postedGroups.length} group) an toàn!\n\n` +
-                                `🔗 **LINK BÀI VIẾT / GROUP ĐÃ ĐĂNG (BẤM VÀO ĐỂ CHECK):**\n\n` +
-                                `${linksListStr}`
-                            )
-                            .setFooter({ text: 'Bấm thẳng vào link từng group ở trên để mở Facebook và kiểm tra bài viết!' });
+                        const failedGroups = result.failed || [];
+                        const embed = buildPublishResultEmbed(postId, targetLabel, postedGroups, failedGroups);
 
                         await interaction.followUp({
-                            embeds: [successEmbed],
+                            embeds: [embed],
                             ephemeral: false
                         });
                     } else {
@@ -1005,5 +1091,7 @@ module.exports = {
     extractImagesFromDiscordZips,
     downloadAndSaveDiscordImages,
     getEffectiveImagesDir,
-    getUserForDiscordChannel
+    getUserForDiscordChannel,
+    buildPublishResultEmbed,
+    notifyDiscordPostResult
 };

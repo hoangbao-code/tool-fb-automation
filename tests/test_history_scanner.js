@@ -1,3 +1,4 @@
+process.env.NODE_ENV = 'test';
 const assert = require('assert');
 const { dbAsync } = require('../src/db');
 const { isValidHistoricalPost, processHistoricalZaloMessages } = require('../src/services/historyScanner');

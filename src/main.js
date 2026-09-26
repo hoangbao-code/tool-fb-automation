@@ -170,10 +170,20 @@ function createWindow() {
                 `${data.sender}: ${data.content ? data.content.substring(0, 60) : '[Hình ảnh]'}`
             );
         } else if (channel === 'post-published') {
-            showNativeNotification(
-                'Xuất bản Facebook thành công!',
-                `Bài viết #${data.id} đã được đăng lên Facebook.`
-            );
+            const hasPending = data.groups && data.groups.some(g => g.status === 'pending_approval');
+            const notifTitle = hasPending ? 'Bài viết đang chờ phê duyệt' : 'Xuất bản Facebook thành công!';
+            const notifBody = hasPending 
+                ? `Bài viết #${data.id} đã được gửi và đang chờ Quản trị viên duyệt.` 
+                : `Bài viết #${data.id} đã được đăng lên Facebook.`;
+            showNativeNotification(notifTitle, notifBody);
+
+            // Báo thẳng kết quả lên Discord bot nếu bot đang trực tuyến
+            try {
+                const { notifyDiscordPostResult } = require('./services/discordEngine');
+                notifyDiscordPostResult(data.id, data);
+            } catch (e) {
+                console.warn('[Main] Lỗi notifyDiscordPostResult:', e.message);
+            }
         }
     };
 
