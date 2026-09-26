@@ -446,7 +446,7 @@ const INJECT_SCRIPT = (promptText) => `
         for (const s of sendSelectors) {
             try {
                 const btn = document.querySelector(s);
-                if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true' && btn.offsetParent !== null) return btn;
+                if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') return btn;
             } catch(e) {}
         }
         return null;
@@ -465,9 +465,11 @@ const INJECT_SCRIPT = (promptText) => `
         const clone = md.cloneNode(true);
         const toRemove = clone.querySelectorAll('button, .response-actions, message-actions, .actions-container, mat-toolbar, .sources-container, .citation-tag, .feedback-container, .tool-call, .tool-result');
         toRemove.forEach(b => b.remove());
-        clone.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
-        clone.querySelectorAll('p, li').forEach(p => p.appendChild(document.createTextNode('\n\n')));
-        return (clone.textContent || '').replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+        const nl = String.fromCharCode(10);
+        const cr = String.fromCharCode(13);
+        clone.querySelectorAll('br').forEach(br => br.replaceWith(nl));
+        clone.querySelectorAll('p, li').forEach(p => p.appendChild(document.createTextNode(nl + nl)));
+        return (clone.textContent || '').split(cr).join('').split(nl + nl + nl).join(nl + nl).trim();
     }
 
     function getLatestResponseText() {
@@ -537,18 +539,18 @@ const INJECT_SCRIPT = (promptText) => `
             document.execCommand('delete', false, null);
             document.execCommand('insertText', false, prompt);
         } catch(e) {}
-        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-        inputEl.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    await new Promise(r => setTimeout(r, 400));
+    // Luôn phát sinh event input và change để Angular phát hiện thay đổi và hiển thị nút Gửi
+    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+    inputEl.dispatchEvent(new Event('change', { bubbles: true }));
 
     // Bấm nút gửi
     let sendBtn = null;
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 150));
         sendBtn = findSendButton();
         if (sendBtn) break;
-        await new Promise(r => setTimeout(r, 200));
     }
 
     if (sendBtn) {
@@ -565,20 +567,22 @@ const INJECT_SCRIPT = (promptText) => `
     let lastLength = 0;
     let stableCount = 0;
 
-    while (Date.now() - startTime < 80000) {
-        await new Promise(r => setTimeout(r, 1000));
+    while (Date.now() - startTime < 60000) {
+        await new Promise(r => setTimeout(r, 800));
         const currentCount = getResponseCount();
         const generating = isAiGenerating();
         const currentText = getLatestResponseText() || '';
+        const isNewNode = currentCount > initialResponseCount;
+        const hasNewText = currentText && currentText !== previousLatestText;
 
         // Nhận diện AI bắt đầu trả lời
-        if (currentCount > initialResponseCount || generating || (currentText && currentText !== previousLatestText)) {
+        if (isNewNode || generating || hasNewText) {
             generationStarted = true;
         }
 
         if (generationStarted && !generating) {
-            // Đảm bảo là phản hồi MỚI (khác với câu trả lời cũ trước đó)
-            if (currentText.length > 30 && currentText !== previousLatestText) {
+            // Khi đã có node phản hồi mới hoặc text đã thay đổi và độ dài ổn định
+            if ((isNewNode || hasNewText) && currentText.length >= 3) {
                 if (currentText.length === lastLength) {
                     stableCount++;
                     if (stableCount >= 2) {
@@ -598,8 +602,9 @@ const INJECT_SCRIPT = (promptText) => `
     }
 
     const fallbackText = getLatestResponseText();
-    // TUYỆT ĐỐI KHÔNG TRẢ VỀ CÂU TRẢ LỜI CŨ TỪ TRƯỚC
-    if (fallbackText && fallbackText.length > 20 && fallbackText !== previousLatestText) {
+    // TUYỆT ĐỐI KHÔNG TRẢ VỀ CÂU TRẢ LỜI CŨ NẾU CHƯA CÓ NODE MỚI
+    const finalCount = getResponseCount();
+    if (fallbackText && fallbackText.length >= 3 && (finalCount > initialResponseCount || fallbackText !== previousLatestText)) {
         return { 
             success: true, 
             text: fallbackText,
