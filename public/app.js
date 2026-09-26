@@ -53,6 +53,16 @@ function setupWebviews() {
 
         // Lắng nghe sự kiện từ Webview Facebook
         if (fbWv) {
+            const registerWc = () => {
+                try {
+                    if (fbWv.getWebContentsId && window.electronApi.registerFbWebview) {
+                        window.electronApi.registerFbWebview(fbWv.getWebContentsId());
+                    }
+                } catch (e) {}
+            };
+            fbWv.addEventListener('dom-ready', registerWc);
+            registerWc();
+
             fbWv.addEventListener('ipc-message', (event) => {
                 if (event.channel === 'fb-groups-scanned') {
                     window.electronApi.forwardFbGroups(event.args[0]);
@@ -643,6 +653,44 @@ function renderPosts() {
                         </div>
                     </div>
                 </div>
+
+                ${(() => {
+                    if (!p.post_links) return '';
+                    try {
+                        const links = typeof p.post_links === 'string' ? JSON.parse(p.post_links) : p.post_links;
+                        if (!Array.isArray(links) || links.length === 0) return '';
+                        return `
+                            <!-- Danh sách liên kết bài viết đã đăng -->
+                            <div class="p-3 bg-slate-900/90 border border-slate-800 rounded-xl space-y-2">
+                                <div class="flex items-center justify-between text-[11px] font-bold text-slate-300">
+                                    <span class="flex items-center gap-1.5 text-blue-400">
+                                        <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                                        Link bài viết thực tế đã xuất bản (${links.length} nhóm):
+                                    </span>
+                                    <span class="text-[10px] text-slate-500 font-mono">Click mở xem bài viết</span>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    ${links.map(l => {
+                                        const targetUrl = l.postUrl || l.url || '#';
+                                        const isPending = (l.status === 'pending_approval');
+                                        const badgeColor = isPending ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-blue-500/15 text-blue-300 border-blue-500/30 hover:bg-blue-500/25';
+                                        const icon = isPending ? 'clock' : 'check-circle-2';
+                                        const title = isPending ? 'Đang chờ Quản trị viên nhóm phê duyệt' : 'Bài viết đã xuất bản công khai';
+                                        return `
+                                            <a href="${escapeHtml(targetUrl)}" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${badgeColor} transition-all shadow-sm group/link" title="${title}">
+                                                <i data-lucide="${icon}" class="w-3.5 h-3.5 shrink-0"></i>
+                                                <span class="max-w-[220px] truncate">${escapeHtml(l.name || 'Nhóm Facebook')}</span>
+                                                <i data-lucide="external-link" class="w-3 h-3 opacity-60 group-hover/link:opacity-100"></i>
+                                            </a>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        `;
+                    } catch(e) {
+                        return '';
+                    }
+                })()}
 
                 <!-- Footer bài viết: Nhóm Facebook đích & Các nút thao tác -->
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800/80 text-xs">

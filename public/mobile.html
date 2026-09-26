@@ -602,6 +602,28 @@
                         </div>
                         <p class="text-xs text-slate-300 line-clamp-3 leading-relaxed whitespace-pre-line">${p.rewritten_text || p.original_text || ''}</p>
                         ${imagesHtml}
+                        ${(() => {
+                            if (!p.post_links) return '';
+                            try {
+                                const links = typeof p.post_links === 'string' ? JSON.parse(p.post_links) : p.post_links;
+                                if (!Array.isArray(links) || links.length === 0) return '';
+                                return `
+                                    <div class="space-y-1 pt-1 border-t border-slate-800/60">
+                                        <span class="text-[10px] font-bold text-blue-400 flex items-center gap-1">
+                                            <i data-lucide="external-link" class="w-3 h-3"></i> Link bài viết đã đăng (${links.length} nhóm):
+                                        </span>
+                                        <div class="flex flex-wrap gap-1.5 pt-0.5">
+                                            ${links.map(l => `
+                                                <a href="${l.postUrl || l.url}" target="_blank" class="px-2 py-1 rounded-lg bg-blue-500/15 border border-blue-500/30 text-[11px] text-blue-300 font-semibold truncate max-w-[220px] flex items-center gap-1" title="${l.status === 'pending_approval' ? 'Đang chờ duyệt' : 'Đã đăng'}">
+                                                    <i data-lucide="${l.status === 'pending_approval' ? 'clock' : 'check-circle'}" class="w-3 h-3 shrink-0"></i>
+                                                    <span class="truncate">${l.name}</span>
+                                                </a>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `;
+                            } catch(e) { return ''; }
+                        })()}
                         <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
                             <button onclick="openPostReviewModal(${p.id})" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 text-xs font-semibold flex items-center gap-1">
                                 <i data-lucide="edit" class="w-3.5 h-3.5"></i> Xem & Sửa

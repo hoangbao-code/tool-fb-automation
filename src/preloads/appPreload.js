@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('electronApi', {
     deleteFbGroup: (id) => ipcRenderer.invoke('delete-fb-group', id),
     toggleFbGroup: (id) => ipcRenderer.invoke('toggle-fb-group', id),
     toggleAllFbGroups: (isActive) => ipcRenderer.invoke('toggle-all-fb-groups', isActive),
+    registerFbWebview: (wcId) => ipcRenderer.invoke('register-fb-webview', wcId),
 
     // 4.1 Cụm Nhóm Facebook (Group Clusters)
     getClusters: () => ipcRenderer.invoke('get-clusters'),

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, session, Tray, Menu, Notification, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, session, Tray, Menu, Notification, nativeImage, webContents } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const dotenv = require('dotenv');
@@ -9,7 +9,8 @@ const {
     handleScannedGroups,
     publishPost,
     startFbPostWorker,
-    setFbEventBroadcaster
+    setFbEventBroadcaster,
+    setFbWebview
 } = require('./services/fbEngine');
 const { processHistoricalZaloMessages } = require('./services/historyScanner');
 const {
@@ -206,6 +207,17 @@ if (!gotTheLock) {
         createWindow();
         setupTray();
         startFbPostWorker();
+
+        // Tự động gắn kết Facebook Webview khi được khởi tạo
+        app.on('web-contents-created', (event, contents) => {
+            if (contents.getType() === 'webview') {
+                const url = contents.getURL();
+                if (url.includes('facebook.com') || (contents.session && contents.session === session.fromPartition('persist:fb'))) {
+                    setFbWebview(contents);
+                    console.log('[Main] Đã gắn kết Facebook Webview tự động (ID: ' + contents.id + ')');
+                }
+            }
+        });
 
         // Khởi động Web Server SaaS cho điện thoại và trình duyệt
         try {
@@ -563,6 +575,20 @@ ipcMain.handle('publish-post', async (event, data) => {
     } catch (e) {
         return { success: false, error: e.message };
     }
+});
+
+ipcMain.handle('register-fb-webview', async (event, wcId) => {
+    try {
+        const wc = webContents.fromId(wcId);
+        if (wc) {
+            setFbWebview(wc);
+            console.log('[Main] Đã đăng ký Facebook Webview qua IPC (ID: ' + wcId + ')');
+            return { success: true };
+        }
+    } catch (e) {
+        console.error('[Main] Lỗi register-fb-webview:', e.message);
+    }
+    return { success: false };
 });
 
 ipcMain.handle('delete-post', async (event, id) => {
