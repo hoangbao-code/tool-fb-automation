@@ -63,6 +63,8 @@ async function runTests() {
     assert.strictEqual(verifyResult.valid, true, 'Key sinh qua Slash Command phải hợp lệ 100%');
     console.log(`  ✓ Slash Command \`/keygen\` tạo key thành công: ${generatedKey} (Hợp lệ: true)`);
 
+    await dbAsync.run("DELETE FROM settings WHERE key = 'discord_owner_user_id'");
+
     console.log('\n\x1b[32m========================================================\x1b[0m');
     console.log('\x1b[32m🎉 TẤT CẢ KIỂM THỬ KÊNH ĐỘC QUYỀN & SLASH COMMANDS ĐÃ ĐẠT 100%!\x1b[0m');
     console.log('\x1b[32m========================================================\x1b[0m');

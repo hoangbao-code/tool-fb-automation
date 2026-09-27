@@ -854,19 +854,33 @@ async function registerSlashCommands(client, token) {
     const rest = new REST({ version: '10' }).setToken(token);
 
     try {
-        // Đăng ký tức thì cho từng Server (Guild) bot đang tham gia (hiện lệnh ngay sau 1s)
-        const guilds = client.guilds?.cache;
-        if (guilds && guilds.size > 0) {
-            for (const [guildId, guild] of guilds) {
-                try {
-                    await rest.put(
-                        Routes.applicationGuildCommands(client.user.id, guildId),
-                        { body: commands }
-                    );
-                    await dbAsync.log('info', `[Discord] ✓ Đã kích hoạt Slash Commands (/) tức thì cho Server: ${guild.name}`);
-                } catch (gErr) {
-                    console.warn(`[Discord] Không thể nạp slash commands cho guild ${guildId}:`, gErr.message);
-                }
+        // Lấy danh sách tất cả Server (Guild) bot đang tham gia
+        let guildsToRegister = [];
+        try {
+            if (client.guilds && typeof client.guilds.fetch === 'function') {
+                const fetched = await client.guilds.fetch();
+                guildsToRegister = Array.from(fetched.values());
+            } else if (client.guilds?.cache && client.guilds.cache.size > 0) {
+                guildsToRegister = Array.from(client.guilds.cache.values());
+            }
+        } catch (fetchErr) {
+            try {
+                guildsToRegister = await rest.get(Routes.userGuilds());
+            } catch (rErr) {}
+        }
+
+        // Đăng ký tức thì cho từng Server (hiện lệnh ngay lập tức không cần đợi 1 tiếng)
+        for (const guild of guildsToRegister) {
+            const guildId = guild.id;
+            const guildName = guild.name || guildId;
+            try {
+                await rest.put(
+                    Routes.applicationGuildCommands(client.user.id, guildId),
+                    { body: commands }
+                );
+                await dbAsync.log('info', `[Discord] ✓ Đã nạp Slash Commands (/) tức thì cho Server: ${guildName}`);
+            } catch (gErr) {
+                console.warn(`[Discord] Không thể nạp slash commands cho guild ${guildId}:`, gErr.message);
             }
         }
 
