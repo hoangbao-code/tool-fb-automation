@@ -703,7 +703,7 @@ function renderPosts() {
                             <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-400"></i> Xóa
                         </button>
                         ${p.status === 'pending' ? `
-                            <button onclick="approvePostDirect(${p.id})" class="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-sm hover:scale-[1.02] transition-all text-xs" title="Duyệt bài để worker tự động đăng theo khung giờ vàng">
+                            <button onclick="approvePostDirect(${p.id})" class="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-sm hover:scale-[1.02] transition-all text-xs" title="Duyệt bài để hệ thống tự động đăng bài theo lịch giãn cách">
                                 <i data-lucide="check" class="w-3.5 h-3.5"></i> Duyệt Bài
                             </button>
                             <button onclick="publishPostDirect(${p.id})" class="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-md shadow-blue-900/30 hover:scale-[1.02] transition-all text-xs" title="Đăng bài ngay lập tức lên Facebook">
@@ -2926,8 +2926,6 @@ async function loadGeneralSettings() {
             document.getElementById('cfg-emergency-stop').value = res.settings.emergency_stop || '0';
             document.getElementById('cfg-delay-min').value = res.settings.delay_min_seconds || '180';
             document.getElementById('cfg-delay-max').value = res.settings.delay_max_seconds || '480';
-            const smartSched = document.getElementById('cfg-smart-scheduler');
-            if (smartSched) smartSched.value = res.settings.smart_scheduler_enabled || '0';
         }
     } catch (e) {
         console.error('Error loadGeneralSettings:', e);
@@ -2939,14 +2937,12 @@ async function saveAllSettings() {
     const stop = document.getElementById('cfg-emergency-stop').value;
     const min = document.getElementById('cfg-delay-min').value;
     const max = document.getElementById('cfg-delay-max').value;
-    const smartSched = document.getElementById('cfg-smart-scheduler')?.value || '0';
 
     await window.electronApi.saveSettings({
         auto_post_enabled: auto,
         emergency_stop: stop,
         delay_min_seconds: min,
-        delay_max_seconds: max,
-        smart_scheduler_enabled: smartSched
+        delay_max_seconds: max
     });
     showToast('Đã lưu cấu hình cài đặt hệ thống!', 'success');
     loadStatus();

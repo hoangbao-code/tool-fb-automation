@@ -368,16 +368,6 @@ function startFbPostWorker() {
 
             if (autoSetting?.value !== '1' || stopSetting?.value === '1') return;
 
-            // Kiểm tra Lên lịch Khung Giờ Vàng (Smart Scheduler)
-            const schedulerRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'smart_scheduler_enabled'`);
-            if (schedulerRow?.value === '1') {
-                const slotsRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'smart_scheduler_slots'`);
-                if (!isWithinGoldenHours(slotsRow?.value)) {
-                    // Ngoài khung giờ vàng -> Tạm hoãn đợi khung giờ tiếp theo
-                    return;
-                }
-            }
-
             // Tìm bài viết ở trạng thái 'approved'
             const pendingPost = await dbAsync.get(`SELECT * FROM posts WHERE status = 'approved' ORDER BY id ASC LIMIT 1`);
             if (!pendingPost) return;
