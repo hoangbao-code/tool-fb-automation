@@ -2,7 +2,8 @@ const assert = require('assert');
 const {
     checkChannelAndUserAccess,
     buildBotControlPanel,
-    handleDiscordKeygenCommand
+    handleDiscordKeygenCommand,
+    buildCreatePostModal
 } = require('../src/services/discordEngine');
 const { dbAsync } = require('../src/db');
 const { verifyLicenseKey } = require('../src/services/licenseEngine');
@@ -63,6 +64,14 @@ async function runTests() {
     const verifyResult = verifyLicenseKey(generatedKey, testHwid);
     assert.strictEqual(verifyResult.valid, true, 'Key sinh qua Slash Command phải hợp lệ 100%');
     console.log(`  ✓ Slash Command \`/keygen\` tạo key thành công: ${generatedKey} (Hợp lệ: true)`);
+
+    // 5. Kiểm thử Modal Soạn & Đăng bài mới (buildCreatePostModal)
+    console.log('\n5. Kiểm thử Modal Soạn bài viết bằng nút bấm:');
+    const postModal = buildCreatePostModal();
+    assert.strictEqual(postModal.data.custom_id, 'discord_modal_create_post');
+    assert.ok(postModal.data.title.includes('Gửi Nội Dung Up Bài'));
+    assert.strictEqual(postModal.components.length, 2, 'Modal phải gồm 2 trường nhập: Nội dung và link ảnh');
+    console.log('  ✓ Modal Soạn & Đăng bài Facebook được cấu hình chính xác và đầy đủ các trường.');
 
     // Khôi phục owner ban đầu
     if (originalOwner && originalOwner.value) {
