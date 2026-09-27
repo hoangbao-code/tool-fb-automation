@@ -34,16 +34,6 @@ function createServer() {
     app.use(express.json({ limit: '50mb' }));
     app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-    // Tự động chuyển hướng sang mobile.html nếu truy cập từ trình duyệt điện thoại (iOS / Android)
-    app.get('/', (req, res, next) => {
-        const ua = req.headers['user-agent'] || '';
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-        if (isMobile) {
-            return res.redirect('/mobile.html');
-        }
-        next();
-    });
-
     // Phục vụ giao diện Web tĩnh từ thư mục public
     const publicDir = path.join(__dirname, '..', 'public');
     app.use(express.static(publicDir));
