@@ -2,7 +2,15 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
-const dataDir = path.join(__dirname, '..', 'data');
+let dataDir = path.join(__dirname, '..', 'data');
+try {
+    const electron = require('electron');
+    const app = electron?.app || (electron?.remote?.app);
+    if (app && app.isPackaged && typeof app.getPath === 'function') {
+        dataDir = path.join(app.getPath('userData'), 'data');
+    }
+} catch (e) {}
+
 if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
 }
