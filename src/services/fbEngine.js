@@ -3,6 +3,7 @@ const path = require('path');
 const { dbAsync } = require('../db');
 const { spinPostForGroup } = require('./gemini');
 const { executeGroupPost } = require('./fbPoster');
+const { checkCurrentLicense } = require('./licenseEngine');
 
 let fbWebviewRef = null;
 let eventBroadcaster = null;
@@ -173,6 +174,11 @@ async function cleanupPostImages(imagesInput, postId = null) {
  * - Đăng rải rác từng nhóm một với khoảng nghỉ ngẫu nhiên (Jitter) để chống spam và tránh bị ngâm bài
  */
 async function publishPost(postId, clusterId = null) {
+    const lic = await checkCurrentLicense(dbAsync);
+    if (!lic.valid) {
+        throw new Error('Chưa kích hoạt bản quyền PostHub Pro hoặc bản quyền đã hết hạn! Vui lòng liên hệ Hoàng Bảo.');
+    }
+
     const post = await dbAsync.get(`SELECT * FROM posts WHERE id = ?`, [postId]);
     if (!post) throw new Error('Không tìm thấy bài viết ID: ' + postId);
 
@@ -363,6 +369,9 @@ function startFbPostWorker() {
 
     setInterval(async () => {
         try {
+            const lic = await checkCurrentLicense(dbAsync);
+            if (!lic.valid) return; // Chưa kích hoạt bản quyền thì không tự động đăng
+
             const autoSetting = await dbAsync.get(`SELECT value FROM settings WHERE key = 'auto_post_enabled'`);
             const stopSetting = await dbAsync.get(`SELECT value FROM settings WHERE key = 'emergency_stop'`);
 

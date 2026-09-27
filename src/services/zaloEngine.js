@@ -1,5 +1,6 @@
 const { dbAsync } = require('../db');
 const { rewriteWithGemini } = require('./gemini');
+const { checkCurrentLicense } = require('./licenseEngine');
 
 const pendingBuffers = new Map();
 let eventBroadcaster = null;
@@ -13,6 +14,10 @@ function setEventBroadcaster(fn) {
  */
 async function processZaloMessage({ groupName, sender, text, images = [] }) {
     if (!text && (!images || images.length === 0)) return;
+
+    // Kiểm tra bản quyền trước khi tiếp nhận và chuyển tiếp
+    const lic = await checkCurrentLicense(dbAsync);
+    if (!lic.valid) return;
 
     const cleanGroupName = (groupName || 'Zalo Chat').trim();
     const cleanSender = (sender || 'Thành viên').trim();

@@ -27,6 +27,12 @@ const {
     sendDiscordTestMessage
 } = require('./services/discordEngine');
 const { startServer, getLocalIpAddresses } = require('./server');
+const {
+    getMachineHWID,
+    checkCurrentLicense,
+    saveLicenseKey,
+    verifyLicenseKey
+} = require('./services/licenseEngine');
 
 dotenv.config();
 
@@ -910,6 +916,23 @@ ipcMain.handle('update-user', async (event, { id, fields }) => {
 
 ipcMain.handle('delete-user', async (event, id) => {
     return await dbAsync.deleteUser(id);
+});
+
+// ==============================================================
+// 8.2 BẢN QUYỀN POSTHUB PRO (HOÀNG BẢO)
+// ==============================================================
+ipcMain.handle('get-license-info', async () => {
+    return await checkCurrentLicense(dbAsync);
+});
+
+ipcMain.handle('activate-license', async (event, licenseKey) => {
+    const result = await saveLicenseKey(dbAsync, licenseKey);
+    if (result.success) {
+        await dbAsync.log('info', `[Bản quyền] Kích hoạt thành công PostHub Pro! Loại: ${result.daysLeft === 'Vĩnh viễn' ? 'Vĩnh viễn' : result.daysLeft + ' ngày'}.`);
+    } else {
+        await dbAsync.log('warn', `[Bản quyền] Thử kích hoạt không thành công: ${result.error || 'Sai mã'}`);
+    }
+    return result;
 });
 
 

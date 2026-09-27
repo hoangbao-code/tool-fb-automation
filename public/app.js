@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupWebviews();
     setupEventListeners();
     switchTab('home');
+    await checkLicenseStatus();
     await loadInitialData();
     checkChromeGeminiUI(true);
 });
@@ -3841,7 +3842,194 @@ async function runFullSystemHealthCheckUI() {
     }
 }
 
+// ==============================================================
+// BẢN QUYỀN POSTHUB PRO (HOÀNG BẢO)
+// ==============================================================
+let currentLicenseData = null;
 
+async function checkLicenseStatus(silent = false) {
+    if (!window.electronApi || !window.electronApi.getLicenseInfo) return;
 
+    try {
+        const res = await window.electronApi.getLicenseInfo();
+        currentLicenseData = res;
 
+        const sidebarBadge = document.getElementById('sidebar-license-badge');
+        const sidebarDot = document.getElementById('sidebar-license-dot');
+        const sidebarText = document.getElementById('sidebar-license-text');
+        const hwidInput = document.getElementById('license-hwid-display');
 
+        if (hwidInput && res.hwid) {
+            hwidInput.value = res.hwid;
+        }
+
+        if (res.valid) {
+            // Đã kích hoạt bản quyền hợp lệ
+            if (sidebarDot) {
+                sidebarDot.className = 'w-2 h-2 rounded-full bg-emerald-400 shrink-0';
+            }
+            if (sidebarText) {
+                sidebarText.className = 'text-emerald-400 font-semibold truncate';
+                sidebarText.innerText = res.daysLeft === 'Vĩnh viễn' ? 'Bản quyền Vĩnh viễn' : `Bản quyền: ${res.daysLeft} ngày`;
+            }
+            if (sidebarBadge) {
+                sidebarBadge.className = 'cursor-pointer group mt-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/60 transition-all flex items-center justify-between text-[11px]';
+            }
+
+            updateLicenseModalContent(res);
+        } else {
+            // Chưa kích hoạt hoặc đã hết hạn -> KHÓA MÀN HÌNH
+            if (sidebarDot) {
+                sidebarDot.className = 'w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0';
+            }
+            if (sidebarText) {
+                sidebarText.className = 'text-rose-400 font-semibold truncate';
+                sidebarText.innerText = res.expired ? 'Bản quyền đã hết hạn' : 'Chưa kích hoạt bản quyền';
+            }
+            if (sidebarBadge) {
+                sidebarBadge.className = 'cursor-pointer group mt-1 px-2.5 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 hover:border-rose-500/60 transition-all flex items-center justify-between text-[11px]';
+            }
+
+            updateLicenseModalContent(res);
+            openLicenseModal(true);
+        }
+    } catch (e) {
+        console.error('Lỗi checkLicenseStatus:', e);
+    }
+}
+
+function updateLicenseModalContent(res) {
+    const banner = document.getElementById('license-status-banner');
+    const title = document.getElementById('license-banner-title');
+    const desc = document.getElementById('license-banner-desc');
+    const closeBtn = document.getElementById('btn-close-license-modal');
+    const keyInput = document.getElementById('license-key-input');
+    const submitBtn = document.getElementById('btn-submit-license');
+
+    if (res.valid) {
+        if (banner) {
+            banner.className = 'bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3.5 flex items-start gap-3 text-xs';
+        }
+        if (title) {
+            title.className = 'font-bold text-emerald-300';
+            title.innerText = '✓ Bản quyền PostHub Pro đã kích hoạt hợp lệ!';
+        }
+        if (desc) {
+            desc.className = 'text-slate-300 text-[11px]';
+            desc.innerText = res.isLifetime ? 'Gói bản quyền: VĨNH VIỄN (Lifetime License) - Sở hữu trọn đời.' : `Hạn sử dụng đến: ${new Date(res.expireAt).toLocaleDateString('vi-VN')} (Còn ${res.daysLeft} ngày).`;
+        }
+        if (closeBtn) closeBtn.classList.remove('hidden');
+        if (keyInput && res.key) keyInput.value = res.key;
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i data-lucide="refresh-cw" class="w-4 h-4"></i><span>CẬP NHẬT / GIA HẠN KEY MỚI</span>';
+        }
+    } else {
+        if (banner) {
+            banner.className = 'bg-rose-500/10 border border-rose-500/30 rounded-xl p-3.5 flex items-start gap-3 text-xs';
+        }
+        if (title) {
+            title.className = 'font-bold text-rose-300';
+            title.innerText = res.expired ? '⚠️ Bản quyền phần mềm đã hết hạn' : '🔒 Phần mềm chưa được kích hoạt bản quyền';
+        }
+        if (desc) {
+            desc.className = 'text-slate-300 text-[11px]';
+            desc.innerText = res.error || 'Vui lòng sao chép Mã Máy (HWID) gửi cho Hoàng Bảo để nhận mã kích hoạt bản quyền.';
+        }
+        if (closeBtn) closeBtn.classList.add('hidden');
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i data-lucide="key" class="w-4 h-4"></i><span>KÍCH HOẠT BẢN QUYỀN NGAY</span>';
+        }
+    }
+    if (window.lucide) lucide.createIcons();
+}
+
+function openLicenseModal(isLocked = false) {
+    const modal = document.getElementById('modal-license-activation');
+    if (modal) {
+        modal.classList.remove('hidden');
+        const closeBtn = document.getElementById('btn-close-license-modal');
+        if (closeBtn) {
+            if (currentLicenseData && currentLicenseData.valid) {
+                closeBtn.classList.remove('hidden');
+            } else {
+                closeBtn.classList.add('hidden');
+            }
+        }
+        if (window.lucide) lucide.createIcons();
+    }
+}
+
+function closeLicenseModal() {
+    if (!currentLicenseData || !currentLicenseData.valid) {
+        showToast('Vui lòng kích hoạt bản quyền để sử dụng ứng dụng!', 'warning');
+        return;
+    }
+    const modal = document.getElementById('modal-license-activation');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function copyMachineHWID() {
+    const hwidInput = document.getElementById('license-hwid-display');
+    const btnText = document.getElementById('btn-copy-hwid-text');
+    if (!hwidInput || !hwidInput.value) return;
+
+    try {
+        await navigator.clipboard.writeText(hwidInput.value);
+        if (btnText) btnText.innerText = '✓ Đã chép!';
+        showToast('✓ Đã sao chép mã máy: ' + hwidInput.value + '. Hãy gửi mã này cho Hoàng Bảo qua Zalo!', 'success');
+        setTimeout(() => {
+            if (btnText) btnText.innerText = 'Sao chép';
+        }, 2500);
+    } catch (e) {
+        hwidInput.select();
+        document.execCommand('copy');
+        showToast('Đã chọn mã máy, bạn có thể ấn Ctrl+C để sao chép!', 'info');
+    }
+}
+
+async function submitLicenseActivation() {
+    const keyInput = document.getElementById('license-key-input');
+    const submitBtn = document.getElementById('btn-submit-license');
+    const key = (keyInput?.value || '').trim();
+
+    if (!key) {
+        showToast('Vui lòng nhập hoặc dán mã kích hoạt bản quyền!', 'warning');
+        if (keyInput) keyInput.focus();
+        return;
+    }
+
+    if (!window.electronApi || !window.electronApi.activateLicense) {
+        showToast('Không kết nối được dịch vụ kích hoạt hệ thống!', 'error');
+        return;
+    }
+
+    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Đang xác minh bản quyền...</span>';
+        if (window.lucide) lucide.createIcons();
+    }
+
+    try {
+        const res = await window.electronApi.activateLicense(key);
+        if (res.success && res.valid) {
+            showToast('🎉 Chúc mừng! Đã kích hoạt bản quyền PostHub Pro thành công!', 'success');
+            await checkLicenseStatus();
+            setTimeout(() => {
+                closeLicenseModal();
+            }, 800);
+        } else {
+            showToast(res.error || 'Mã kích hoạt không đúng hoặc không khớp với máy tính này!', 'error');
+            const desc = document.getElementById('license-banner-desc');
+            if (desc) desc.innerText = res.error || 'Mã kích hoạt không hợp lệ!';
+        }
+    } catch (e) {
+        showToast('Lỗi kích hoạt: ' + e.message, 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnHtml;
+            if (window.lucide) lucide.createIcons();
+        }
+    }
+}

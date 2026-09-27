@@ -90,6 +90,10 @@ contextBridge.exposeInMainWorld('electronApi', {
     updateUser: (id, fields) => ipcRenderer.invoke('update-user', { id, fields }),
     deleteUser: (id) => ipcRenderer.invoke('delete-user', id),
 
+    // 8.2 Bản quyền PostHub Pro (Hoàng Bảo)
+    getLicenseInfo: () => ipcRenderer.invoke('get-license-info'),
+    activateLicense: (key) => ipcRenderer.invoke('activate-license', key),
+
     // 9. Lắng nghe các sự kiện hệ thống thời gian thực
     on: (channel, callback) => {
         const validChannels = [
