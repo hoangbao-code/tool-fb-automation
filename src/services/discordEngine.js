@@ -9,7 +9,8 @@ const {
     ButtonStyle, 
     EmbedBuilder,
     StringSelectMenuBuilder,
-    StringSelectMenuOptionBuilder
+    StringSelectMenuOptionBuilder,
+    Events
 } = require('discord.js');
 const { dbAsync } = require('../db');
 const { rewriteWithGemini } = require('./gemini');
@@ -553,7 +554,7 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
     return new Promise((resolve, reject) => {
         let isResolved = false;
 
-        client.once('ready', async () => {
+        client.once(Events?.ClientReady || 'clientReady', async () => {
             discordClient = client;
             const botTag = client.user?.tag || 'Discord Bot';
             await dbAsync.log('info', `[Discord Bot] Đã kết nối thành công với tài khoản: ${botTag}! Đang lắng nghe kênh ID: ${channelId}`);

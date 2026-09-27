@@ -224,7 +224,8 @@ if (!gotTheLock) {
                 const url = contents.getURL();
                 if (url.includes('facebook.com') || (contents.session && contents.session === session.fromPartition('persist:fb'))) {
                     setFbWebview(contents);
-                    console.log('[Main] Đã gắn kết Facebook Webview tự động (ID: ' + contents.id + ')');
+                    const time = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+                    console.log(`\x1b[90m${time}\x1b[0m \x1b[32m[OK]\x1b[0m [Facebook] Đã kết nối Webview an toàn (Session ID: ${contents.id})`);
                 }
             }
         });
@@ -592,7 +593,8 @@ ipcMain.handle('register-fb-webview', async (event, wcId) => {
         const wc = webContents.fromId(wcId);
         if (wc) {
             setFbWebview(wc);
-            console.log('[Main] Đã đăng ký Facebook Webview qua IPC (ID: ' + wcId + ')');
+            const time = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+            console.log(`\x1b[90m${time}\x1b[0m \x1b[32m[OK]\x1b[0m [Facebook] Kênh điều khiển Webview IPC sẵn sàng (#${wcId})`);
             return { success: true };
         }
     } catch (e) {

@@ -183,7 +183,15 @@ const dbAsync = {
         try {
             const timeStr = new Date().toISOString();
             await dbAsync.run(`INSERT INTO logs (level, message) VALUES (?, ?)`, [level, message]);
-            console.log(`[${level.toUpperCase()}] ${message}`);
+            const colors = {
+                info: '\x1b[36m[INFO]\x1b[0m',
+                warn: '\x1b[33m[WARN]\x1b[0m',
+                error: '\x1b[31m[ERROR]\x1b[0m',
+                success: '\x1b[32m[OK]\x1b[0m'
+            };
+            const tag = colors[level.toLowerCase()] || `\x1b[36m[${level.toUpperCase()}]\x1b[0m`;
+            const time = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+            console.log(`\x1b[90m${time}\x1b[0m ${tag} ${message}`);
             if (logCallback) {
                 logCallback({ level, message, created_at: timeStr });
             }

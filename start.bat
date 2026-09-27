@@ -1,19 +1,28 @@
 @echo off
-title PostHub PC - Tu Dong Hoa Zalo sang Facebook
-color 0B
+setlocal
+chcp 65001 >nul
+title PostHub Pro - Tự Động Hóa Quản Lý Tin Đăng
+color 0F
 
-echo ===================================================================
-echo     POSTHUB PC - TU DONG HOA ZALO SANG FACEBOOK (DESKTOP)
-echo ===================================================================
-echo.
-
-set "PROJECT_DIR=C:\Users\bao\.gemini\antigravity\scratch\zalo_fb_poster_apk"
-if exist "%~dp0package.json" (
-    set "PROJECT_DIR=%~dp0"
+set "NODE_NO_WARNINGS=1"
+set "PROJECT_DIR=%~dp0"
+if not exist "%PROJECT_DIR%package.json" (
+    set "PROJECT_DIR=C:\Users\bao\.gemini\antigravity\scratch\zalo_fb_poster_apk"
 )
-
-echo [INFO] Thu muc ung dung: %PROJECT_DIR%
 cd /d "%PROJECT_DIR%"
+
+cls
+echo.
+echo  =============================================================================
+echo    ██████╗  ██████╗ ███████╗████████╗██╗  ██╗██╗   ██╗██████╗ 
+echo    ██╔══██╗██╔═══██╗██╔════╝╚══██╔══╝██║  ██║██║   ██║██╔══██╗
+echo    ██████╔╝██║   ██║███████╗   ██║   ███████║██║   ██║██████╔╝
+echo    ██╔═══╝ ██║   ██║╚════██║   ██║   ██╔══██║██║   ██║██╔══██╗
+echo    ██║     ╚██████╔╝███████║   ██║   ██║  ██║╚██████╔╝██████╔╝
+echo    ╚═╝      ╚═════╝ ╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ 
+echo                   HỆ THỐNG TỰ ĐỘNG HÓA BĐS & ĐA KÊNH v2.1
+echo  =============================================================================
+echo.
 
 :: Kiem tra Node.js
 where node >nul 2>nul
@@ -25,31 +34,37 @@ if %errorlevel% neq 0 (
 
 where node >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [LOI] Khong tim thay Node.js tren may tinh!
-    echo Vui long cai dat Node.js tu: https://nodejs.org
+    echo  [X] LOI: Khong tim thay Node.js tren may tinh!
+    echo      Vui long cai dat Node.js tu: https://nodejs.org
+    echo.
     pause
     exit /b 1
 )
 
 :: Kiem tra thu vien
 if not exist "node_modules\" (
-    echo [INFO] Dang cai dat thu vien can thiet...
-    call npm.cmd install
+    echo  [*] Dang thiet lap cac thanh phan he thong lan dau...
+    call npm.cmd install --silent --no-audit --no-fund
     if %errorlevel% neq 0 (
-        echo [LOI] Cai dat thu vien that bai!
+        echo  [X] Cai dat thanh phan that bai!
         pause
         exit /b 1
     )
 )
 
-:: Khoi chay ung dung
-echo [OK] Dang khoi chay PostHub Desktop...
+echo  [OK] Khoi chay thanh cong moi truong PostHub Pro.
+echo  [*] Dang khoi dong giao dien Desktop va cac tien trinh tu dong...
 echo.
 
-call npm.cmd start
+:: Khoi chay Electron truc tiep, khong hien thi thong bao rac npm
+if exist "node_modules\.bin\electron.cmd" (
+    call "node_modules\.bin\electron.cmd" .
+) else (
+    call npx.cmd electron .
+)
 
 if %errorlevel% neq 0 (
     echo.
-    echo [THONG BAO] Ung dung da dong (Ma thoat: %errorlevel%).
+    echo  [THONG BAO] Ung dung da dong (Ma: %errorlevel%).
     pause
 )

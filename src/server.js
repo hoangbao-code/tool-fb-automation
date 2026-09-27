@@ -491,13 +491,13 @@ function startServer(port = 3000) {
     const app = createServer();
     const serverPort = process.env.PORT || port;
     const server = app.listen(serverPort, '0.0.0.0', () => {
-        const localIps = getLocalIpAddresses();
-        const primaryIp = localIps[0] || 'localhost';
-        console.log(`========================================================`);
-        console.log(`🚀 [PostHub SaaS Web Server] Đang chạy tại cổng ${serverPort}`);
-        console.log(`💻 Mở trên máy tính:   http://localhost:${serverPort}`);
-        console.log(`📱 Mở trên điện thoại: http://${primaryIp}:${serverPort}/mobile.html`);
-        console.log(`========================================================`);
+        console.log(`\x1b[36m┌─────────────────────────────────────────────────────────────────┐\x1b[0m`);
+        console.log(`\x1b[36m│\x1b[0m  \x1b[1;32m●\x1b[0m \x1b[1mPOSTHUB PRO DESKTOP AUTOMATION ENGINE v2.1\x1b[0m                   \x1b[36m│\x1b[0m`);
+        console.log(`\x1b[36m├─────────────────────────────────────────────────────────────────┤\x1b[0m`);
+        console.log(`\x1b[36m│\x1b[0m  ⚡ Backend API Gateway : \x1b[32mhttp://127.0.0.1:${serverPort}\x1b[0m (Trực tuyến)       \x1b[36m│\x1b[0m`);
+        console.log(`\x1b[36m│\x1b[0m  🤖 Biên tập nội dung   : \x1b[33mGoogle Chrome Gemini (CDP)\x1b[0m              \x1b[36m│\x1b[0m`);
+        console.log(`\x1b[36m│\x1b[0m  🌐 Trình duyệt nhúng   : \x1b[34mFacebook Webview Isolated Session\x1b[0m       \x1b[36m│\x1b[0m`);
+        console.log(`\x1b[36m└─────────────────────────────────────────────────────────────────┘\x1b[0m`);
     });
     return { app, server };
 }
