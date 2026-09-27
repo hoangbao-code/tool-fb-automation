@@ -1127,109 +1127,128 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
             const access = await checkChannelAndUserAccess(interaction.channelId, interaction.user);
             if (!access.allowed) {
                 if (access.reason === 'not_owner') {
-                    await interaction.reply({ content: access.error, ephemeral: true });
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({ content: access.error, ephemeral: true });
+                    }
+                } else if (access.reason === 'wrong_channel') {
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: `⚠️ Bot PostHub chỉ nhận lệnh trong kênh <#${currentConfig.channelId}>! Vui lòng thao tác tại kênh đó.`,
+                            ephemeral: true
+                        });
+                    }
                 }
                 return;
             }
 
             // Xử lý Slash Commands (/)
             if (interaction.isChatInputCommand()) {
-                const matchedUser = await getUserForDiscordChannel(interaction.channelId);
-                const cmd = interaction.commandName;
+                try {
+                    const matchedUser = (await getUserForDiscordChannel(interaction.channelId)) || { id: 1, username: 'hoangbao', role: 'admin', display_name: 'Hoàng Bảo' };
+                    const cmd = interaction.commandName;
 
-                if (cmd === 'menu') {
-                    await interaction.reply(buildBotControlPanel(matchedUser));
-                    return;
-                }
+                    if (cmd === 'menu') {
+                        await interaction.reply(buildBotControlPanel(matchedUser));
+                        return;
+                    }
 
-                if (cmd === 'keygen') {
-                    const hwid = interaction.options.getString('hwid');
-                    const days = interaction.options.getInteger('days');
-                    const daysParam = days !== null && days !== undefined ? ` ${days}` : '';
-                    await handleDiscordKeygenCommand(interaction, `!keygen ${hwid}${daysParam}`, matchedUser);
-                    return;
-                }
+                    if (cmd === 'keygen') {
+                        const hwid = interaction.options.getString('hwid');
+                        const days = interaction.options.getInteger('days');
+                        const daysParam = days !== null && days !== undefined ? ` ${days}` : '';
+                        await handleDiscordKeygenCommand(interaction, `!keygen ${hwid}${daysParam}`, matchedUser);
+                        return;
+                    }
 
-                if (cmd === 'upbai') {
-                    const buffer = channelBuffers.get(interaction.channelId);
-                    if (!buffer || (buffer.texts.length === 0 && buffer.images.length === 0 && buffer.zips.length === 0)) {
+                    if (cmd === 'upbai') {
+                        const buffer = channelBuffers.get(interaction.channelId);
+                        if (!buffer || (buffer.texts.length === 0 && buffer.images.length === 0 && buffer.zips.length === 0)) {
+                            await interaction.reply({
+                                content: '⚠️ Hiện tại kênh chưa có bài viết nào đang trong hàng chờ gom! Bạn hãy gửi nội dung hoặc ảnh/zip vào kênh trước nhé.',
+                                ephemeral: true
+                            });
+                            return;
+                        }
+                        clearTimeout(buffer.timer);
                         await interaction.reply({
-                            content: '⚠️ Hiện tại kênh chưa có bài viết nào đang trong hàng chờ gom! Bạn hãy gửi nội dung hoặc ảnh/zip vào kênh trước nhé.',
-                            ephemeral: true
+                            content: '⚡ **Đã nhận lệnh Slash Command `/upbai`! Đang tiến hành xử lý lưu ảnh và gửi sang Gemini AI biên tập ngay...**'
+                        });
+                        await processDiscordBuffer(interaction.channelId);
+                        return;
+                    }
+
+                    if (cmd === 'status') {
+                        const activeGroups = await dbAsync.all(
+                            `SELECT name FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
+                            [matchedUser.id]
+                        );
+                        const pendingPosts = await dbAsync.all(
+                            `SELECT id FROM posts WHERE status = 'pending' AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
+                            [matchedUser.id]
+                        );
+                        let chromeStatus = { active: false };
+                        try { chromeStatus = await isChromeDebuggingActive(); } catch (e) {}
+
+                        const statusEmbed = new EmbedBuilder()
+                            .setColor(0x5865f2)
+                            .setTitle('📊 BÁO CÁO HỆ THỐNG POSTHUB TOOL')
+                            .setDescription(`Tình trạng hoạt động thời gian thực của Kênh: **#${interaction.channel.name || 'channel'}**`)
+                            .addFields(
+                                { name: '👤 Tài khoản', value: `${matchedUser.display_name || matchedUser.username}`, inline: true },
+                                { name: '🤖 Chrome Gemini', value: chromeStatus.active ? '🟢 Sẵn sàng' : '🔴 Chưa mở', inline: true },
+                                { name: '👥 Nhóm FB Đã Chọn', value: `${activeGroups.length} nhóm`, inline: true },
+                                { name: '📝 Bài Chờ Duyệt', value: `${pendingPosts.length} bài`, inline: true },
+                                { name: '💻 Tool Desktop', value: '🟢 Đang chạy', inline: true }
+                            )
+                            .setFooter({ text: 'Gõ /menu hoặc gửi bài viết để bắt đầu.' })
+                            .setTimestamp();
+
+                        await interaction.reply({ embeds: [statusEmbed], ephemeral: true });
+                        return;
+                    }
+
+                    if (cmd === 'groups') {
+                        const activeGroups = await dbAsync.all(
+                            `SELECT name FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
+                            [matchedUser.id]
+                        );
+                        if (activeGroups.length === 0) {
+                            await interaction.reply({
+                                content: `⚠️ Hiện chưa có nhóm Facebook nào được kích hoạt cho tài khoản [${matchedUser.username}] trong Tool Desktop. Hãy vào tab "Nhóm Facebook" trên tool để tích chọn!`,
+                                ephemeral: true
+                            });
+                        } else {
+                            const listStr = activeGroups.slice(0, 15).map((g, i) => `${i + 1}. **${g.name}**`).join('\n');
+                            const extra = activeGroups.length > 15 ? `\n... và ${activeGroups.length - 15} nhóm khác.` : '';
+                            await interaction.reply({
+                                content: `👥 **Danh sách ${activeGroups.length} nhóm Facebook đang kích hoạt cho tài khoản ${matchedUser.username}:**\n\n${listStr}${extra}`,
+                                ephemeral: true
+                            });
+                        }
+                        return;
+                    }
+
+                    if (cmd === 'lock') {
+                        await dbAsync.run(
+                            `INSERT INTO settings (key, value) VALUES ('discord_owner_user_id', ?)
+                             ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+                            [interaction.user.id]
+                        );
+                        await interaction.reply({
+                            content: `🔒 **ĐÃ KHÓA KÊNH ĐỘC QUYỀN CHO BẠN (<@${interaction.user.id}>)!**\nTừ bây giờ bot chỉ phục vụ và nhận lệnh từ riêng tài khoản này. Mọi người khác sẽ bị từ chối tự động.`,
+                            ephemeral: false
                         });
                         return;
                     }
-                    clearTimeout(buffer.timer);
-                    await interaction.reply({
-                        content: '⚡ **Đã nhận lệnh Slash Command `/upbai`! Đang tiến hành xử lý lưu ảnh và gửi sang Gemini AI biên tập ngay...**'
-                    });
-                    await processDiscordBuffer(interaction.channelId);
-                    return;
-                }
-
-                if (cmd === 'status') {
-                    const activeGroups = await dbAsync.all(
-                        `SELECT name FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
-                        [matchedUser.id]
-                    );
-                    const pendingPosts = await dbAsync.all(
-                        `SELECT id FROM posts WHERE status = 'pending' AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
-                        [matchedUser.id]
-                    );
-                    let chromeStatus = { active: false };
-                    try { chromeStatus = await isChromeDebuggingActive(); } catch (e) {}
-
-                    const statusEmbed = new EmbedBuilder()
-                        .setColor(0x5865f2)
-                        .setTitle('📊 BÁO CÁO HỆ THỐNG POSTHUB TOOL')
-                        .setDescription(`Tình trạng hoạt động thời gian thực của Kênh: **#${interaction.channel.name || 'channel'}**`)
-                        .addFields(
-                            { name: '👤 Tài khoản', value: `${matchedUser.display_name || matchedUser.username}`, inline: true },
-                            { name: '🤖 Chrome Gemini', value: chromeStatus.active ? '🟢 Sẵn sàng' : '🔴 Chưa mở', inline: true },
-                            { name: '👥 Nhóm FB Đã Chọn', value: `${activeGroups.length} nhóm`, inline: true },
-                            { name: '📝 Bài Chờ Duyệt', value: `${pendingPosts.length} bài`, inline: true },
-                            { name: '💻 Tool Desktop', value: '🟢 Đang chạy', inline: true }
-                        )
-                        .setFooter({ text: 'Gõ /menu hoặc gửi bài viết để bắt đầu.' })
-                        .setTimestamp();
-
-                    await interaction.reply({ embeds: [statusEmbed], ephemeral: true });
-                    return;
-                }
-
-                if (cmd === 'groups') {
-                    const activeGroups = await dbAsync.all(
-                        `SELECT name FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
-                        [matchedUser.id]
-                    );
-                    if (activeGroups.length === 0) {
-                        await interaction.reply({
-                            content: `⚠️ Hiện chưa có nhóm Facebook nào được kích hoạt cho tài khoản [${matchedUser.username}] trong Tool Desktop. Hãy vào tab "Nhóm Facebook" trên tool để tích chọn!`,
-                            ephemeral: true
-                        });
-                    } else {
-                        const listStr = activeGroups.slice(0, 15).map((g, i) => `${i + 1}. **${g.name}**`).join('\n');
-                        const extra = activeGroups.length > 15 ? `\n... và ${activeGroups.length - 15} nhóm khác.` : '';
-                        await interaction.reply({
-                            content: `👥 **Danh sách ${activeGroups.length} nhóm Facebook đang kích hoạt cho tài khoản ${matchedUser.username}:**\n\n${listStr}${extra}`,
-                            ephemeral: true
-                        });
+                } catch (cmdErr) {
+                    console.error('[Discord] Lỗi xử lý slash command:', cmdErr);
+                    if (!interaction.replied && !interaction.deferred) {
+                        try {
+                            await interaction.reply({ content: `❌ Có lỗi khi thực thi lệnh: ${cmdErr.message}`, ephemeral: true });
+                        } catch (e) {}
                     }
-                    return;
                 }
-
-                if (cmd === 'lock') {
-                    await dbAsync.run(
-                        `INSERT INTO settings (key, value) VALUES ('discord_owner_user_id', ?)
-                         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-                        [interaction.user.id]
-                    );
-                    await interaction.reply({
-                        content: `🔒 **ĐÃ KHÓA KÊNH ĐỘC QUYỀN CHO BẠN (<@${interaction.user.id}>)!**\nTừ bây giờ bot chỉ phục vụ và nhận lệnh từ riêng tài khoản này. Mọi người khác sẽ bị từ chối tự động.`,
-                        ephemeral: false
-                    });
-                    return;
-                }
+                return;
             }
 
             // Xác định kênh và người dùng tương ứng (Admin hoặc Nhân viên)

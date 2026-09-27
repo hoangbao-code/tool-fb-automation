@@ -16,6 +16,7 @@ async function runTests() {
     const hoangBaoUser = { id: '9988776655', tag: 'HoangBao#0001', username: 'hoangbao' };
     const strangerUser = { id: '1122334455', tag: 'Stranger#1234', username: 'stranger' };
 
+    const originalOwner = await dbAsync.get(`SELECT value FROM settings WHERE key = 'discord_owner_user_id'`);
     // Reset setting discord_owner_user_id trước khi test
     await dbAsync.run(`DELETE FROM settings WHERE key = 'discord_owner_user_id'`);
 
@@ -63,7 +64,12 @@ async function runTests() {
     assert.strictEqual(verifyResult.valid, true, 'Key sinh qua Slash Command phải hợp lệ 100%');
     console.log(`  ✓ Slash Command \`/keygen\` tạo key thành công: ${generatedKey} (Hợp lệ: true)`);
 
-    await dbAsync.run("DELETE FROM settings WHERE key = 'discord_owner_user_id'");
+    // Khôi phục owner ban đầu
+    if (originalOwner && originalOwner.value) {
+        await dbAsync.run("INSERT OR REPLACE INTO settings (key, value) VALUES ('discord_owner_user_id', ?)", [originalOwner.value]);
+    } else {
+        await dbAsync.run("DELETE FROM settings WHERE key = 'discord_owner_user_id'");
+    }
 
     console.log('\n\x1b[32m========================================================\x1b[0m');
     console.log('\x1b[32m🎉 TẤT CẢ KIỂM THỬ KÊNH ĐỘC QUYỀN & SLASH COMMANDS ĐÃ ĐẠT 100%!\x1b[0m');
