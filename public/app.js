@@ -2592,7 +2592,6 @@ async function toggleAllFbGroupsUI(isActive) {
 }
 
 async function deleteFbGroupRow(id) {
-    if (!confirm('Bạn có chắc chắn muốn xóa nhóm Facebook này khỏi danh sách?')) return;
     try {
         await window.electronApi.deleteFbGroup(id);
         loadFbGroups();
