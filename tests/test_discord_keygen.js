@@ -99,7 +99,8 @@ async function runTests() {
         reply: async (text) => { staffDeniedReply = text; }
     };
     await handleDiscordKeygenCommand(mockMessageStaff, `!keygen ${testHwid} 30`, { role: 'staff' });
-    assert.ok(staffDeniedReply.includes('Quyền bị từ chối'));
+    const replyMsg = typeof staffDeniedReply === 'string' ? staffDeniedReply : (staffDeniedReply?.content || '');
+    assert.ok(replyMsg.includes('Quyền bị từ chối'));
     console.log('  ✓ Đã chặn nhân viên thường, chỉ cho phép Admin phát hành key!');
 
     // 8. Kiểm thử Bảng Điều Khiển Bot (buildBotControlPanel)

@@ -13,6 +13,9 @@ const {
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
+    REST,
+    Routes,
+    SlashCommandBuilder,
     Events
 } = require('discord.js');
 const { dbAsync } = require('../db');
@@ -564,12 +567,21 @@ function buildKeygenEmbed(hwid, days, key) {
 }
 
 /**
- * Xử lý lệnh !keygen hoặc !key gửi từ Discord
+ * Xử lý lệnh !keygen hoặc !key hoặc Slash Command /keygen gửi từ Discord
  */
-async function handleDiscordKeygenCommand(message, text, matchedUser) {
+async function handleDiscordKeygenCommand(target, text, matchedUser) {
+    const sendReply = async (payload) => {
+        if (target && typeof target.reply === 'function') {
+            if (target.replied || target.deferred) {
+                return await target.followUp(payload);
+            }
+            return await target.reply(payload);
+        }
+    };
+
     // Chỉ Admin mới có quyền cấp key (phòng ngừa nhân viên tự cấp)
     if (matchedUser && matchedUser.role && matchedUser.role !== 'admin') {
-        await message.reply('⛔ **Quyền bị từ chối:** Chỉ Quản trị viên (Admin - Hoàng Bảo) mới có quyền phát hành License Key!');
+        await sendReply({ content: '⛔ **Quyền bị từ chối:** Chỉ Quản trị viên (Admin - Hoàng Bảo) mới có quyền phát hành License Key!', ephemeral: true });
         return;
     }
 
@@ -586,7 +598,7 @@ async function handleDiscordKeygenCommand(message, text, matchedUser) {
             .addFields(
                 {
                     name: '📌 Cú pháp nhanh',
-                    value: '`!keygen <Mã_Máy_HWID> [Số_Ngày]`\n*(hoặc viết tắt: `!key <Mã_Máy_HWID> [Số_Ngày]`)*'
+                    value: '`/keygen <hwid> [days]` hoặc `!keygen <Mã_Máy_HWID> [Số_Ngày]`\n*(Ví dụ: `/keygen hwid:HB-F35B-C42E-B236-F7BE days:30`)*'
                 },
                 {
                     name: '💡 Ví dụ cấp nhanh',
@@ -599,7 +611,7 @@ async function handleDiscordKeygenCommand(message, text, matchedUser) {
             )
             .setFooter({ text: 'Bản quyền Hoàng Bảo • PostHub Pro' });
 
-        await message.reply({ embeds: [guideEmbed] });
+        await sendReply({ embeds: [guideEmbed] });
         return;
     }
 
@@ -635,7 +647,7 @@ async function handleDiscordKeygenCommand(message, text, matchedUser) {
             .setDescription(`Mã máy khách hàng: **\`${hwid}\`**\n\n👉 Bấm một trong các nút dưới đây để phát hành License Key ngay:`)
             .setFooter({ text: 'Bấm nút để sinh key và mẫu tin nhắn Zalo tức thì' });
 
-        await message.reply({ embeds: [selectEmbed], components: [row] });
+        await sendReply({ embeds: [selectEmbed], components: [row] });
         return;
     }
 
@@ -652,10 +664,10 @@ async function handleDiscordKeygenCommand(message, text, matchedUser) {
     try {
         const key = generateLicenseKey(hwid, days);
         const { embed } = buildKeygenEmbed(hwid, days, key);
-        await message.reply({ embeds: [embed] });
+        await sendReply({ embeds: [embed] });
         await dbAsync.log('info', `[Discord Keygen] Admin đã phát hành key cho máy [${hwid}] thời hạn: ${days === 0 ? 'Vĩnh viễn' : days + ' ngày'}.`);
     } catch (err) {
-        await message.reply(`❌ **Lỗi khi tạo key:** ${err.message}`);
+        await sendReply({ content: `❌ **Lỗi khi tạo key:** ${err.message}` });
     }
 }
 
@@ -764,6 +776,112 @@ function buildBotControlPanel(matchedUser) {
 }
 
 /**
+ * Kiểm tra quyền riêng tư của Kênh và Người dùng (Chỉ dành riêng cho chủ sở hữu Hoàng Bảo)
+ */
+async function checkChannelAndUserAccess(channelId, user) {
+    if (!channelId || !user) return { allowed: false, reason: 'invalid_params' };
+
+    // 1. Phải là kênh được cài đặt trong Tool Desktop
+    if (currentConfig && currentConfig.channelId && channelId !== currentConfig.channelId) {
+        return { allowed: false, reason: 'wrong_channel' };
+    }
+
+    // 2. Kiểm tra chủ sở hữu độc quyền (Exclusive Owner)
+    try {
+        const ownerRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'discord_owner_user_id'`);
+        if (ownerRow && ownerRow.value) {
+            if (ownerRow.value !== user.id) {
+                return {
+                    allowed: false,
+                    reason: 'not_owner',
+                    ownerId: ownerRow.value,
+                    error: `⛔ **KÊNH DISCORD NÀY LÀ CỦA RIÊNG HOÀNG BẢO!**\nKênh đã được thiết lập độc quyền cho tài khoản <@${ownerRow.value}>. Người khác không được phép sử dụng.`
+                };
+            }
+        } else {
+            // Lần đầu tiên: Tự động ghi nhớ tài khoản này là Chủ Sở Hữu Độc Quyền
+            await dbAsync.run(
+                `INSERT INTO settings (key, value) VALUES ('discord_owner_user_id', ?)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+                [user.id]
+            );
+            await dbAsync.log('info', `[Discord] 🔒 ĐÃ TỰ ĐỘNG KHÓA KÊNH ĐỘC QUYỀN cho chủ sở hữu: ${user.tag || user.username} (ID: ${user.id}).`);
+        }
+    } catch (e) {
+        console.error('[Discord] Lỗi checkChannelAndUserAccess:', e);
+    }
+
+    return { allowed: true };
+}
+
+/**
+ * Đăng ký các Slash Commands (/) với Discord REST API
+ */
+async function registerSlashCommands(client, token) {
+    if (!client?.user?.id || !token) return;
+
+    const commands = [
+        new SlashCommandBuilder()
+            .setName('menu')
+            .setDescription('Mở Bảng Điều Khiển PostHub Pro (Up bài, Cấp key, Trạng thái...)'),
+        new SlashCommandBuilder()
+            .setName('keygen')
+            .setDescription('Phát hành License Key bản quyền PostHub Pro cho khách hàng')
+            .addStringOption(opt =>
+                opt.setName('hwid')
+                    .setDescription('Mã máy của khách hàng (VD: HB-F35B-C42E-B236-F7BE)')
+                    .setRequired(true)
+            )
+            .addIntegerOption(opt =>
+                opt.setName('days')
+                    .setDescription('Số ngày bản quyền (gõ 0 = Vĩnh viễn, 30 = 1 tháng)')
+                    .setRequired(false)
+            ),
+        new SlashCommandBuilder()
+            .setName('upbai')
+            .setDescription('Xử lý và đăng bài viết đang chờ gom lên Facebook ngay lập tức'),
+        new SlashCommandBuilder()
+            .setName('status')
+            .setDescription('Kiểm tra trạng thái bot, Chrome Gemini và bài chờ duyệt'),
+        new SlashCommandBuilder()
+            .setName('groups')
+            .setDescription('Xem danh sách các nhóm Facebook đang kích hoạt'),
+        new SlashCommandBuilder()
+            .setName('lock')
+            .setDescription('Khóa độc quyền kênh Discord này cho riêng tài khoản của bạn')
+    ].map(cmd => cmd.toJSON());
+
+    const rest = new REST({ version: '10' }).setToken(token);
+
+    try {
+        // Đăng ký tức thì cho từng Server (Guild) bot đang tham gia (hiện lệnh ngay sau 1s)
+        const guilds = client.guilds?.cache;
+        if (guilds && guilds.size > 0) {
+            for (const [guildId, guild] of guilds) {
+                try {
+                    await rest.put(
+                        Routes.applicationGuildCommands(client.user.id, guildId),
+                        { body: commands }
+                    );
+                    await dbAsync.log('info', `[Discord] ✓ Đã kích hoạt Slash Commands (/) tức thì cho Server: ${guild.name}`);
+                } catch (gErr) {
+                    console.warn(`[Discord] Không thể nạp slash commands cho guild ${guildId}:`, gErr.message);
+                }
+            }
+        }
+
+        // Đăng ký toàn cục (Global)
+        await rest.put(
+            Routes.applicationCommands(client.user.id),
+            { body: commands }
+        );
+        await dbAsync.log('info', `[Discord] ✓ Đã đăng ký Slash Commands (/) toàn cục thành công.`);
+    } catch (err) {
+        console.error('[Discord] Lỗi đăng ký Slash Commands:', err.message);
+    }
+}
+
+/**
  * Khởi động Discord Bot
  */
 async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
@@ -793,6 +911,11 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
             const botTag = client.user?.tag || 'Discord Bot';
             await dbAsync.log('info', `[Discord Bot] Đã kết nối thành công với tài khoản: ${botTag}! Đang lắng nghe kênh ID: ${channelId}`);
             
+            // Kích hoạt đăng ký Slash Commands (/) với Discord
+            registerSlashCommands(client, token).catch(e => {
+                console.warn('[Discord] Không thể nạp Slash Commands:', e.message);
+            });
+
             if (eventBroadcaster) {
                 eventBroadcaster('discord-bot-status', {
                     status: 'connected',
@@ -812,6 +935,15 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
             try {
                 // Bỏ qua tin nhắn từ chính bot
                 if (message.author.bot) return;
+
+                // Xác thực quyền riêng tư: Kênh độc quyền của riêng Hoàng Bảo
+                const access = await checkChannelAndUserAccess(message.channelId, message.author);
+                if (!access.allowed) {
+                    if (access.reason === 'not_owner') {
+                        try { await message.reply(access.error); } catch (e) {}
+                    }
+                    return;
+                }
 
                 // Xác định kênh và người dùng tương ứng (Admin hoặc Nhân viên)
                 const matchedUser = await getUserForDiscordChannel(message.channelId);
@@ -874,6 +1006,17 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                 const lowerText = text.toLowerCase();
                 if (lowerText === '!menu' || lowerText === '!panel' || lowerText === '!help') {
                     await message.reply(buildBotControlPanel(matchedUser));
+                    return;
+                }
+
+                // Lệnh khóa kênh độc quyền cho tài khoản gửi tin
+                if (lowerText === '!lock') {
+                    await dbAsync.run(
+                        `INSERT INTO settings (key, value) VALUES ('discord_owner_user_id', ?)
+                         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+                        [message.author.id]
+                    );
+                    await message.reply(`🔒 **ĐÃ KHÓA KÊNH ĐỘC QUYỀN CHO BẠN (<@${message.author.id}>)!**\nTừ bây giờ bot chỉ phục vụ và nhận lệnh từ riêng tài khoản này. Người khác sẽ bị từ chối tự động.`);
                     return;
                 }
 
@@ -961,8 +1104,120 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
             }
         });
 
-        // Xử lý khi người dùng tương tác trên Discord (Select Menu chọn nhóm/cụm, Nút bấm Xác nhận/ACP, Viết lại, Hủy)
+        // Xử lý khi người dùng tương tác trên Discord (Slash Commands, Select Menu, Nút bấm, Modal)
         client.on('interactionCreate', async (interaction) => {
+            // Bỏ qua nếu từ bot
+            if (interaction.user.bot) return;
+
+            // Xác thực quyền riêng tư: Kênh độc quyền của riêng Hoàng Bảo
+            const access = await checkChannelAndUserAccess(interaction.channelId, interaction.user);
+            if (!access.allowed) {
+                if (access.reason === 'not_owner') {
+                    await interaction.reply({ content: access.error, ephemeral: true });
+                }
+                return;
+            }
+
+            // Xử lý Slash Commands (/)
+            if (interaction.isChatInputCommand()) {
+                const matchedUser = await getUserForDiscordChannel(interaction.channelId);
+                const cmd = interaction.commandName;
+
+                if (cmd === 'menu') {
+                    await interaction.reply(buildBotControlPanel(matchedUser));
+                    return;
+                }
+
+                if (cmd === 'keygen') {
+                    const hwid = interaction.options.getString('hwid');
+                    const days = interaction.options.getInteger('days');
+                    const daysParam = days !== null && days !== undefined ? ` ${days}` : '';
+                    await handleDiscordKeygenCommand(interaction, `!keygen ${hwid}${daysParam}`, matchedUser);
+                    return;
+                }
+
+                if (cmd === 'upbai') {
+                    const buffer = channelBuffers.get(interaction.channelId);
+                    if (!buffer || (buffer.texts.length === 0 && buffer.images.length === 0 && buffer.zips.length === 0)) {
+                        await interaction.reply({
+                            content: '⚠️ Hiện tại kênh chưa có bài viết nào đang trong hàng chờ gom! Bạn hãy gửi nội dung hoặc ảnh/zip vào kênh trước nhé.',
+                            ephemeral: true
+                        });
+                        return;
+                    }
+                    clearTimeout(buffer.timer);
+                    await interaction.reply({
+                        content: '⚡ **Đã nhận lệnh Slash Command `/upbai`! Đang tiến hành xử lý lưu ảnh và gửi sang Gemini AI biên tập ngay...**'
+                    });
+                    await processDiscordBuffer(interaction.channelId);
+                    return;
+                }
+
+                if (cmd === 'status') {
+                    const activeGroups = await dbAsync.all(
+                        `SELECT name FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
+                        [matchedUser.id]
+                    );
+                    const pendingPosts = await dbAsync.all(
+                        `SELECT id FROM posts WHERE status = 'pending' AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
+                        [matchedUser.id]
+                    );
+                    let chromeStatus = { active: false };
+                    try { chromeStatus = await isChromeDebuggingActive(); } catch (e) {}
+
+                    const statusEmbed = new EmbedBuilder()
+                        .setColor(0x5865f2)
+                        .setTitle('📊 BÁO CÁO HỆ THỐNG POSTHUB TOOL')
+                        .setDescription(`Tình trạng hoạt động thời gian thực của Kênh: **#${interaction.channel.name || 'channel'}**`)
+                        .addFields(
+                            { name: '👤 Tài khoản', value: `${matchedUser.display_name || matchedUser.username}`, inline: true },
+                            { name: '🤖 Chrome Gemini', value: chromeStatus.active ? '🟢 Sẵn sàng' : '🔴 Chưa mở', inline: true },
+                            { name: '👥 Nhóm FB Đã Chọn', value: `${activeGroups.length} nhóm`, inline: true },
+                            { name: '📝 Bài Chờ Duyệt', value: `${pendingPosts.length} bài`, inline: true },
+                            { name: '💻 Tool Desktop', value: '🟢 Đang chạy', inline: true }
+                        )
+                        .setFooter({ text: 'Gõ /menu hoặc gửi bài viết để bắt đầu.' })
+                        .setTimestamp();
+
+                    await interaction.reply({ embeds: [statusEmbed], ephemeral: true });
+                    return;
+                }
+
+                if (cmd === 'groups') {
+                    const activeGroups = await dbAsync.all(
+                        `SELECT name FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
+                        [matchedUser.id]
+                    );
+                    if (activeGroups.length === 0) {
+                        await interaction.reply({
+                            content: `⚠️ Hiện chưa có nhóm Facebook nào được kích hoạt cho tài khoản [${matchedUser.username}] trong Tool Desktop. Hãy vào tab "Nhóm Facebook" trên tool để tích chọn!`,
+                            ephemeral: true
+                        });
+                    } else {
+                        const listStr = activeGroups.slice(0, 15).map((g, i) => `${i + 1}. **${g.name}**`).join('\n');
+                        const extra = activeGroups.length > 15 ? `\n... và ${activeGroups.length - 15} nhóm khác.` : '';
+                        await interaction.reply({
+                            content: `👥 **Danh sách ${activeGroups.length} nhóm Facebook đang kích hoạt cho tài khoản ${matchedUser.username}:**\n\n${listStr}${extra}`,
+                            ephemeral: true
+                        });
+                    }
+                    return;
+                }
+
+                if (cmd === 'lock') {
+                    await dbAsync.run(
+                        `INSERT INTO settings (key, value) VALUES ('discord_owner_user_id', ?)
+                         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+                        [interaction.user.id]
+                    );
+                    await interaction.reply({
+                        content: `🔒 **ĐÃ KHÓA KÊNH ĐỘC QUYỀN CHO BẠN (<@${interaction.user.id}>)!**\nTừ bây giờ bot chỉ phục vụ và nhận lệnh từ riêng tài khoản này. Mọi người khác sẽ bị từ chối tự động.`,
+                        ephemeral: false
+                    });
+                    return;
+                }
+            }
+
             // Xác định kênh và người dùng tương ứng (Admin hoặc Nhân viên)
             const matchedUser = await getUserForDiscordChannel(interaction.channelId);
             if (!matchedUser) return; // Không thuộc kênh quản lý -> Bỏ qua
@@ -1501,5 +1756,7 @@ module.exports = {
     handleDiscordKeygenCommand,
     handleDiscordKeygenButton,
     buildBotControlPanel,
-    buildKeygenModal
+    buildKeygenModal,
+    checkChannelAndUserAccess,
+    registerSlashCommands
 };
