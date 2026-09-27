@@ -102,6 +102,29 @@ async function runTests() {
     assert.ok(staffDeniedReply.includes('Quyền bị từ chối'));
     console.log('  ✓ Đã chặn nhân viên thường, chỉ cho phép Admin phát hành key!');
 
+    // 8. Kiểm thử Bảng Điều Khiển Bot (buildBotControlPanel)
+    console.log('\n8. Kiểm thử Bảng Điều Khiển Bot Control Panel:');
+    const { buildBotControlPanel, buildKeygenModal } = require('../src/services/discordEngine');
+    const panel = buildBotControlPanel({ username: 'hoangbao', display_name: 'Hoàng Bảo' });
+    assert.ok(panel.embeds && panel.embeds.length === 1);
+    assert.ok(panel.components && panel.components.length === 2, 'Menu phải gồm 2 hàng nút bấm (Row 1 & Row 2)');
+    const row1Buttons = panel.components[0].components;
+    const row2Buttons = panel.components[1].components;
+    assert.strictEqual(row1Buttons.length, 2);
+    assert.strictEqual(row2Buttons.length, 2);
+    assert.ok(row1Buttons.some(b => b.data.custom_id === 'discord_open_keygen_modal'), 'Phải có nút [🔑 Cấp Key Bản Quyền]');
+    assert.ok(row1Buttons.some(b => b.data.custom_id === 'discord_trigger_buffer'), 'Phải có nút [⚡ Xử Lý Đăng Bài Ngay]');
+    assert.ok(row2Buttons.some(b => b.data.custom_id === 'discord_btn_status'), 'Phải có nút [📊 Trạng Thái Hệ Thống]');
+    assert.ok(row2Buttons.some(b => b.data.custom_id === 'discord_btn_groups'), 'Phải có nút [👥 Xem Nhóm Facebook]');
+    console.log('  ✓ Menu Bảng điều khiển gồm đủ 4 nút trực quan: Cấp key, Đăng ngay, Trạng thái, Nhóm FB.');
+
+    // 9. Kiểm thử Modal Cấp Key Bản Quyền (buildKeygenModal)
+    console.log('\n9. Kiểm thử Modal Cấp Key Bản Quyền (buildKeygenModal):');
+    const modal = buildKeygenModal('HB-9999-8888-7777-6666');
+    assert.strictEqual(modal.data.custom_id, 'discord_modal_keygen');
+    assert.strictEqual(modal.components.length, 2, 'Modal phải gồm 2 ô nhập liệu');
+    console.log('  ✓ Modal nhập HWID và số ngày trực tiếp trên Discord được khởi tạo hoàn hảo.');
+
     console.log('\n\x1b[32m========================================================\x1b[0m');
     console.log('\x1b[32m🎉 TẤT CẢ KIỂM THỬ TÍNH NĂNG BOT DISCORD TẠO KEY ĐÃ ĐẠT 100%!\x1b[0m');
     console.log('\x1b[32m========================================================\x1b[0m');

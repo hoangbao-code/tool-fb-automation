@@ -10,6 +10,9 @@ const {
     EmbedBuilder,
     StringSelectMenuBuilder,
     StringSelectMenuOptionBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
     Events
 } = require('discord.js');
 const { dbAsync } = require('../db');
@@ -679,6 +682,88 @@ async function handleDiscordKeygenButton(interaction) {
 }
 
 /**
+ * Xây dựng Modal popup tạo Key bản quyền trực tiếp trên Discord
+ */
+function buildKeygenModal(defaultHwid = '') {
+    const modal = new ModalBuilder()
+        .setCustomId('discord_modal_keygen')
+        .setTitle('🔑 Cấp Key Bản Quyền PostHub Pro');
+
+    const hwidInput = new TextInputBuilder()
+        .setCustomId('keygen_hwid')
+        .setLabel('Mã Máy Của Khách Hàng (HWID):')
+        .setPlaceholder('VD: HB-F35B-C42E-B236-F7BE')
+        .setValue(defaultHwid)
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setMaxLength(32);
+
+    const daysInput = new TextInputBuilder()
+        .setCustomId('keygen_days')
+        .setLabel('Thời Hạn (Số ngày, gõ 0 = Vĩnh viễn):')
+        .setPlaceholder('30 (Gõ 0 nếu cấp Vĩnh viễn, 365 = 1 năm)')
+        .setValue('30')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setMaxLength(10);
+
+    const row1 = new ActionRowBuilder().addComponents(hwidInput);
+    const row2 = new ActionRowBuilder().addComponents(daysInput);
+
+    modal.addComponents(row1, row2);
+    return modal;
+}
+
+/**
+ * Xây dựng Bảng Điều Khiển Bot (Menu chính kèm các nút bấm tương tác)
+ */
+function buildBotControlPanel(matchedUser) {
+    const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle('🤖 BẢNG ĐIỀU KHIỂN POSTHUB PRO (DISCORD BOT)')
+        .setDescription(
+            `Kênh hoạt động: **#${matchedUser?.display_name || matchedUser?.username || 'PostHub'}**\n` +
+            `Dưới đây là các nút thao tác nhanh dành cho bạn:`
+        )
+        .addFields(
+            {
+                name: '📝 Đăng Bài Facebook (Up Bài Tự Động)',
+                value: 'Gửi nội dung & ảnh/file zip vào kênh này. Bạn có thể bấm nút **[⚡ Xử Lý Đăng Bài Ngay]** bên dưới để bot gửi bài đi duyệt mà không cần đợi đếm ngược.'
+            },
+            {
+                name: '🔑 Phát Hành Bản Quyền (Hoàng Bảo)',
+                value: 'Bấm nút **[🔑 Cấp Key Bản Quyền]** để mở form nhập mã máy (HWID) cấp key trực tiếp trên Discord hoặc gõ `!keygen <Mã_Máy>`.'
+            }
+        )
+        .setFooter({ text: 'PostHub Pro • Tự Động Hóa Facebook & Discord Bot v2.1' })
+        .setTimestamp();
+
+    const row1 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('discord_open_keygen_modal')
+            .setLabel('🔑 Cấp Key Bản Quyền')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId('discord_trigger_buffer')
+            .setLabel('⚡ Xử Lý Đăng Bài Ngay')
+            .setStyle(ButtonStyle.Primary)
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('discord_btn_status')
+            .setLabel('📊 Trạng Thái Hệ Thống')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId('discord_btn_groups')
+            .setLabel('👥 Xem Nhóm Facebook')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    return { embeds: [embed], components: [row1, row2] };
+}
+
+/**
  * Khởi động Discord Bot
  */
 async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
@@ -785,10 +870,24 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                     return;
                 }
 
-                // Lệnh tạo key bản quyền PostHub Pro từ Discord
+                // Lệnh mở Menu Bảng Điều Khiển Bot
                 const lowerText = text.toLowerCase();
+                if (lowerText === '!menu' || lowerText === '!panel' || lowerText === '!help') {
+                    await message.reply(buildBotControlPanel(matchedUser));
+                    return;
+                }
+
+                // Lệnh tạo key bản quyền PostHub Pro từ Discord
                 if (lowerText === '!keygen' || lowerText.startsWith('!keygen ') || lowerText === '!key' || lowerText.startsWith('!key ')) {
                     await handleDiscordKeygenCommand(message, text, matchedUser);
+                    return;
+                }
+
+                // Tự động nhận diện khi người dùng dán Mã Máy (HWID) trực tiếp vào kênh
+                const trimmedText = text.trim();
+                const hwidRegex = /^HB-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}$/i;
+                if (hwidRegex.test(trimmedText)) {
+                    await handleDiscordKeygenCommand(message, `!keygen ${trimmedText}`, matchedUser);
                     return;
                 }
 
@@ -809,6 +908,7 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                 }
 
                 // Quản lý bộ đệm (Debounce) theo từng kênh riêng biệt
+                const isFirstMessage = !channelBuffers.has(message.channelId);
                 let buffer = channelBuffers.get(message.channelId);
                 if (buffer) {
                     clearTimeout(buffer.timer);
@@ -827,6 +927,28 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                         zips: [...zips]
                     };
                     channelBuffers.set(message.channelId, buffer);
+                }
+
+                // Nếu là tin nhắn đầu tiên của đợt gom, gửi thông báo kèm nút bấm "Xử lý đăng ngay"
+                if (isFirstMessage) {
+                    try {
+                        const quickRow = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setCustomId('discord_trigger_buffer')
+                                .setLabel('⚡ Xử Lý Đăng Bài Ngay')
+                                .setStyle(ButtonStyle.Primary),
+                            new ButtonBuilder()
+                                .setCustomId('discord_open_keygen_modal')
+                                .setLabel('🔑 Cấp Key Khách')
+                                .setStyle(ButtonStyle.Secondary)
+                        );
+                        await message.reply({
+                            content: `⏳ **Đang gom tin bài đăng (${mediaDetails.length > 0 ? mediaDetails.join(', ') : 'văn bản'})!** Tự động gom thêm trong ${currentConfig.debounceSeconds}s...\n👉 Hoặc bấm **[⚡ Xử Lý Đăng Bài Ngay]** nếu bạn đã gửi xong:`,
+                            components: [quickRow]
+                        });
+                    } catch (e) {
+                        // Ignore reply errors
+                    }
                 }
 
                 const debounceMs = currentConfig.debounceSeconds * 1000;
@@ -1163,6 +1285,124 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                 await handleDiscordKeygenButton(interaction);
                 return;
             }
+
+            // 6. Bấm NÚT MỞ MODAL NHẬP HWID CẤP KEY
+            if (interaction.isButton() && interaction.customId === 'discord_open_keygen_modal') {
+                if (matchedUser && matchedUser.role && matchedUser.role !== 'admin') {
+                    await interaction.reply({
+                        content: '⛔ **Quyền bị từ chối:** Chỉ Quản trị viên (Hoàng Bảo) mới có quyền phát hành License Key!',
+                        ephemeral: true
+                    });
+                    return;
+                }
+                const modal = buildKeygenModal();
+                await interaction.showModal(modal);
+                return;
+            }
+
+            // 7. Xử lý khi SUBMIT MODAL CẤP KEY BẢN QUYỀN
+            if (interaction.isModalSubmit() && interaction.customId === 'discord_modal_keygen') {
+                const rawHwid = interaction.fields.getTextInputValue('keygen_hwid') || '';
+                const rawDays = interaction.fields.getTextInputValue('keygen_days') || '30';
+
+                let hwid = rawHwid.trim().toUpperCase();
+                if (!hwid.startsWith('HB-') && !hwid.includes('-')) {
+                    hwid = 'HB-' + hwid;
+                }
+
+                let days = 30;
+                const lowerDays = rawDays.toLowerCase().trim();
+                if (lowerDays === '0' || lowerDays === 'lifetime' || lowerDays === 'vinhvien' || lowerDays === 'vv') {
+                    days = 0;
+                } else {
+                    const parsed = parseInt(rawDays, 10);
+                    days = isNaN(parsed) ? 30 : parsed;
+                }
+
+                try {
+                    const key = generateLicenseKey(hwid, days);
+                    const { embed } = buildKeygenEmbed(hwid, days, key);
+                    await interaction.reply({
+                        content: `🎉 **ĐÃ PHÁT HÀNH KEY BẢN QUYỀN THÀNH CÔNG CHO KHÁCH!**`,
+                        embeds: [embed]
+                    });
+                    await dbAsync.log('info', `[Discord Modal Keygen] Admin đã phát hành key cho máy [${hwid}] (${days === 0 ? 'Vĩnh viễn' : days + ' ngày'}).`);
+                } catch (err) {
+                    await interaction.reply({ content: `❌ **Lỗi tạo key:** ${err.message}`, ephemeral: true });
+                }
+                return;
+            }
+
+            // 8. Bấm NÚT XỬ LÝ & ĐĂNG BÀI NGAY (Bỏ qua thời gian chờ gom tin 60s)
+            if (interaction.isButton() && interaction.customId === 'discord_trigger_buffer') {
+                const buffer = channelBuffers.get(interaction.channelId);
+                if (!buffer || (buffer.texts.length === 0 && buffer.images.length === 0 && buffer.zips.length === 0)) {
+                    await interaction.reply({
+                        content: '⚠️ Hiện tại kênh chưa có bài viết nào đang trong hàng chờ gom! Bạn hãy gửi nội dung hoặc ảnh/zip vào kênh trước nhé.',
+                        ephemeral: true
+                    });
+                    return;
+                }
+                clearTimeout(buffer.timer);
+                await interaction.reply({
+                    content: '⚡ **Đã nhận lệnh! Đang tiến hành xử lý lưu ảnh và gửi sang Gemini AI biên tập ngay...**'
+                });
+                await processDiscordBuffer(interaction.channelId);
+                return;
+            }
+
+            // 9. Bấm NÚT XEM TRẠNG THÁI HỆ THỐNG
+            if (interaction.isButton() && interaction.customId === 'discord_btn_status') {
+                const activeGroups = await dbAsync.all(
+                    `SELECT name FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
+                    [matchedUser.id]
+                );
+                const pendingPosts = await dbAsync.all(
+                    `SELECT id FROM posts WHERE status = 'pending' AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
+                    [matchedUser.id]
+                );
+                let chromeStatus = { active: false };
+                try { chromeStatus = await isChromeDebuggingActive(); } catch (e) {}
+
+                const statusEmbed = new EmbedBuilder()
+                    .setColor(0x5865f2)
+                    .setTitle('📊 BÁO CÁO HỆ THỐNG POSTHUB TOOL')
+                    .setDescription(`Tình trạng hoạt động thời gian thực của Kênh: **#${interaction.channel.name || 'channel'}**`)
+                    .addFields(
+                        { name: '👤 Tài khoản', value: `${matchedUser.display_name || matchedUser.username}`, inline: true },
+                        { name: '🤖 Chrome Gemini', value: chromeStatus.active ? '🟢 Sẵn sàng' : '🔴 Chưa mở', inline: true },
+                        { name: '👥 Nhóm FB Đã Chọn', value: `${activeGroups.length} nhóm`, inline: true },
+                        { name: '📝 Bài Chờ Duyệt', value: `${pendingPosts.length} bài`, inline: true },
+                        { name: '💻 Tool Desktop', value: '🟢 Đang chạy', inline: true }
+                    )
+                    .setFooter({ text: 'Bấm [⚡ Xử Lý Đăng Bài Ngay] hoặc gửi bài viết để bắt đầu.' })
+                    .setTimestamp();
+
+                await interaction.reply({ embeds: [statusEmbed], ephemeral: true });
+                return;
+            }
+
+            // 10. Bấm NÚT XEM DANH SÁCH NHÓM FACEBOOK
+            if (interaction.isButton() && interaction.customId === 'discord_btn_groups') {
+                const activeGroups = await dbAsync.all(
+                    `SELECT name FROM fb_groups WHERE is_active = 1 AND (user_id = ? OR user_id = 1 OR user_id IS NULL)`,
+                    [matchedUser.id]
+                );
+                if (activeGroups.length === 0) {
+                    await interaction.reply({
+                        content: `⚠️ Hiện chưa có nhóm Facebook nào được kích hoạt cho tài khoản [${matchedUser.username}] trong Tool Desktop. Hãy vào tab "Nhóm Facebook" trên tool để tích chọn!`,
+                        ephemeral: true
+                    });
+                } else {
+                    const listStr = activeGroups.slice(0, 15).map((g, i) => `${i + 1}. **${g.name}**`).join('\n');
+                    const extra = activeGroups.length > 15 ? `\n... và ${activeGroups.length - 15} nhóm khác.` : '';
+                    await interaction.reply({
+                        content: `👥 **Danh sách ${activeGroups.length} nhóm Facebook đang kích hoạt cho tài khoản ${matchedUser.username}:**\n\n${listStr}${extra}`,
+                        ephemeral: true
+                    });
+                }
+                return;
+            }
         });
 
         client.on('error', async (err) => {
@@ -1259,5 +1499,7 @@ module.exports = {
     notifyDiscordPostResult,
     buildKeygenEmbed,
     handleDiscordKeygenCommand,
-    handleDiscordKeygenButton
+    handleDiscordKeygenButton,
+    buildBotControlPanel,
+    buildKeygenModal
 };
