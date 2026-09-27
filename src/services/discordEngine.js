@@ -17,6 +17,7 @@ const { rewriteWithGemini } = require('./gemini');
 const { publishPost } = require('./fbEngine');
 const { publishPostForUser } = require('./multiFbEngine');
 const { isChromeDebuggingActive } = require('./chromeGemini');
+const { generateLicenseKey, verifyLicenseKey, getMachineHWID } = require('./licenseEngine');
 
 let discordClient = null;
 let currentConfig = null;
@@ -530,6 +531,154 @@ async function processDiscordBuffer(channelId) {
 }
 
 /**
+ * Xây dựng Embed báo cáo kết quả tạo License Key
+ */
+function buildKeygenEmbed(hwid, days, key) {
+    const isLifetime = days === 0;
+    const expDateStr = isLifetime ? 'VĨNH VIỄN (Lifetime)' : `${days} NGÀY (Hết hạn: ${new Date(Date.now() + days * 86400000).toLocaleDateString('vi-VN')})`;
+
+    const zaloTemplate = `Chào bạn, Hoàng Bảo gửi bạn mã kích hoạt bản quyền PostHub Pro:
+- Mã máy của bạn: ${hwid}
+- Gói bản quyền : ${expDateStr}
+- Mã kích hoạt  : ${key}
+
+👉 Bạn dán mã vào phần "Kích Hoạt Bản Quyền" trong phần mềm và bấm [KÍCH HOẠT NGAY] là có thể dùng trọn đời/đầy đủ tính năng nhé!`;
+
+    const embed = new EmbedBuilder()
+        .setColor(0x2ecc71)
+        .setTitle('🎉 PHÁT HÀNH KEY BẢN QUYỀN POSTHUB PRO')
+        .setDescription(`Đã tạo thành công mã kích hoạt bản quyền cho máy khách: **\`${hwid}\`**`)
+        .addFields(
+            { name: '🖥️ Mã Máy Khách (HWID)', value: `\`${hwid}\``, inline: true },
+            { name: '⏳ Gói Bản Quyền', value: `**${expDateStr}**`, inline: true },
+            { name: '🔑 MÃ BẢN QUYỀN (LICENSE KEY)', value: `\`\`\`text\n${key}\n\`\`\``, inline: false },
+            { name: '📩 Mẫu tin nhắn gửi Zalo cho khách (Chạm sao chép):', value: `\`\`\`text\n${zaloTemplate}\n\`\`\``, inline: false }
+        )
+        .setFooter({ text: 'Hệ thống bản quyền Hoàng Bảo • PostHub Pro v2.1' })
+        .setTimestamp();
+
+    return { embed, key, zaloTemplate };
+}
+
+/**
+ * Xử lý lệnh !keygen hoặc !key gửi từ Discord
+ */
+async function handleDiscordKeygenCommand(message, text, matchedUser) {
+    // Chỉ Admin mới có quyền cấp key (phòng ngừa nhân viên tự cấp)
+    if (matchedUser && matchedUser.role && matchedUser.role !== 'admin') {
+        await message.reply('⛔ **Quyền bị từ chối:** Chỉ Quản trị viên (Admin - Hoàng Bảo) mới có quyền phát hành License Key!');
+        return;
+    }
+
+    const parts = text.trim().split(/\s+/);
+    const rawHwid = parts[1];
+    const rawDays = parts[2];
+
+    // 1. Không truyền HWID -> Hiện hướng dẫn chi tiết
+    if (!rawHwid) {
+        const guideEmbed = new EmbedBuilder()
+            .setColor(0x3498db)
+            .setTitle('🔑 BỘ CÔNG CỤ CẤP BẢN QUYỀN (HOÀNG BẢO)')
+            .setDescription('Tạo License Key bản quyền PostHub Pro trực tiếp từ Discord cho khách hàng của bạn.')
+            .addFields(
+                {
+                    name: '📌 Cú pháp nhanh',
+                    value: '`!keygen <Mã_Máy_HWID> [Số_Ngày]`\n*(hoặc viết tắt: `!key <Mã_Máy_HWID> [Số_Ngày]`)*'
+                },
+                {
+                    name: '💡 Ví dụ cấp nhanh',
+                    value: '• `!keygen HB-F35B-C42E-B236-F7BE 30` ➔ Cấp 30 ngày (1 tháng)\n• `!keygen HB-F35B-C42E-B236-F7BE 0` ➔ Cấp **VĨNH VIỄN (Lifetime)**\n• `!keygen HB-F35B-C42E-B236-F7BE 365` ➔ Cấp 1 năm\n• `!keygen HB-F35B-C42E-B236-F7BE 3` ➔ Cấp dùng thử 3 ngày'
+                },
+                {
+                    name: '⚡ Tùy chọn 1-chạm',
+                    value: 'Chỉ cần gõ `!keygen <Mã_Máy>`, Bot sẽ gửi ngay 4 nút bấm để bạn chọn gói thời hạn bằng 1 click chuột!'
+                }
+            )
+            .setFooter({ text: 'Bản quyền Hoàng Bảo • PostHub Pro' });
+
+        await message.reply({ embeds: [guideEmbed] });
+        return;
+    }
+
+    let hwid = rawHwid.trim().toUpperCase();
+    if (!hwid.startsWith('HB-') && !hwid.includes('-')) {
+        hwid = 'HB-' + hwid;
+    }
+
+    // 2. Chỉ nhập HWID chưa có số ngày -> Hiện 4 nút bấm chọn thời hạn
+    if (rawDays === undefined) {
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`discord_keygen_${hwid}_3`)
+                .setLabel('🎁 Dùng thử 3 ngày')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId(`discord_keygen_${hwid}_30`)
+                .setLabel('⭐ 1 Tháng (30 ngày)')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId(`discord_keygen_${hwid}_365`)
+                .setLabel('👑 1 Năm (365 ngày)')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId(`discord_keygen_${hwid}_0`)
+                .setLabel('💎 VĨNH VIỄN (Lifetime)')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+        const selectEmbed = new EmbedBuilder()
+            .setColor(0x9b59b6)
+            .setTitle('⚡ CHỌN THỜI HẠN BẢN QUYỀN CHO KHÁCH')
+            .setDescription(`Mã máy khách hàng: **\`${hwid}\`**\n\n👉 Bấm một trong các nút dưới đây để phát hành License Key ngay:`)
+            .setFooter({ text: 'Bấm nút để sinh key và mẫu tin nhắn Zalo tức thì' });
+
+        await message.reply({ embeds: [selectEmbed], components: [row] });
+        return;
+    }
+
+    // 3. Đã nhập đủ HWID và số ngày
+    let days = 30;
+    const lowerDays = rawDays.toLowerCase();
+    if (lowerDays === '0' || lowerDays === 'lifetime' || lowerDays === 'vinhvien' || lowerDays === 'vv') {
+        days = 0;
+    } else {
+        const parsed = parseInt(rawDays, 10);
+        days = isNaN(parsed) ? 30 : parsed;
+    }
+
+    try {
+        const key = generateLicenseKey(hwid, days);
+        const { embed } = buildKeygenEmbed(hwid, days, key);
+        await message.reply({ embeds: [embed] });
+        await dbAsync.log('info', `[Discord Keygen] Admin đã phát hành key cho máy [${hwid}] thời hạn: ${days === 0 ? 'Vĩnh viễn' : days + ' ngày'}.`);
+    } catch (err) {
+        await message.reply(`❌ **Lỗi khi tạo key:** ${err.message}`);
+    }
+}
+
+/**
+ * Xử lý khi bấm nút chọn thời hạn keygen trên Discord
+ */
+async function handleDiscordKeygenButton(interaction) {
+    const parts = interaction.customId.split('_');
+    const hwid = parts[2];
+    const days = parseInt(parts[3], 10);
+
+    try {
+        const key = generateLicenseKey(hwid, days);
+        const { embed } = buildKeygenEmbed(hwid, days, key);
+        await interaction.update({
+            content: `✅ **ĐÃ PHÁT HÀNH KEY CHO MÁY \`${hwid}\`!**`,
+            embeds: [embed],
+            components: []
+        });
+        await dbAsync.log('info', `[Discord Keygen] Admin đã phát hành key bằng nút bấm cho máy [${hwid}] (${days === 0 ? 'Vĩnh viễn' : days + ' ngày'}).`);
+    } catch (err) {
+        await interaction.reply({ content: `❌ **Lỗi tạo key:** ${err.message}`, ephemeral: true });
+    }
+}
+
+/**
  * Khởi động Discord Bot
  */
 async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
@@ -633,6 +782,13 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                     const listStr = activeGroups.slice(0, 15).map((g, i) => `${i + 1}. **${g.name}**`).join('\n');
                     const extra = activeGroups.length > 15 ? `\n... và ${activeGroups.length - 15} nhóm khác.` : '';
                     await message.reply(`👥 **Danh sách ${activeGroups.length} nhóm Facebook đang kích hoạt cho tài khoản ${matchedUser.username}:**\n\n${listStr}${extra}`);
+                    return;
+                }
+
+                // Lệnh tạo key bản quyền PostHub Pro từ Discord
+                const lowerText = text.toLowerCase();
+                if (lowerText === '!keygen' || lowerText.startsWith('!keygen ') || lowerText === '!key' || lowerText.startsWith('!key ')) {
+                    await handleDiscordKeygenCommand(message, text, matchedUser);
                     return;
                 }
 
@@ -1001,6 +1157,12 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                 }
                 return;
             }
+
+            // 5. Bấm NÚT TẠO KEY BẢN QUYỀN (1-Chạm)
+            if (interaction.isButton() && interaction.customId.startsWith('discord_keygen_')) {
+                await handleDiscordKeygenButton(interaction);
+                return;
+            }
         });
 
         client.on('error', async (err) => {
@@ -1094,5 +1256,8 @@ module.exports = {
     getEffectiveImagesDir,
     getUserForDiscordChannel,
     buildPublishResultEmbed,
-    notifyDiscordPostResult
+    notifyDiscordPostResult,
+    buildKeygenEmbed,
+    handleDiscordKeygenCommand,
+    handleDiscordKeygenButton
 };
