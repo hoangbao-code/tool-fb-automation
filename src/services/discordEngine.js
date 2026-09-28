@@ -54,8 +54,10 @@ async function getUserForDiscordChannel(channelId) {
     return null;
 }
 
+const { getDataDir } = require('../paths');
+
 // Thư mục lưu trữ ảnh mặc định từ Discord
-const defaultImagesDir = path.join(__dirname, '..', '..', 'data', 'images');
+const defaultImagesDir = getDataDir('images');
 
 /**
  * Lấy thư mục lưu ảnh thực tế (do người dùng chỉ định trong Cài đặt hoặc mặc định data/images)

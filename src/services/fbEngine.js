@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { dbAsync } = require('../db');
+const { getDataDir } = require('../paths');
 const { spinPostForGroup } = require('./gemini');
 const { executeGroupPost } = require('./fbPoster');
 const { checkCurrentLicense } = require('./licenseEngine');
@@ -125,7 +126,7 @@ async function cleanupPostImages(imagesInput, postId = null) {
     // 2. Quét dọn thêm các file ảnh giải nén từ zip theo tiền tố post_${postId}_* trong thư mục images
     if (postId) {
         try {
-            const defaultImagesDir = path.join(__dirname, '..', '..', 'data', 'images');
+            const defaultImagesDir = getDataDir('images');
             const dirsToCheck = [defaultImagesDir];
             const customRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'discord_image_save_dir'`);
             if (customRow && customRow.value && customRow.value.trim().length > 0) {

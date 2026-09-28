@@ -2,19 +2,9 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
-let dataDir = path.join(__dirname, '..', 'data');
-try {
-    const electron = require('electron');
-    const app = electron?.app || (electron?.remote?.app);
-    if (app && app.isPackaged && typeof app.getPath === 'function') {
-        dataDir = path.join(app.getPath('userData'), 'data');
-    }
-} catch (e) {}
+const { getDataDir } = require('./paths');
 
-if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-}
-
+const dataDir = getDataDir();
 const dbPath = path.join(dataDir, 'posthub_desktop.sqlite');
 const db = new sqlite3.Database(dbPath);
 

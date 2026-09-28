@@ -3,10 +3,9 @@ const fs = require('fs');
 const { dbAsync } = require('../db');
 const { publishPost } = require('./fbEngine');
 
-const profilesDir = path.join(__dirname, '..', '..', 'data', 'profiles');
-if (!fs.existsSync(profilesDir)) {
-    fs.mkdirSync(profilesDir, { recursive: true });
-}
+const { getDataDir } = require('../paths');
+
+const profilesDir = getDataDir('profiles');
 
 /**
  * Trả về thư mục profile của từng nhân viên

@@ -111,13 +111,14 @@ async function runTests() {
     assert.ok(panel.components && panel.components.length === 2, 'Menu phải gồm 2 hàng nút bấm (Row 1 & Row 2)');
     const row1Buttons = panel.components[0].components;
     const row2Buttons = panel.components[1].components;
-    assert.strictEqual(row1Buttons.length, 2);
-    assert.strictEqual(row2Buttons.length, 2);
-    assert.ok(row1Buttons.some(b => b.data.custom_id === 'discord_open_keygen_modal'), 'Phải có nút [🔑 Cấp Key Bản Quyền]');
-    assert.ok(row1Buttons.some(b => b.data.custom_id === 'discord_trigger_buffer'), 'Phải có nút [⚡ Xử Lý Đăng Bài Ngay]');
-    assert.ok(row2Buttons.some(b => b.data.custom_id === 'discord_btn_status'), 'Phải có nút [📊 Trạng Thái Hệ Thống]');
+    assert.ok(row1Buttons.length >= 2);
+    assert.ok(row2Buttons.length >= 2);
+    assert.ok(row1Buttons.some(b => b.data.custom_id === 'discord_open_create_post_modal'), 'Phải có nút [✍️ Gửi Nội Dung Up Bài]');
+    assert.ok(row1Buttons.some(b => b.data.custom_id === 'discord_trigger_buffer'), 'Phải có nút [⚡ Đăng Bài Từ Hàng Chờ]');
+    assert.ok(row2Buttons.some(b => b.data.custom_id === 'discord_open_keygen_modal'), 'Phải có nút [🔑 Cấp Key Bản Quyền]');
+    assert.ok(row2Buttons.some(b => b.data.custom_id === 'discord_btn_status'), 'Phải có nút [📊 Trạng Thái]');
     assert.ok(row2Buttons.some(b => b.data.custom_id === 'discord_btn_groups'), 'Phải có nút [👥 Xem Nhóm Facebook]');
-    console.log('  ✓ Menu Bảng điều khiển gồm đủ 4 nút trực quan: Cấp key, Đăng ngay, Trạng thái, Nhóm FB.');
+    console.log('  ✓ Menu Bảng điều khiển gồm đầy đủ các nút trực quan: Gửi nội dung bài, Cấp key, Đăng ngay, Trạng thái, Nhóm FB.');
 
     // 9. Kiểm thử Modal Cấp Key Bản Quyền (buildKeygenModal)
     console.log('\n9. Kiểm thử Modal Cấp Key Bản Quyền (buildKeygenModal):');

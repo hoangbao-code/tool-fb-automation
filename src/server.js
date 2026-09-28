@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const os = require('os');
 const { dbAsync } = require('./db');
+const { getDataDir } = require('./paths');
 const {
     getUserFbStatus,
     saveUserFbCookies,
@@ -38,7 +39,7 @@ function createServer() {
     const publicDir = path.join(__dirname, '..', 'public');
     app.use(express.static(publicDir));
     // Phục vụ thư mục ảnh data/images
-    const imagesDir = path.join(__dirname, '..', 'data', 'images');
+    const imagesDir = getDataDir('images');
     app.use('/data/images', express.static(imagesDir));
 
     // Middleware trích xuất thông tin người dùng

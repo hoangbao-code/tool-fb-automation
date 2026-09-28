@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const dotenv = require('dotenv');
 const { dbAsync } = require('./db');
+const { getDataDir } = require('./paths');
 const { testGemini, rewriteWithGemini } = require('./services/gemini');
 const { processZaloMessage, setEventBroadcaster } = require('./services/zaloEngine');
 const {
@@ -889,7 +890,7 @@ ipcMain.handle('open-directory', async (event, dirPath) => {
         const { shell } = require('electron');
         let target = dirPath;
         if (!target) {
-            target = path.join(__dirname, '..', 'data', 'images');
+            target = getDataDir('images');
         }
         if (!fs.existsSync(target)) {
             fs.mkdirSync(target, { recursive: true });
