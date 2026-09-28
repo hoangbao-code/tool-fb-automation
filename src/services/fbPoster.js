@@ -79,6 +79,24 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
         const imagesToUpload = ${JSON.stringify(imagesData || [])};
         const startTime = Date.now();
 
+        // Hàm kích hoạt sự kiện click toàn diện (Pointer, Mouse, Native) tương thích React 18+
+        function clickElement(el) {
+            if (!el) return;
+            try { el.focus(); } catch (e) {}
+            const rect = el.getBoundingClientRect();
+            const x = rect.left + rect.width / 2;
+            const y = rect.top + rect.height / 2;
+            const eventInit = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y };
+            try { el.dispatchEvent(new PointerEvent('pointerdown', eventInit)); } catch (e) {}
+            try { el.dispatchEvent(new MouseEvent('mousedown', eventInit)); } catch (e) {}
+            try { el.dispatchEvent(new PointerEvent('pointerup', eventInit)); } catch (e) {}
+            try { el.dispatchEvent(new MouseEvent('mouseup', eventInit)); } catch (e) {}
+            try { el.dispatchEvent(new MouseEvent('click', eventInit)); } catch (e) {}
+            if (typeof el.click === 'function') {
+                try { el.click(); } catch (e) {}
+            }
+        }
+
         // 1. Kiểm tra nếu bị chuyển hướng về trang đăng nhập
         if (window.location.href.includes('/login') || window.location.href.includes('checkpoint')) {
             return { success: false, error: 'Chưa đăng nhập Facebook hoặc phiên đã hết hạn. Hãy đăng nhập lại trong tab Facebook Web.' };
@@ -124,18 +142,19 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
                 return { success: false, error: 'Không tìm thấy khung tạo bài viết trong nhóm này (Có thể bạn chưa được duyệt vào nhóm hoặc nhóm đã khóa đăng bài).' };
             }
         } else {
-            triggerBtn.click();
+            clickElement(triggerBtn);
         }
 
         // 3. Chờ Dialog tạo bài viết xuất hiện
-        let dialog = null;
+        let postDialog = null;
         let editor = null;
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < 25; i++) {
             await new Promise(r => setTimeout(r, 400));
-            dialog = document.querySelector('div[role="dialog"]');
-            const searchContext = dialog || document;
-            editor = searchContext.querySelector('div[role="textbox"][contenteditable="true"], div[contenteditable="true"]');
-            if (editor && editor.offsetParent !== null) break;
+            editor = document.querySelector('div[role="dialog"] div[role="textbox"][contenteditable="true"], div[role="dialog"] div[contenteditable="true"], div[data-pagelet="GroupInlineComposer"] div[contenteditable="true"], div[role="textbox"][contenteditable="true"]');
+            if (editor && editor.offsetParent !== null) {
+                postDialog = editor.closest('div[role="dialog"]') || document.querySelector('div[role="dialog"]');
+                break;
+            }
         }
 
         if (!editor) {
@@ -281,70 +300,183 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
             }
         }
 
-        // 5. Tìm nút "Đăng" / "Post"
+        // 5. Tìm nút "Đăng" / "Post" / "Gửi" / "Submit"
+        const submitKeywords = [
+            'đăng', 'post', 'gửi', 'submit', 'chia sẻ', 'share',
+            'gửi bài viết', 'submit post', 'tiếp', 'next', 'xác nhận', 'confirm'
+        ];
+
         function findSubmitButton() {
-            const searchContext = document.querySelector('div[role="dialog"]') || document;
+            const searchContext = postDialog || document.querySelector('div[role="dialog"]') || document;
             const buttons = Array.from(searchContext.querySelectorAll('div[role="button"], button'));
-            for (const b of buttons) {
+            for (let i = buttons.length - 1; i >= 0; i--) {
+                const b = buttons[i];
+                if (b.offsetParent === null) continue;
                 const aria = (b.getAttribute('aria-label') || '').trim().toLowerCase();
                 const text = (b.innerText || b.textContent || '').trim().toLowerCase();
-                const isDisabled = b.getAttribute('aria-disabled') === 'true' || b.disabled;
+                const isDisabled = b.getAttribute('aria-disabled') === 'true' || b.disabled || b.classList.contains('disabled');
 
-                if ((aria === 'đăng' || aria === 'post' || text === 'đăng' || text === 'post') && !isDisabled) {
-                    return b;
+                for (const kw of submitKeywords) {
+                    if ((aria === kw || text === kw || aria.startsWith(kw) || text.startsWith(kw)) && !isDisabled) {
+                        return b;
+                    }
                 }
             }
             return null;
         }
 
         let submitBtn = null;
-        for (let i = 0; i < 15; i++) {
+        for (let i = 0; i < 20; i++) {
             submitBtn = findSubmitButton();
             if (submitBtn) break;
             await new Promise(r => setTimeout(r, 300));
         }
 
         if (!submitBtn) {
-            return { success: false, error: 'Không tìm thấy nút "Đăng" khả dụng (Nội dung có thể chưa hợp lệ).' };
+            return { success: false, error: 'Không tìm thấy nút "Đăng" hoặc "Gửi" khả dụng (Nội dung có thể chưa hợp lệ).' };
         }
 
         // Bấm nút Đăng
-        submitBtn.click();
+        clickElement(submitBtn);
 
         // 6. Chờ Facebook xử lý đăng bài (Chờ dialog đóng hoặc toast hiển thị)
         let isPosted = false;
         let isPendingApproval = false;
         const waitSubmitStart = Date.now();
 
-        while (Date.now() - waitSubmitStart < 35000) {
+        // Tự động xử lý pop-up Quy tắc nhóm (Group Rules) hoặc xác nhận câu hỏi
+        function handleGroupRulesAndConfirmations() {
+            try {
+                // Tự động tích checkbox đồng ý nếu có
+                const checkboxes = Array.from(document.querySelectorAll('input[type="checkbox"], div[role="checkbox"]'));
+                for (const cb of checkboxes) {
+                    const isChecked = cb.checked || cb.getAttribute('aria-checked') === 'true';
+                    if (!isChecked && cb.offsetParent !== null) {
+                        clickElement(cb);
+                    }
+                }
+
+                // Tìm nút "Đồng ý" / "Gửi" / "Submit" trong các dialog xác nhận
+                const dialogs = Array.from(document.querySelectorAll('div[role="dialog"]'));
+                for (const d of dialogs) {
+                    const dText = (d.innerText || '').toLowerCase();
+                    if (dText.includes('quy tắc nhóm') || dText.includes('group rules') || dText.includes('trước khi đăng bài') || dText.includes('before you post')) {
+                        const btns = Array.from(d.querySelectorAll('div[role="button"], button'));
+                        for (const b of btns) {
+                            if (b.offsetParent === null) continue;
+                            const bText = (b.innerText || b.textContent || '').trim().toLowerCase();
+                            const bAria = (b.getAttribute('aria-label') || '').trim().toLowerCase();
+                            if (bText === 'tôi đồng ý' || bText === 'đồng ý' || bText === 'i agree' || bText === 'agree' ||
+                                bText === 'gửi' || bText === 'submit' || bText === 'xác nhận' || bText === 'confirm' ||
+                                bText === 'hoàn tất' || bText === 'done' || bAria === 'tôi đồng ý' || bAria === 'i agree') {
+                                clickElement(b);
+                                return true;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {}
+            return false;
+        }
+
+        while (Date.now() - waitSubmitStart < 40000) {
             await new Promise(r => setTimeout(r, 1000));
 
-            // Kiểm tra thông báo chờ duyệt
+            // Tự động giải quyết popup quy tắc nhóm
+            handleGroupRulesAndConfirmations();
+
             const bodyText = (document.body.innerText || '').toLowerCase();
-            if (bodyText.includes('chờ quản trị viên phê duyệt') || 
-                bodyText.includes('đang chờ phê duyệt') || 
-                bodyText.includes('pending approval') || 
-                bodyText.includes('submitted for approval')) {
-                isPendingApproval = true;
+
+            // A. Dấu hiệu bài đang chờ Quản trị viên duyệt
+            const pendingKeywords = [
+                'chờ quản trị viên phê duyệt',
+                'đang chờ phê duyệt',
+                'quản trị viên sẽ phê duyệt',
+                'chờ phê duyệt',
+                'đã gửi bài viết cho quản trị viên',
+                'bài viết của bạn đã được gửi',
+                'bài viết đang chờ',
+                'pending approval',
+                'submitted for approval',
+                'waiting for approval',
+                'must be approved by an admin',
+                'admin must approve',
+                'post has been submitted'
+            ];
+            for (const kw of pendingKeywords) {
+                if (bodyText.includes(kw)) {
+                    isPendingApproval = true;
+                    isPosted = true;
+                    break;
+                }
+            }
+            if (isPosted) break;
+
+            // B. Dấu hiệu đăng thành công (Toast / Notification)
+            const successKeywords = [
+                'đã đăng bài viết của bạn',
+                'bài viết của bạn đã được đăng',
+                'đã chia sẻ bài viết',
+                'bài viết của bạn hiện đã hiển thị',
+                'your post was shared',
+                'your post has been published',
+                'your post is now published',
+                'post published'
+            ];
+            for (const skw of successKeywords) {
+                if (bodyText.includes(skw)) {
+                    isPosted = true;
+                    break;
+                }
+            }
+            if (isPosted) break;
+
+            // C. Dấu hiệu lỗi spam / chặn quyền
+            if (bodyText.includes('bạn tạm thời bị chặn') || bodyText.includes('you\\'re temporarily blocked') || bodyText.includes('hành động bị chặn')) {
+                return { success: false, error: 'Facebook tạm thời chặn tài khoản đăng bài vào nhóm này (Spam filter).' };
+            }
+            if (bodyText.includes('bạn không thể đăng bài trong nhóm này') || bodyText.includes('you can\\'t post to this group')) {
+                return { success: false, error: 'Tài khoản không có quyền đăng bài trong nhóm này.' };
+            }
+
+            // D. Kiểm tra xem Post Dialog đã ĐÓNG THỰC SỰ hay chưa (tránh bị lừa bởi Messenger dock)
+            let isTargetDialogClosed = true;
+            if (postDialog && document.body.contains(postDialog)) {
+                try {
+                    const isVisible = postDialog.offsetParent !== null && 
+                                     postDialog.getAttribute('aria-hidden') !== 'true' &&
+                                     window.getComputedStyle(postDialog).display !== 'none' &&
+                                     window.getComputedStyle(postDialog).visibility !== 'hidden';
+                    isTargetDialogClosed = !isVisible;
+                } catch (e) {
+                    isTargetDialogClosed = true;
+                }
+            }
+
+            const isEditorGone = !editor || !document.body.contains(editor) || editor.offsetParent === null;
+
+            if (isTargetDialogClosed || isEditorGone) {
                 isPosted = true;
                 break;
             }
 
-            // Kiểm tra thông báo lỗi checkpoint hoặc spam
-            if (bodyText.includes('bạn tạm thời bị chặn') || bodyText.includes('you\\'re temporarily blocked')) {
-                return { success: false, error: 'Facebook tạm thời chặn tài khoản đăng bài vào nhóm (Spam filter).' };
-            }
-
-            // Dialog đã đóng chứng tỏ bài đã gửi thành công
-            const curDialog = document.querySelector('div[role="dialog"]');
-            if (!curDialog) {
-                isPosted = true;
-                break;
+            // E. Nếu sau 6 giây mà nút Submit vẫn còn khả dụng và chưa bị vô hiệu hóa, thử click lại
+            if (Date.now() - waitSubmitStart > 6000 && Math.floor((Date.now() - waitSubmitStart) / 1000) % 5 === 0) {
+                const retryBtn = findSubmitButton();
+                if (retryBtn) {
+                    clickElement(retryBtn);
+                }
             }
         }
 
         if (!isPosted) {
-            return { success: false, error: 'Hết thời gian chờ Facebook xử lý đăng bài.' };
+            // Kiểm tra xem có thông báo lỗi cụ thể nào bên trong dialog không
+            const dText = postDialog ? (postDialog.innerText || '').trim() : '';
+            if (dText.includes('lỗi') || dText.includes('error') || dText.includes('không thể') || dText.includes('failed')) {
+                const errSnippet = dText.substring(0, 150).replace(/\\s+/g, ' ');
+                return { success: false, error: 'Facebook báo lỗi: ' + errSnippet };
+            }
+            return { success: false, error: 'Hết thời gian chờ Facebook xử lý đăng bài (Có thể nhóm yêu cầu trả lời câu hỏi thành viên hoặc kiểm duyệt).' };
         }
 
         // Đợi thêm 2 giây để Facebook render bài viết lên đầu trang
