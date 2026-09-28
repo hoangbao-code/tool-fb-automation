@@ -11,7 +11,7 @@ async function runMultiChannelDiscordTest() {
     try {
         // 1. Tạo nhân viên mẫu kèm kênh Discord riêng
         const testChannelAdmin = '1538337526530707548';
-        const testChannelStaff = '998877665544332211';
+        const testChannelStaff = '99' + Date.now().toString().slice(-16);
         const testChannelStranger = '111111111111111111';
 
         const testStaff = await dbAsync.createUser({

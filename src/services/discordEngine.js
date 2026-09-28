@@ -39,14 +39,14 @@ async function getUserForDiscordChannel(channelId) {
         // 1. Tìm nhân viên được gán kênh này trong bảng users
         const user = await dbAsync.get(
             `SELECT id, username, display_name, role, discord_channel_id FROM users WHERE discord_channel_id = ? AND discord_channel_id != ''`,
-            [channelId]
+            [String(channelId).trim()]
         );
         if (user) return user;
 
         // 2. Nếu là kênh chính của Admin (cấu hình trong Tool Desktop)
-        if (currentConfig && channelId === currentConfig.channelId) {
+        if (currentConfig && currentConfig.channelId && String(channelId).trim() === String(currentConfig.channelId).trim()) {
             const admin = await dbAsync.getUserById(1);
-            return admin || { id: 1, username: 'admin', role: 'admin', display_name: 'Quản Trị Viên' };
+            return admin || { id: 1, username: 'admin', role: 'admin', display_name: 'Hoàng Bảo' };
         }
     } catch (e) {
         console.error('[Discord] Lỗi tìm user theo channelId:', e);
@@ -823,7 +823,7 @@ async function checkChannelAndUserAccess(channelId, user) {
     if (!channelId || !user) return { allowed: false, reason: 'invalid_params' };
 
     // 1. Phải là kênh được cài đặt trong Tool Desktop
-    if (currentConfig && currentConfig.channelId && channelId !== currentConfig.channelId) {
+    if (currentConfig && currentConfig.channelId && String(channelId) !== String(currentConfig.channelId)) {
         return { allowed: false, reason: 'wrong_channel' };
     }
 
@@ -831,7 +831,7 @@ async function checkChannelAndUserAccess(channelId, user) {
     try {
         const ownerRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'discord_owner_user_id'`);
         if (ownerRow && ownerRow.value) {
-            if (ownerRow.value !== user.id) {
+            if (String(ownerRow.value) !== String(user.id)) {
                 return {
                     allowed: false,
                     reason: 'not_owner',
@@ -844,7 +844,7 @@ async function checkChannelAndUserAccess(channelId, user) {
             await dbAsync.run(
                 `INSERT INTO settings (key, value) VALUES ('discord_owner_user_id', ?)
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-                [user.id]
+                [String(user.id)]
             );
             await dbAsync.log('info', `[Discord] 🔒 ĐÃ TỰ ĐỘNG KHÓA KÊNH ĐỘC QUYỀN cho chủ sở hữu: ${user.tag || user.username} (ID: ${user.id}).`);
         }
@@ -1163,8 +1163,9 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
 
         // Xử lý khi người dùng tương tác trên Discord (Slash Commands, Select Menu, Nút bấm, Modal)
         client.on('interactionCreate', async (interaction) => {
-            // Bỏ qua nếu từ bot
-            if (interaction.user.bot) return;
+            try {
+                // Bỏ qua nếu từ bot
+                if (interaction.user.bot) return;
 
             // Xác thực quyền riêng tư: Kênh độc quyền của riêng Hoàng Bảo
             const access = await checkChannelAndUserAccess(interaction.channelId, interaction.user);
@@ -1300,8 +1301,7 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
             }
 
             // Xác định kênh và người dùng tương ứng (Admin hoặc Nhân viên)
-            const matchedUser = await getUserForDiscordChannel(interaction.channelId);
-            if (!matchedUser) return; // Không thuộc kênh quản lý -> Bỏ qua
+            const matchedUser = (await getUserForDiscordChannel(interaction.channelId)) || { id: 1, username: 'hoangbao', role: 'admin', display_name: 'Hoàng Bảo' };
 
             // Helper an toàn để tránh xung đột double-click trên Discord API
             const safeDeferUpdate = async () => {
@@ -1791,6 +1791,23 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                     });
                 }
                 return;
+            }
+        } catch (globalErr) {
+                console.error('[Discord] Lỗi xử lý interactionCreate:', globalErr);
+                try {
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: `⚠️ Có lỗi xảy ra khi xử lý: ${globalErr.message}`,
+                            ephemeral: true
+                        });
+                    } else if (interaction.deferred) {
+                        await interaction.editReply({
+                            content: `⚠️ Có lỗi xảy ra khi xử lý: ${globalErr.message}`
+                        });
+                    }
+                } catch (sendErr) {
+                    console.error('[Discord] Không thể gửi thông báo lỗi interaction:', sendErr.message);
+                }
             }
         });
 
