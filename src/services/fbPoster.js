@@ -121,6 +121,19 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
         if (!triggerBtn) {
             // Kiểm tra xem dialog đã mở sẵn chưa
             if (!document.querySelector('div[role="dialog"]')) {
+                const pageText = (document.body.innerText || '').toLowerCase();
+                if (pageText.includes('tham gia nhóm') || pageText.includes('join group')) {
+                    return { success: false, error: 'Tài khoản chưa tham gia nhóm này. Vui lòng bấm Tham Gia Nhóm trên Facebook trước.' };
+                }
+                if (pageText.includes('đã gửi yêu cầu') || pageText.includes('request sent') || pageText.includes('yêu cầu tham gia')) {
+                    return { success: false, error: 'Đang chờ Quản trị viên duyệt tham gia nhóm (Chưa phải thành viên chính thức).' };
+                }
+                if (pageText.includes('chỉ quản trị viên mới có thể đăng') || pageText.includes('only admins can post')) {
+                    return { success: false, error: 'Nhóm này cài đặt chỉ cho phép Quản trị viên (Admin) đăng bài.' };
+                }
+                if (pageText.includes('tạm thời bị chặn') || pageText.includes('temporarily blocked') || pageText.includes('hạn chế')) {
+                    return { success: false, error: 'Tài khoản đang bị Facebook tạm khóa tính năng đăng bài trong nhóm này (Spam filter).' };
+                }
                 return { success: false, error: 'Không tìm thấy khung tạo bài viết trong nhóm này (Có thể bạn chưa được duyệt vào nhóm hoặc nhóm đã khóa đăng bài).' };
             }
         } else {
@@ -614,14 +627,17 @@ async function executeGroupPost({ webContents, cookies, groupUrl, groupName, con
     }
 
     if (effectiveCookies && effectiveCookies.trim().length > 10) {
-        console.log(`[FB Poster] Sử dụng Direct Cookies để đăng bài vào [${groupName}]...`);
+        console.log(`[FB Poster] Thử phương án dự phòng Direct Cookies vào [${groupName}]...`);
         const cookieRes = await postViaCookies(effectiveCookies, { groupUrl, content });
-        return cookieRes;
+        if (cookieRes.success) {
+            return cookieRes;
+        }
+        console.warn(`[FB Poster] Phương án cookie dự phòng cũng không thành công: ${cookieRes.error}`);
     }
 
     return {
         success: false,
-        error: lastError || 'Chưa mở Webview Facebook và không tìm thấy Cookie Facebook hợp lệ để đăng bài.'
+        error: lastError || 'Chưa mở Webview Facebook hoặc tài khoản chưa có quyền đăng bài trong nhóm này.'
     };
 }
 
