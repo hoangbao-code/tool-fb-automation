@@ -27,6 +27,15 @@ function getDataDir(subDir = '') {
         }
     } catch (err) {}
 
+    // Tự động đồng bộ database ban đầu nếu database đích chưa có
+    try {
+        const targetDb = path.join(baseDataDir, 'posthub_desktop.sqlite');
+        const sourceDb = path.join(__dirname, '..', 'data', 'posthub_desktop.sqlite');
+        if (!fs.existsSync(targetDb) && fs.existsSync(sourceDb)) {
+            fs.copyFileSync(sourceDb, targetDb);
+        }
+    } catch (e) {}
+
     return fullPath;
 }
 
