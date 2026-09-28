@@ -305,8 +305,116 @@ function buildPublishResultEmbed(postId, targetLabel, postedGroups = [], failedG
 }
 
 /**
+ * Xuất danh sách link bài viết đã đăng ra file text (.txt)
+ */
+async function exportPostLinksToFile(postId, result = {}) {
+    const exportsDir = getDataDir('exports');
+    const timestampStr = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `links_post_${postId}_${timestampStr}.txt`;
+    const filePath = path.join(exportsDir, filename);
+
+    const postedGroups = result.groups || [];
+    const failedGroups = result.failed || [];
+    const directGroups = postedGroups.filter(g => g.status === 'posted');
+    const pendingGroups = postedGroups.filter(g => g.status === 'pending_approval');
+
+    let lines = [];
+    lines.push('================================================================');
+    lines.push(`       BÁO CÁO KẾT QUẢ ĐĂNG BÀI FACEBOOK - POSTHUB PRO`);
+    lines.push('================================================================');
+    lines.push(`Mã bài viết (Post ID) : #${postId}`);
+    lines.push(`Thời gian hoàn tất    : ${new Date().toLocaleString('vi-VN')}`);
+    lines.push(`Tổng số nhóm xử lý    : ${postedGroups.length + failedGroups.length} nhóm`);
+    lines.push(`  - Đã đăng công khai : ${directGroups.length} nhóm`);
+    lines.push(`  - Chờ QTV phê duyệt : ${pendingGroups.length} nhóm`);
+    lines.push(`  - Thất bại / Lỗi    : ${failedGroups.length} nhóm`);
+    lines.push('================================================================\r\n');
+
+    if (directGroups.length > 0) {
+        lines.push('DANH SÁCH BÀI VIẾT ĐÃ ĐĂNG CÔNG KHAI (XEM ĐƯỢC NGAY):');
+        lines.push('----------------------------------------------------------------');
+        directGroups.forEach((g, idx) => {
+            lines.push(`${idx + 1}. [${g.name}]`);
+            lines.push(`   Link bài viết: ${g.postUrl || g.url}`);
+            lines.push('');
+        });
+        lines.push('\r\n');
+    }
+
+    if (pendingGroups.length > 0) {
+        lines.push('DANH SÁCH BÀI VIẾT ĐANG CHỜ PHÊ DUYỆT (CHỜ ADMIN DUYỆT):');
+        lines.push('----------------------------------------------------------------');
+        pendingGroups.forEach((g, idx) => {
+            lines.push(`${idx + 1}. [${g.name}] (Đang chờ duyệt)`);
+            lines.push(`   Link xem bài chờ: ${g.postUrl || g.url}`);
+            lines.push('');
+        });
+        lines.push('\r\n');
+    }
+
+    if (failedGroups.length > 0) {
+        lines.push('DANH SÁCH NHÓM ĐĂNG THẤT BẠI:');
+        lines.push('----------------------------------------------------------------');
+        failedGroups.forEach((f, idx) => {
+            lines.push(`${idx + 1}. [${f.name}]`);
+            lines.push(`   Lý do lỗi: ${f.error}`);
+            lines.push('');
+        });
+        lines.push('\r\n');
+    }
+
+    lines.push('================================================================');
+    lines.push('Hệ thống PostHub Pro Automation • Bản quyền Hoàng Bảo');
+    lines.push('================================================================\r\n');
+
+    const content = lines.join('\r\n');
+    fs.writeFileSync(filePath, content, 'utf8');
+    return filePath;
+}
+
+/**
+ * Gửi thông báo tức thì lên Discord khi đăng xong một nhóm (theo thời gian thực)
+ */
+async function notifyDiscordGroupStep({ postId, step, total, groupName, groupUrl, status, postUrl, error, userId }) {
+    if (!discordClient || !discordClient.isReady()) return;
+
+    try {
+        let targetChannelId = null;
+        if (userId) {
+            const user = await dbAsync.getUserById(userId);
+            if (user?.discord_channel_id) {
+                targetChannelId = user.discord_channel_id;
+            }
+        }
+        if (!targetChannelId && currentConfig?.channelId) {
+            targetChannelId = currentConfig.channelId;
+        }
+        if (!targetChannelId) return;
+
+        const channel = await discordClient.channels.fetch(targetChannelId).catch(() => null);
+        if (!channel || !channel.isTextBased()) return;
+
+        let content = '';
+        if (status === 'posted') {
+            const link = postUrl || groupUrl || 'https://www.facebook.com/groups';
+            content = `✅ **[#${step}/${total}]** Nhóm **[${groupName}](${link})** — **ĐÃ ĐĂNG THÀNH CÔNG!**\n   ↳ 🔗 **Link bài viết:** ${link}`;
+        } else if (status === 'pending_approval') {
+            const link = postUrl || groupUrl || 'https://www.facebook.com/groups';
+            content = `⏳ **[#${step}/${total}]** Nhóm **[${groupName}](${link})** — **ĐANG CHỜ PHÊ DUYỆT!**\n   ↳ 🔗 **Link xem bài chờ:** ${link}`;
+        } else {
+            const errMsg = error || 'Không thể đăng bài';
+            content = `❌ **[#${step}/${total}]** Nhóm **[${groupName}](${groupUrl || 'https://www.facebook.com/groups'})** — **LỖI:** ${errMsg}`;
+        }
+
+        await channel.send({ content });
+    } catch (err) {
+        console.warn(`[DiscordEngine] Lỗi gửi thông báo bước nhóm #${step}:`, err.message);
+    }
+}
+
+/**
  * Gửi thông báo kết quả đăng bài trực tiếp vào Kênh Discord tương ứng
- * Tự động nhận diện bài chờ phê duyệt hay đã đăng thành công
+ * Tự động nhận diện bài chờ phê duyệt hay đã đăng thành công, đính kèm file link tải về
  */
 async function notifyDiscordPostResult(postId, result) {
     if (!discordClient || !discordClient.isReady()) return;
@@ -339,8 +447,25 @@ async function notifyDiscordPostResult(postId, result) {
         const targetLabel = post.target_fb_group || 'Nhóm Facebook';
         const embed = buildPublishResultEmbed(postId, targetLabel, postedGroups, failedGroups);
 
-        await channel.send({ embeds: [embed] });
-        console.log(`[DiscordEngine] Đã gửi thông báo xuất bản bài #${postId} tới kênh Discord #${channel.name || targetChannelId}`);
+        // Xuất file text danh sách link bài viết
+        let exportFile = null;
+        try {
+            exportFile = await exportPostLinksToFile(postId, result);
+        } catch (e) {
+            console.warn('[DiscordEngine] Lỗi tạo file export links:', e.message);
+        }
+
+        const payload = { embeds: [embed] };
+        if (exportFile && fs.existsSync(exportFile)) {
+            payload.files = [{
+                attachment: exportFile,
+                name: path.basename(exportFile)
+            }];
+            payload.content = `🎉 **HOÀN TẤT ĐĂNG BÀI #${postId}!**\n📥 Bot đã tổng hợp toàn bộ link bài viết và đính kèm file bên dưới để bạn tải về:`;
+        }
+
+        await channel.send(payload);
+        console.log(`[DiscordEngine] Đã gửi thông báo xuất bản bài #${postId} kèm file links tới kênh Discord #${channel.name || targetChannelId}`);
     } catch (err) {
         console.warn(`[DiscordEngine] Lỗi gửi thông báo xuất bản bài #${postId} vào Discord:`, err.message);
     }
@@ -1537,10 +1662,20 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                         const failedGroups = result.failed || [];
                         const embed = buildPublishResultEmbed(postId, targetLabel, postedGroups, failedGroups);
 
-                        await interaction.followUp({
-                            embeds: [embed],
-                            ephemeral: false
-                        });
+                        let exportFile = null;
+                        try {
+                            exportFile = await exportPostLinksToFile(postId, result);
+                        } catch (e) {
+                            console.warn('[Discord] Không thể xuất file tổng hợp link:', e.message);
+                        }
+
+                        const payload = { embeds: [embed], ephemeral: false };
+                        if (exportFile && fs.existsSync(exportFile)) {
+                            payload.files = [{ attachment: exportFile, name: path.basename(exportFile) }];
+                            payload.content = `🎉 **HOÀN TẤT ĐĂNG BÀI #${postId}!**\n📥 Bot đã tổng hợp toàn bộ link bài viết và đính kèm file bên dưới để bạn tải về:`;
+                        }
+
+                        await interaction.followUp(payload);
                     } else {
                         const errMsg = result?.stopped ? 'Quá trình đăng bài đã bị Dừng Khẩn Cấp từ Tool Desktop.' : (result?.error || 'Đăng bài không thành công hoặc không tìm thấy nhóm khả dụng.');
                         await dbAsync.log('warn', `[Discord] Đăng bài #${postId} không hoàn thành: ${errMsg}`);
@@ -1950,6 +2085,8 @@ module.exports = {
     getUserForDiscordChannel,
     buildPublishResultEmbed,
     notifyDiscordPostResult,
+    notifyDiscordGroupStep,
+    exportPostLinksToFile,
     buildKeygenEmbed,
     handleDiscordKeygenCommand,
     handleDiscordKeygenButton,

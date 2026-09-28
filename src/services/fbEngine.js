@@ -9,6 +9,18 @@ const { checkCurrentLicense } = require('./licenseEngine');
 let fbWebviewRef = null;
 let eventBroadcaster = null;
 let isWorkerStarted = false;
+let discordEngineModule = null;
+
+function getDiscordEngine() {
+    if (!discordEngineModule) {
+        try {
+            discordEngineModule = require('./discordEngine');
+        } catch (e) {
+            console.warn('[fbEngine] Không thể nạp discordEngine:', e.message);
+        }
+    }
+    return discordEngineModule;
+}
 
 function setFbWebview(wv) {
     fbWebviewRef = wv;
@@ -282,7 +294,7 @@ async function publishPost(postId, clusterId = null) {
 
         if (postRes && postRes.success) {
             const actualPostUrl = postRes.postUrl || group.url;
-            postedResults.push({
+            const resItem = {
                 groupId: group.id,
                 name: group.name,
                 url: group.url,
@@ -290,8 +302,28 @@ async function publishPost(postId, clusterId = null) {
                 status: postRes.status || 'posted',
                 message: postRes.message || 'Đã đăng thành công',
                 postedAt: new Date().toISOString()
-            });
+            };
+            postedResults.push(resItem);
             await dbAsync.log('info', `[Facebook] ✓ Đã đăng bài thành công vào nhóm [${group.name}]: ${actualPostUrl}`);
+
+            // Thông báo thời gian thực lên Discord cho từng nhóm
+            try {
+                const de = getDiscordEngine();
+                if (de?.notifyDiscordGroupStep) {
+                    await de.notifyDiscordGroupStep({
+                        postId,
+                        step: i + 1,
+                        total: shuffledGroups.length,
+                        groupName: group.name,
+                        groupUrl: group.url,
+                        status: resItem.status,
+                        postUrl: actualPostUrl,
+                        userId: post.user_id
+                    });
+                }
+            } catch (notifyErr) {
+                console.warn('[Facebook] Lỗi gửi thông báo Discord cho nhóm:', notifyErr.message);
+            }
         } else {
             const errMsg = postRes?.error || 'Không đăng được bài viết';
             failedResults.push({
@@ -301,6 +333,25 @@ async function publishPost(postId, clusterId = null) {
                 error: errMsg
             });
             await dbAsync.log('warn', `[Facebook] ✗ Không đăng được vào nhóm [${group.name}]: ${errMsg}`);
+
+            // Thông báo thời gian thực lên Discord khi nhóm bị lỗi
+            try {
+                const de = getDiscordEngine();
+                if (de?.notifyDiscordGroupStep) {
+                    await de.notifyDiscordGroupStep({
+                        postId,
+                        step: i + 1,
+                        total: shuffledGroups.length,
+                        groupName: group.name,
+                        groupUrl: group.url,
+                        status: 'failed',
+                        error: errMsg,
+                        userId: post.user_id
+                    });
+                }
+            } catch (notifyErr) {
+                console.warn('[Facebook] Lỗi gửi thông báo lỗi Discord cho nhóm:', notifyErr.message);
+            }
         }
 
         // Nghỉ giãn cách rải rác giữa các nhóm (trừ nhóm cuối cùng)
@@ -334,6 +385,17 @@ async function publishPost(postId, clusterId = null) {
                 cleanedImagesCount: cleanupInfo?.count || 0
             });
         }
+
+        // Thông báo kết quả tổng hợp + đính kèm file danh sách link bài viết lên Discord
+        try {
+            const de = getDiscordEngine();
+            if (de?.notifyDiscordPostResult) {
+                await de.notifyDiscordPostResult(postId, { groups: postedResults, failed: failedResults });
+            }
+        } catch (sumErr) {
+            console.warn('[Facebook] Lỗi gửi thông báo tổng hợp lên Discord:', sumErr.message);
+        }
+
         await dbAsync.log('info', `✓ Đã hoàn tất đăng bài #${postId}: Đăng thành công ${postedResults.length}/${shuffledGroups.length} nhóm và đã thu thập link bài viết!`);
         return { 
             success: true, 
