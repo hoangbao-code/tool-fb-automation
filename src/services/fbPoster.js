@@ -213,9 +213,18 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
         // 3. Chờ Dialog tạo bài viết xuất hiện
         let postDialog = null;
         let editor = null;
-        for (let i = 0; i < 25; i++) {
+        for (let i = 0; i < 30; i++) {
             await new Promise(r => setTimeout(r, 400));
-            editor = document.querySelector('div[role="dialog"] div[role="textbox"][contenteditable="true"], div[role="dialog"] div[contenteditable="true"], div[data-pagelet="GroupInlineComposer"] div[contenteditable="true"], div[role="textbox"][contenteditable="true"]');
+            editor = document.querySelector(
+                'div[role="dialog"] div[data-lexical-editor="true"], ' +
+                'div[role="dialog"] div[role="textbox"][contenteditable="true"], ' +
+                'div[role="dialog"] div[contenteditable="true"], ' +
+                'div[role="dialog"] div[aria-label*="Tạo bài viết"], ' +
+                'div[role="dialog"] div[aria-label*="viết gì"], ' +
+                'div[role="dialog"] div[aria-label*="write something"], ' +
+                'div[data-pagelet="GroupInlineComposer"] div[contenteditable="true"], ' +
+                'div[role="textbox"][contenteditable="true"]'
+            );
             if (editor && editor.offsetParent !== null) {
                 postDialog = editor.closest('div[role="dialog"]') || document.querySelector('div[role="dialog"]');
                 break;
@@ -226,54 +235,59 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
             return { success: false, error: 'Không mở được khung soạn thảo bài viết của Facebook.' };
         }
 
-        // 4. Nhập nội dung bài viết vào editor (Đảm bảo chính xác 1 bản duy nhất y như Gemini đưa ra)
+        // 4. Nhập nội dung bài viết vào editor
+        clickElement(editor);
         editor.focus();
         await new Promise(r => setTimeout(r, 200));
 
-        // Xóa sạch toàn bộ nội dung cũ trong editor nếu có (chống trùng lặp)
+        // Đặt con trỏ vào bên trong editor
         try {
             const sel = window.getSelection();
             if (sel) {
-                sel.selectAllChildren(editor);
+                const range = document.createRange();
+                range.selectNodeContents(editor);
+                range.collapse(false);
+                sel.removeAllRanges();
+                sel.addRange(range);
             }
-            document.execCommand('delete', false, null);
         } catch (e) {}
 
-        // Ưu tiên phương thức Paste qua Clipboard/DataTransfer: Giữ trọn vẹn 100% xuống dòng, cấu trúc & emoji chuẩn xác của Gemini
-        let pasteSuccess = false;
+        // Nhập từng dòng bằng execCommand ('insertText' và 'insertParagraph' cho xuống dòng)
+        // Kích hoạt chuẩn xác cơ chế soạn thảo của Lexical / React 18 trên Facebook
+        let insertedAny = false;
         try {
-            const dt = new DataTransfer();
-            dt.setData('text/plain', textToPost);
-            const pasteEvt = new ClipboardEvent('paste', {
-                clipboardData: dt,
-                bubbles: true,
-                cancelable: true
-            });
-            editor.dispatchEvent(pasteEvt);
-            // Kiểm tra xem editor đã nhận nội dung chưa
-            if (editor.innerText && editor.innerText.trim().length > 0) {
-                pasteSuccess = true;
-            }
-        } catch (e) {}
-
-        // Chỉ dùng execCommand dự phòng nếu Clipboard paste không ghi nhận nội dung
-        if (!pasteSuccess) {
-            try {
-                document.execCommand('insertText', false, textToPost);
-                if (editor.innerText && editor.innerText.trim().length > 0) {
-                    pasteSuccess = true;
+            const lines = textToPost.split(/\r?\n/);
+            for (let li = 0; li < lines.length; li++) {
+                const curLine = lines[li];
+                if (curLine.length > 0) {
+                    const ok = document.execCommand('insertText', false, curLine);
+                    if (ok) insertedAny = true;
                 }
+                if (li < lines.length - 1) {
+                    document.execCommand('insertParagraph', false, null);
+                }
+            }
+        } catch (e) {
+            console.warn('[FB DOM] Lỗi execCommand insertText:', e);
+        }
+
+        // Dự phòng nếu execCommand không chèn được chữ
+        if (!editor.innerText || !editor.innerText.trim()) {
+            try {
+                editor.dispatchEvent(new InputEvent('beforeinput', {
+                    bubbles: true,
+                    cancelable: true,
+                    inputType: 'insertText',
+                    data: textToPost
+                }));
             } catch (e) {}
         }
 
-        // Dự phòng cuối cùng bằng textContent nếu vẫn hoàn toàn rỗng
-        if (!editor.innerText || !editor.innerText.trim()) {
-            editor.textContent = textToPost;
-        }
-
+        // Kích hoạt toàn bộ sự kiện input để React đồng bộ state và làm sáng nút Đăng
+        editor.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText' }));
         editor.dispatchEvent(new Event('input', { bubbles: true }));
         editor.dispatchEvent(new Event('change', { bubbles: true }));
-        await new Promise(r => setTimeout(r, 600));
+        await new Promise(r => setTimeout(r, 500));
 
         // 4.1 Đính kèm hình ảnh vào bài viết (nếu có)
         if (Array.isArray(imagesToUpload) && imagesToUpload.length > 0) {
@@ -394,7 +408,7 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
         }
 
         let submitBtn = null;
-        for (let i = 0; i < 25; i++) {
+        for (let i = 0; i < 35; i++) {
             handleGroupRulesAndConfirmations();
             submitBtn = findSubmitButton();
             if (submitBtn) break;
@@ -413,7 +427,7 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
         }
 
         if (!submitBtn) {
-            return { success: false, error: 'Không tìm thấy nút "Đăng" hoặc "Gửi" khả dụng (Nội dung có thể chưa hợp lệ).' };
+            return { success: false, error: 'Không tìm thấy nút "Đăng" hoặc "Gửi" khả dụng (Nút Đăng có thể đang bị mờ do tài khoản bị giới hạn hoặc ảnh tải chưa xong).' };
         }
 
         // Bấm nút Đăng
