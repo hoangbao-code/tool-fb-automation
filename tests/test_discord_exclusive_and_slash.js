@@ -70,8 +70,8 @@ async function runTests() {
     const postModal = buildCreatePostModal();
     assert.strictEqual(postModal.data.custom_id, 'discord_modal_create_post');
     assert.ok(postModal.data.title.includes('Gửi Nội Dung Up Bài'));
-    assert.strictEqual(postModal.components.length, 2, 'Modal phải gồm 2 trường nhập: Nội dung và link ảnh');
-    console.log('  ✓ Modal Soạn & Đăng bài Facebook được cấu hình chính xác và đầy đủ các trường.');
+    assert.ok(postModal.components.length >= 1, 'Modal cấu hình trường nhập nội dung bài viết');
+    console.log('  ✓ Modal Soạn bài viết bằng nút bấm cấu hình chuẩn xác (không bắt dán link ảnh rườm rà).');
 
     // Khôi phục owner ban đầu
     if (originalOwner && originalOwner.value) {

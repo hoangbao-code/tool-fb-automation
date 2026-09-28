@@ -729,7 +729,7 @@ function buildKeygenModal(defaultHwid = '') {
 }
 
 /**
- * Xây dựng Modal (Form Pop-up) để người dùng tự nhập nội dung bài viết và ảnh để đăng
+ * Xây dựng Modal (Form Pop-up) để người dùng tự nhập nội dung bài viết để đăng
  */
 function buildCreatePostModal() {
     const modal = new ModalBuilder()
@@ -744,18 +744,8 @@ function buildCreatePostModal() {
         .setRequired(true)
         .setMaxLength(4000);
 
-    const imagesInput = new TextInputBuilder()
-        .setCustomId('post_images')
-        .setLabel('Link ảnh đính kèm (tùy chọn, cách dấu phẩy):')
-        .setPlaceholder('https://example.com/anh1.jpg, https://example.com/anh2.jpg')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setMaxLength(1000);
-
     const row1 = new ActionRowBuilder().addComponents(contentInput);
-    const row2 = new ActionRowBuilder().addComponents(imagesInput);
-
-    modal.addComponents(row1, row2);
+    modal.addComponents(row1);
     return modal;
 }
 
@@ -773,7 +763,7 @@ function buildBotControlPanel(matchedUser) {
         .addFields(
             {
                 name: '✍️ Đăng Bài Viết Mới',
-                value: 'Bấm nút **[✍️ Gửi Nội Dung Up Bài]** để mở form soạn bài viết, hoặc gửi ảnh/tin vào kênh rồi bấm **[⚡ Đăng Bài Từ Hàng Chờ]**.'
+                value: 'Bấm nút **[✍️ Gửi Nội Dung Up Bài]** hoặc gửi trực tiếp bài viết + ảnh/file zip vào kênh chat này như ban đầu!'
             },
             {
                 name: '🔑 Phát Hành Bản Quyền (Hoàng Bảo)',
@@ -1139,16 +1129,12 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                                 .setLabel('🚀 Xác Nhận Đăng Bài Này')
                                 .setStyle(ButtonStyle.Success),
                             new ButtonBuilder()
-                                .setCustomId('discord_open_create_post_modal')
-                                .setLabel('✍️ Soạn Bằng Form')
-                                .setStyle(ButtonStyle.Primary),
-                            new ButtonBuilder()
                                 .setCustomId('discord_clear_buffer')
                                 .setLabel('🗑️ Xóa Hàng Chờ')
                                 .setStyle(ButtonStyle.Secondary)
                         );
                         await message.reply({
-                            content: `📥 **Đã nhận thông tin (${mediaDetails.length > 0 ? mediaDetails.join(', ') : 'văn bản'}) vào hàng chờ!** (Bot không tự động đăng bài).\n👉 Bấm nút **[🚀 Xác Nhận Đăng Bài Này]** khi bạn muốn đưa bài vào Gemini để duyệt đăng:`,
+                            content: `📥 **Đã nhận ${mediaDetails.length > 0 ? mediaDetails.join(', ') : 'văn bản'} vào hàng chờ!** (Bạn có thể gửi thêm ảnh/nội dung nếu muốn).\n👉 Bấm nút **[🚀 Xác Nhận Đăng Bài Này]** khi bạn muốn đưa bài vào Gemini để duyệt đăng:`,
                             components: [quickRow]
                         });
                     } catch (e) {
@@ -1197,7 +1183,41 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                     }
 
                     if (cmd === 'soanbai') {
-                        await interaction.showModal(buildCreatePostModal());
+                        const buffer = channelBuffers.get(interaction.channelId);
+                        const hasContent = buffer && (buffer.texts.length > 0 || buffer.images.length > 0 || buffer.zips.length > 0);
+
+                        if (hasContent) {
+                            if (buffer.timer) clearTimeout(buffer.timer);
+                            await interaction.reply({
+                                content: `⚡ **Đã nhận nội dung & ${buffer.images.length} ảnh/zip trong hàng chờ!** Đang chuyển sang Gemini AI để biên tập và tạo bài viết...`
+                            });
+                            await processDiscordBuffer(interaction.channelId);
+                            return;
+                        }
+
+                        const directRow = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setCustomId('discord_trigger_buffer')
+                                .setLabel('🚀 Xác Nhận Đăng Ngay')
+                                .setStyle(ButtonStyle.Success),
+                            new ButtonBuilder()
+                                .setCustomId('discord_clear_buffer')
+                                .setLabel('🗑️ Xóa Hàng Chờ')
+                                .setStyle(ButtonStyle.Secondary)
+                        );
+
+                        const directEmbed = new EmbedBuilder()
+                            .setColor(0x5865f2)
+                            .setTitle('✍️ GỬI THẲNG BÀI VIẾT & HÌNH ẢNH VÀO KÊNH')
+                            .setDescription(
+                                `👉 **Bạn hãy gửi thẳng nội dung bài viết và đính kèm ảnh (hoặc file .ZIP) vào khung chat này ngay bây giờ!**\n\n` +
+                                `• Bấm dấu **\`+\`** hoặc kéo thả nhiều ảnh/zip từ máy tính hoặc điện thoại trực tiếp vào ô chat.\n` +
+                                `• Dán nội dung mô tả phòng trọ / BĐS kèm theo.\n` +
+                                `• Gửi xong, bạn bấm nút **[🚀 Xác Nhận Đăng Ngay]** bên dưới để tiến hành duyệt đăng!`
+                            )
+                            .setFooter({ text: 'Gửi ảnh & bài trực tiếp vào chat • Không cần lấy link' });
+
+                        await interaction.reply({ embeds: [directEmbed], components: [directRow] });
                         return;
                     }
 
@@ -1669,10 +1689,44 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                 return;
             }
 
-            // 7.1. Bấm NÚT MỞ MODAL SOẠN BÀI VIẾT
+            // 7.1. Bấm NÚT GỬI NỘI DUNG UP BÀI
             if (interaction.isButton() && interaction.customId === 'discord_open_create_post_modal') {
-                const modal = buildCreatePostModal();
-                await interaction.showModal(modal);
+                const buffer = channelBuffers.get(interaction.channelId);
+                const hasContent = buffer && (buffer.texts.length > 0 || buffer.images.length > 0 || buffer.zips.length > 0);
+
+                if (hasContent) {
+                    if (buffer.timer) clearTimeout(buffer.timer);
+                    await interaction.reply({
+                        content: `⚡ **Đã nhận nội dung & ${buffer.images.length} ảnh/zip trong hàng chờ!** Đang chuyển sang Gemini AI để biên tập và tạo bài viết...`
+                    });
+                    await processDiscordBuffer(interaction.channelId);
+                    return;
+                }
+
+                // Nếu chưa có bài trong hàng chờ: hướng dẫn gửi trực tiếp như ban đầu
+                const directRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('discord_trigger_buffer')
+                        .setLabel('🚀 Xác Nhận Đăng Ngay')
+                        .setStyle(ButtonStyle.Success),
+                    new ButtonBuilder()
+                        .setCustomId('discord_clear_buffer')
+                        .setLabel('🗑️ Xóa Hàng Chờ')
+                        .setStyle(ButtonStyle.Secondary)
+                );
+
+                const directEmbed = new EmbedBuilder()
+                    .setColor(0x5865f2)
+                    .setTitle('✍️ GỬI THẲNG BÀI VIẾT & HÌNH ẢNH VÀO KÊNH')
+                    .setDescription(
+                        `👉 **Bạn hãy gửi thẳng nội dung bài viết và đính kèm ảnh (hoặc file .ZIP) vào khung chat này ngay bây giờ!**\n\n` +
+                        `• Bấm dấu **\`+\`** hoặc kéo thả nhiều ảnh/zip từ máy tính hoặc điện thoại trực tiếp vào ô chat.\n` +
+                        `• Dán nội dung mô tả phòng trọ / BĐS kèm theo.\n` +
+                        `• Gửi xong, bạn bấm nút **[🚀 Xác Nhận Đăng Ngay]** bên dưới là Tool sẽ tự động đưa bài vào Gemini AI biên tập rồi duyệt đăng lên Facebook!`
+                    )
+                    .setFooter({ text: 'Gửi ảnh & bài trực tiếp vào chat • Không cần lấy link' });
+
+                await interaction.reply({ embeds: [directEmbed], components: [directRow] });
                 return;
             }
 
@@ -1680,17 +1734,10 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
             if (interaction.isModalSubmit() && interaction.customId === 'discord_modal_create_post') {
                 await interaction.deferReply();
                 const postContent = (interaction.fields.getTextInputValue('post_content') || '').trim();
-                const rawImages = (interaction.fields.getTextInputValue('post_images') || '').trim();
 
                 if (!postContent) {
                     await interaction.editReply({ content: '⚠️ Nội dung bài viết không được để trống!' });
                     return;
-                }
-
-                const imageUrls = [];
-                if (rawImages) {
-                    const urls = rawImages.split(/[\n,;]+/).map(u => u.trim()).filter(u => u.startsWith('http'));
-                    imageUrls.push(...urls);
                 }
 
                 // Gửi vào hàng chờ và lập tức kích hoạt tiến trình xử lý
@@ -1700,12 +1747,12 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                     username: interaction.user.username,
                     userTag: interaction.user.tag || interaction.user.username,
                     texts: [postContent],
-                    images: imageUrls,
+                    images: [],
                     zips: []
                 });
 
                 await interaction.editReply({
-                    content: '⚡ **Đã nhận nội dung bài viết từ Form!** Đang chuyển nội dung sang Gemini AI để biên tập và tạo bài viết chờ duyệt...'
+                    content: '⚡ **Đã nhận nội dung bài viết!** Đang chuyển nội dung sang Gemini AI để biên tập và tạo bài viết chờ duyệt...'
                 });
 
                 await processDiscordBuffer(interaction.channelId);
