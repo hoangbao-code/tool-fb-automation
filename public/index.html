@@ -111,6 +111,12 @@
                     </button>
                 </div>
                 <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-400 font-medium">Spin bài (Chống spam):</span>
+                    <button id="quick-spin-btn" onclick="toggleAiSpin()" class="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400 hover:text-white transition-all">
+                        Đang tắt
+                    </button>
+                </div>
+                <div class="flex items-center justify-between text-xs">
                     <span class="text-slate-400 font-medium">Dừng khẩn cấp:</span>
                     <button id="quick-stop-btn" onclick="toggleEmergencyStop()" class="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400 hover:text-rose-400 transition-all">
                         Bình thường
@@ -151,6 +157,10 @@
                     <span class="text-slate-400">Bot Discord:</span>
                     <b id="head-stat-discord" class="text-violet-400 font-bold">🟢 Sẵn sàng</b>
                 </div>
+                <button type="button" onclick="toggleAiSpin()" id="head-spin-toggle-btn" class="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 px-3 py-1 rounded-lg border border-slate-800 transition-all font-semibold" title="Bật/Tắt AI Spin đảo nội dung giữa các nhóm Facebook">
+                    <span class="text-slate-400">Spin FB:</span>
+                    <b id="head-spin-status" class="text-slate-500 font-bold">⚪ Tắt</b>
+                </button>
                 <div class="flex items-center gap-1.5 bg-slate-900 px-3 py-1 rounded-lg border border-slate-800">
                     <span class="text-slate-400">Chờ duyệt:</span>
                     <b id="head-stat-pending" class="text-amber-400 font-bold">0</b>
@@ -491,6 +501,11 @@
 
                         <!-- Các nút tác vụ nhanh -->
                         <div class="flex items-center gap-2 shrink-0">
+                            <button onclick="toggleAiSpin()" id="feed-spin-toggle-btn" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm" title="Bật/Tắt tính năng tự động biến tấu nội dung (Spin Content) để chống thuật toán spam Facebook">
+                                <i data-lucide="shuffle" class="w-3.5 h-3.5 text-indigo-400"></i>
+                                <span>Spin Bài:</span>
+                                <b id="feed-spin-status" class="text-slate-400 font-bold">TẮT</b>
+                            </button>
                             <button onclick="approveAllPendingUI()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-emerald-900/30 hover:scale-[1.02] transition-all" title="Duyệt tất cả bài chờ sang trạng thái sẵn sàng đăng tự động">
                                 <i data-lucide="check-check" class="w-4 h-4"></i> Duyệt Tất Cả Chờ
                             </button>
@@ -1119,22 +1134,31 @@
                 <div class="max-w-4xl bg-slate-950/60 rounded-xl border border-slate-800 p-6 space-y-6 shadow-sm">
                     <h3 class="font-bold text-white text-base">Cấu Hình Hoạt Động & Chống Spam</h3>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
                         <div class="space-y-2 p-4 bg-slate-900 rounded-xl border border-slate-800">
                             <label class="block text-xs font-semibold text-slate-200">Chế độ Tự Động Đăng (Auto-Pilot)</label>
-                            <p class="text-[11px] text-slate-400">Khi bật, cứ có tin Zalo mới là AI viết lại và tự động xếp lịch đăng lên các nhóm Facebook đã chọn.</p>
+                            <p class="text-[11px] text-slate-400">Cứ có tin mới là AI tự xếp lịch đăng lên nhóm Facebook.</p>
                             <select id="cfg-auto-post" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2">
-                                <option value="0">Tắt - Giữ ở Hàng đợi để tôi xem và bấm Duyệt tay</option>
-                                <option value="1">Bật - Tự động duyệt và tự động đăng lên Facebook</option>
+                                <option value="0">Tắt - Duyệt bài bằng tay</option>
+                                <option value="1">Bật - Tự động duyệt và đăng</option>
+                            </select>
+                        </div>
+
+                        <div class="space-y-2 p-4 bg-slate-900 rounded-xl border border-slate-800">
+                            <label class="block text-xs font-semibold text-slate-200">AI Spin Nội Dung (Chống Spam FB)</label>
+                            <p class="text-[11px] text-slate-400">Tự động biến tấu câu mở đầu, icon cho từng nhóm để chống thuật toán spam.</p>
+                            <select id="cfg-ai-spin" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2">
+                                <option value="1">Bật - Biến tấu nhẹ từng nhóm (Khuyên dùng)</option>
+                                <option value="0">Tắt - Đăng nguyên bản gốc</option>
                             </select>
                         </div>
 
                         <div class="space-y-2 p-4 bg-slate-900 rounded-xl border border-slate-800">
                             <label class="block text-xs font-semibold text-slate-200">Dừng Khẩn Cấp (Emergency Stop)</label>
-                            <p class="text-[11px] text-slate-400">Tạm dừng ngay lập tức mọi hoạt động đăng bài để bảo vệ tài khoản khi cần thiết.</p>
+                            <p class="text-[11px] text-slate-400">Ngắt tức thì mọi hoạt động đăng bài để bảo vệ tài khoản khi cần.</p>
                             <select id="cfg-emergency-stop" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2">
-                                <option value="0">Bình thường (Hệ thống chạy theo lịch)</option>
-                                <option value="1">DỪNG KHẨN CẤP (Ngắt toàn bộ hàng đợi)</option>
+                                <option value="0">Bình thường (Chạy theo lịch)</option>
+                                <option value="1">DỪNG KHẨN CẤP (Ngắt hàng đợi)</option>
                             </select>
                         </div>
                     </div>

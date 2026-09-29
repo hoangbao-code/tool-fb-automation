@@ -308,6 +308,7 @@ ipcMain.handle('get-status', async () => {
         const pendingCount = await dbAsync.get(`SELECT COUNT(*) as count FROM posts WHERE status = 'pending'`);
         const postedCount = await dbAsync.get(`SELECT COUNT(*) as count FROM posts WHERE status = 'posted'`);
         const autoSetting = await dbAsync.get(`SELECT value FROM settings WHERE key = 'auto_post_enabled'`);
+        const spinSetting = await dbAsync.get(`SELECT value FROM settings WHERE key = 'ai_spin_enabled'`);
 
         return {
             success: true,
@@ -316,7 +317,8 @@ ipcMain.handle('get-status', async () => {
                 postsToday: postsToday?.count || 0,
                 pendingPosts: pendingCount?.count || 0,
                 postedPosts: postedCount?.count || 0,
-                autoPostEnabled: autoSetting?.value === '1'
+                autoPostEnabled: autoSetting?.value === '1',
+                aiSpinEnabled: spinSetting?.value === '1'
             }
         };
     } catch (e) {

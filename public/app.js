@@ -235,9 +235,79 @@ async function loadStatus() {
                     autoBtn.className = 'px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400 hover:text-white transition-all';
                 }
             }
+
+            if (res.stats && typeof res.stats.aiSpinEnabled !== 'undefined') {
+                updateSpinUI(res.stats.aiSpinEnabled);
+            }
         }
     } catch (e) {
         console.error('Error loadStatus:', e);
+    }
+}
+
+function updateSpinUI(isSpinOn) {
+    // 1. Nút trên thanh Header
+    const headStatus = document.getElementById('head-spin-status');
+    const headBtn = document.getElementById('head-spin-toggle-btn');
+    if (headStatus) {
+        if (isSpinOn) {
+            headStatus.innerText = '🟢 Bật';
+            headStatus.className = 'text-emerald-400 font-bold';
+            if (headBtn) headBtn.className = 'flex items-center gap-1.5 bg-emerald-950/40 hover:bg-emerald-900/50 px-3 py-1 rounded-lg border border-emerald-500/40 transition-all font-semibold';
+        } else {
+            headStatus.innerText = '⚪ Tắt';
+            headStatus.className = 'text-slate-500 font-bold';
+            if (headBtn) headBtn.className = 'flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 px-3 py-1 rounded-lg border border-slate-800 transition-all font-semibold';
+        }
+    }
+
+    // 2. Nút nhanh ở Sidebar
+    const quickBtn = document.getElementById('quick-spin-btn');
+    if (quickBtn) {
+        if (isSpinOn) {
+            quickBtn.innerText = 'Đang bật';
+            quickBtn.className = 'px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-600 text-white transition-all';
+        } else {
+            quickBtn.innerText = 'Đang tắt';
+            quickBtn.className = 'px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400 hover:text-white transition-all';
+        }
+    }
+
+    // 3. Nút ở thanh tác vụ Bảng Tin (Feed Action Bar)
+    const feedStatus = document.getElementById('feed-spin-status');
+    const feedBtn = document.getElementById('feed-spin-toggle-btn');
+    if (feedStatus) {
+        if (isSpinOn) {
+            feedStatus.innerText = 'BẬT';
+            feedStatus.className = 'text-emerald-400 font-bold';
+            if (feedBtn) feedBtn.className = 'bg-emerald-950/50 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/40 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm';
+        } else {
+            feedStatus.innerText = 'TẮT';
+            feedStatus.className = 'text-slate-400 font-bold';
+            if (feedBtn) feedBtn.className = 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm';
+        }
+    }
+
+    // 4. Select box trong tab Cài đặt
+    const cfgSpin = document.getElementById('cfg-ai-spin');
+    if (cfgSpin) {
+        cfgSpin.value = isSpinOn ? '1' : '0';
+    }
+}
+
+async function toggleAiSpin() {
+    try {
+        const res = await window.electronApi.getSettings();
+        const currentVal = res?.settings?.ai_spin_enabled || '0';
+        const newVal = (currentVal === '1') ? '0' : '1';
+        await window.electronApi.saveSettings({ ai_spin_enabled: newVal });
+        const isNowOn = (newVal === '1');
+        updateSpinUI(isNowOn);
+        showToast(isNowOn ? 'Đã BẬT Spin nội dung (Tự động biến tấu câu từ chống spam FB)!' : 'Đã TẮT Spin nội dung (Đăng nguyên bản gốc).', 'info');
+        loadStatus();
+        loadGeneralSettings();
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
     }
 }
 
@@ -2897,6 +2967,9 @@ async function loadGeneralSettings() {
             document.getElementById('cfg-emergency-stop').value = res.settings.emergency_stop || '0';
             document.getElementById('cfg-delay-min').value = res.settings.delay_min_seconds || '180';
             document.getElementById('cfg-delay-max').value = res.settings.delay_max_seconds || '480';
+            const spinSelect = document.getElementById('cfg-ai-spin');
+            if (spinSelect) spinSelect.value = res.settings.ai_spin_enabled || '0';
+            updateSpinUI(res.settings.ai_spin_enabled === '1');
         }
     } catch (e) {
         console.error('Error loadGeneralSettings:', e);
@@ -2908,13 +2981,16 @@ async function saveAllSettings() {
     const stop = document.getElementById('cfg-emergency-stop').value;
     const min = document.getElementById('cfg-delay-min').value;
     const max = document.getElementById('cfg-delay-max').value;
+    const spin = document.getElementById('cfg-ai-spin')?.value || '0';
 
     await window.electronApi.saveSettings({
         auto_post_enabled: auto,
         emergency_stop: stop,
         delay_min_seconds: min,
-        delay_max_seconds: max
+        delay_max_seconds: max,
+        ai_spin_enabled: spin
     });
+    updateSpinUI(spin === '1');
     showToast('Đã lưu cấu hình cài đặt hệ thống!', 'success');
     loadStatus();
 }
