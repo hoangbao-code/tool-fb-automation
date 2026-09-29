@@ -109,6 +109,20 @@ async function callGeminiApi(apiKey, requestedModel, prompt) {
 }
 
 /**
+ * Chuẩn bị nội dung gửi sang Gemini:
+ * Chỉ gửi nội dung gốc + Tiếng Việt hoặc Tiếng Anh, không chèn form yêu cầu rườm rà
+ * để giữ nguyên form mẫu/persona của cuộc trò chuyện đã ghim của người dùng.
+ */
+function buildGeminiPrompt(content, language = 'vi', overridePrompt = null) {
+    const rawText = (content || '').trim();
+    if (overridePrompt) {
+        return overridePrompt.replace('{CONTENT}', rawText);
+    }
+    const langTag = (language === 'en') ? 'Tiếng Anh' : 'Tiếng Việt';
+    return `${rawText}\n\n${langTag}`;
+}
+
+/**
  * Gửi nội dung tin nhắn phòng thô trực tiếp vào Google Chrome Gemini Web
  * Chờ AI trên Chrome hoàn tất biên tập, làm sạch và trả về bài viết đã viết lại.
  * Hỗ trợ tùy chọn ngôn ngữ Tiếng Anh (en) hoặc Tiếng Việt (vi).
@@ -131,19 +145,7 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
         }
     }
 
-    let promptToSend = rawText;
-    if (overridePrompt) {
-        promptToSend = overridePrompt.replace('{CONTENT}', rawText);
-        if (targetLang === 'en' && !promptToSend.toLowerCase().includes('english')) {
-            promptToSend = `[YÊU CẦU: Viết bài đăng hoàn toàn bằng TIẾNG ANH (English) chuyên nghiệp, thu hút khách nước ngoài / expat]\n\n` + promptToSend;
-        }
-    } else {
-        if (targetLang === 'en') {
-            promptToSend = `[YÊU CẦU: Hãy dịch và viết lại bài đăng sau đây thành bài đăng Facebook hoàn toàn bằng TIẾNG ANH (English) chuyên nghiệp, thu hút khách thuê người nước ngoài / expat. Giữ đúng toàn bộ thông tin quan trọng (giá thuê, diện tích, địa chỉ/quận, tiện ích, số điện thoại Zalo liên hệ), thêm emoji sinh động và hashtag tiếng Anh phù hợp như #saigonapartment #expat #apartmentforrent #hcmc. Không thêm lời chào hay giải thích, chỉ xuất ra nội dung bài viết.]\n\nNội dung gốc:\n${rawText}`;
-        } else {
-            promptToSend = `[YÊU CẦU: Hãy viết lại bài đăng sau đây thành một bài đăng Facebook chuyên nghiệp bằng TIẾNG VIỆT, hấp dẫn, giữ đúng toàn bộ thông tin quan trọng (giá, diện tích, địa chỉ, số điện thoại liên hệ), có thêm icon sinh động và hashtag liên quan. Không thêm lời chào hay giải thích, chỉ xuất ra nội dung bài viết.]\n\nNội dung gốc:\n${rawText}`;
-        }
-    }
+    const promptToSend = buildGeminiPrompt(rawText, targetLang, overridePrompt);
 
     // Lấy cấu hình URL cuộc trò chuyện đã ghim từ settings
     const targetUrlRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_conversation_url'`);
@@ -301,4 +303,4 @@ async function testGemini(apiKey, promptTemplate, model = 'gemini-3.6-flash') {
     return `[Mô hình sử dụng: ${modelUsed}]\n\n${text}`;
 }
 
-module.exports = { rewriteWithGemini, testGemini, spinPostForGroup, isEnglishPost, callGeminiApi, cleanGeminiOutput };
+module.exports = { rewriteWithGemini, testGemini, spinPostForGroup, isEnglishPost, buildGeminiPrompt, callGeminiApi, cleanGeminiOutput };

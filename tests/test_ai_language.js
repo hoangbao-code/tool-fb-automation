@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { rewriteWithGemini, spinPostForGroup, isEnglishPost } = require('../src/services/gemini');
+const { rewriteWithGemini, spinPostForGroup, isEnglishPost, buildGeminiPrompt } = require('../src/services/gemini');
 
 console.log('========================================================');
 console.log('🧪 BẮT ĐẦU KIỂM THỬ: TÍNH NĂNG CHỌN NGÔN NGỮ AI (VI/EN)');
@@ -44,5 +44,19 @@ assert.ok(
     'Bài tiếng Việt phải có CTA tiếng Việt'
 );
 console.log('  ✓ Spin nội dung thông minh tự chuyển Hook/CTA theo ngôn ngữ chuẩn xác!\n');
+
+// 3. Test buildGeminiPrompt (chỉ gửi nội dung gốc + Tiếng Việt / Tiếng Anh, không ghi đè form người dùng)
+console.log('3. Kiểm tra định dạng gửi prompt sang Gemini (buildGeminiPrompt)...');
+const sampleZalo = `65 gò công , Q5\nKhách chuyển công tác trống 1 phòng 202 , giá 11tr\n202 : 2PN tách bếp ban công`;
+
+const promptVi = buildGeminiPrompt(sampleZalo, 'vi');
+const promptEn = buildGeminiPrompt(sampleZalo, 'en');
+
+assert.strictEqual(promptVi, `${sampleZalo}\n\nTiếng Việt`, 'Prompt tiếng Việt phải là: nd gốc + Tiếng Việt');
+assert.strictEqual(promptEn, `${sampleZalo}\n\nTiếng Anh`, 'Prompt tiếng Anh phải là: nd gốc + Tiếng Anh');
+assert.ok(!promptVi.includes('[YÊU CẦU:'), 'Prompt không được chứa [YÊU CẦU: làm hỏng form của khách');
+assert.ok(!promptVi.includes('Nội dung gốc:'), 'Prompt không được bọc chữ Nội dung gốc: thừa thãi');
+assert.ok(!promptEn.includes('[YÊU CẦU:'), 'Prompt tiếng Anh không được chứa [YÊU CẦU:');
+console.log('  ✓ Định dạng prompt sang Gemini chuẩn xác 100%: Chỉ gửi nd gốc + Tiếng Việt/Tiếng Anh (bảo toàn trọn vẹn form của khách)!\n');
 
 console.log('✨ TOÀN BỘ KIỂM THỬ NGÔN NGỮ AI ĐÃ VƯỢT QUA 100%! ✨\n');
