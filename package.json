@@ -1,6 +1,6 @@
 {
   "name": "posthub-desktop",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "PostHub - Tự Động Hóa Zalo sang Facebook (Ứng Dụng Desktop Windows)",
   "main": "src/main.js",
   "type": "commonjs",
