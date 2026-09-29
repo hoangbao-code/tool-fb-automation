@@ -1134,9 +1134,9 @@
                 <div class="max-w-4xl bg-slate-950/60 rounded-xl border border-slate-800 p-6 space-y-6 shadow-sm">
                     <h3 class="font-bold text-white text-base">Cấu Hình Hoạt Động & Chống Spam</h3>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div class="space-y-2 p-4 bg-slate-900 rounded-xl border border-slate-800">
-                            <label class="block text-xs font-semibold text-slate-200">Chế độ Tự Động Đăng (Auto-Pilot)</label>
+                            <label class="block text-xs font-semibold text-slate-200">Tự Động Đăng (Auto-Pilot)</label>
                             <p class="text-[11px] text-slate-400">Cứ có tin mới là AI tự xếp lịch đăng lên nhóm Facebook.</p>
                             <select id="cfg-auto-post" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2">
                                 <option value="0">Tắt - Duyệt bài bằng tay</option>
@@ -1145,8 +1145,8 @@
                         </div>
 
                         <div class="space-y-2 p-4 bg-slate-900 rounded-xl border border-slate-800">
-                            <label class="block text-xs font-semibold text-slate-200">AI Spin Nội Dung (Chống Spam FB)</label>
-                            <p class="text-[11px] text-slate-400">Tự động biến tấu câu mở đầu, icon cho từng nhóm để chống thuật toán spam.</p>
+                            <label class="block text-xs font-semibold text-slate-200">Spin Nội Dung (Chống Spam)</label>
+                            <p class="text-[11px] text-slate-400">Tự động biến tấu câu mở đầu, icon cho từng nhóm.</p>
                             <select id="cfg-ai-spin" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2">
                                 <option value="1">Bật - Biến tấu nhẹ từng nhóm (Khuyên dùng)</option>
                                 <option value="0">Tắt - Đăng nguyên bản gốc</option>
@@ -1154,8 +1154,17 @@
                         </div>
 
                         <div class="space-y-2 p-4 bg-slate-900 rounded-xl border border-slate-800">
-                            <label class="block text-xs font-semibold text-slate-200">Dừng Khẩn Cấp (Emergency Stop)</label>
-                            <p class="text-[11px] text-slate-400">Ngắt tức thì mọi hoạt động đăng bài để bảo vệ tài khoản khi cần.</p>
+                            <label class="block text-xs font-semibold text-slate-200">Ngôn Ngữ AI Mặc Định</label>
+                            <p class="text-[11px] text-slate-400">Ngôn ngữ Gemini sẽ tự động viết lại khi nhận tin.</p>
+                            <select id="cfg-ai-lang" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2">
+                                <option value="vi">🇻🇳 Tiếng Việt (Mặc định)</option>
+                                <option value="en">🇬🇧 Tiếng Anh (English - Expat)</option>
+                            </select>
+                        </div>
+
+                        <div class="space-y-2 p-4 bg-slate-900 rounded-xl border border-slate-800">
+                            <label class="block text-xs font-semibold text-slate-200">Dừng Khẩn Cấp (Emergency)</label>
+                            <p class="text-[11px] text-slate-400">Ngắt tức thì mọi hoạt động đăng bài khi cần.</p>
                             <select id="cfg-emergency-stop" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2">
                                 <option value="0">Bình thường (Chạy theo lịch)</option>
                                 <option value="1">DỪNG KHẨN CẤP (Ngắt hàng đợi)</option>
@@ -1235,7 +1244,17 @@
             </div>
 
             <div>
-                <label class="block text-xs font-semibold text-slate-400 mb-1">Nội dung AI đã biên tập (Chỉnh sửa tự do):</label>
+                <div class="flex items-center justify-between mb-1.5">
+                    <label class="block text-xs font-semibold text-slate-400">Nội dung AI đã biên tập (Chỉnh sửa tự do):</label>
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" onclick="modalRewritePost('vi')" id="modal-btn-rewrite-vi" class="px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 text-[11px] font-bold flex items-center gap-1 transition-all border border-amber-500/30" title="Nhờ Gemini viết lại bằng Tiếng Việt">
+                            <span>🇻🇳</span> AI Tiếng Việt
+                        </button>
+                        <button type="button" onclick="modalRewritePost('en')" id="modal-btn-rewrite-en" class="px-2.5 py-1 rounded-lg bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25 text-[11px] font-bold flex items-center gap-1 transition-all border border-indigo-500/30" title="Nhờ Gemini dịch & viết lại bằng Tiếng Anh (cho nhóm Expat)">
+                            <span>🇬🇧</span> AI Tiếng Anh
+                        </button>
+                    </div>
+                </div>
                 <textarea id="modal-rewritten-input" rows="8" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans leading-relaxed"></textarea>
             </div>
 

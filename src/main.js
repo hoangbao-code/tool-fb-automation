@@ -690,15 +690,15 @@ ipcMain.handle('clear-all-posts', async (event, statusFilter) => {
     }
 });
 
-ipcMain.handle('re-rewrite-post', async (event, id) => {
+ipcMain.handle('re-rewrite-post', async (event, id, language = null) => {
     try {
         const post = await dbAsync.get(`SELECT * FROM posts WHERE id = ?`, [id]);
         if (!post) throw new Error('Không tìm thấy bài viết');
         const originalText = post.original_text || post.rewritten_text || '';
         if (!originalText) throw new Error('Bài viết không có nội dung gốc');
-        const newText = await rewriteWithGemini(originalText, post.sender, post.group_name);
+        const newText = await rewriteWithGemini(originalText, post.sender, post.group_name, null, language);
         await dbAsync.run(`UPDATE posts SET rewritten_text = ? WHERE id = ?`, [newText, id]);
-        await dbAsync.log('info', `Đã dùng Gemini AI viết lại bài viết #${id}.`);
+        await dbAsync.log('info', `Đã dùng Gemini AI viết lại bài viết #${id} (${language === 'en' ? 'Tiếng Anh' : 'Tiếng Việt'}).`);
         return { success: true, rewritten_text: newText };
     } catch (e) {
         return { success: false, error: e.message };

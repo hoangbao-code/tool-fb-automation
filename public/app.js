@@ -735,8 +735,11 @@ function renderPosts() {
                     </div>
 
                     <div class="flex flex-wrap items-center gap-2">
-                        <button onclick="reRewritePostUI(${p.id})" id="btn-ai-rewrite-${p.id}" class="px-3.5 py-1.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-md shadow-amber-900/30 hover:scale-[1.02] transition-all text-xs" title="Gửi tin nhắn này sang Chrome Gemini để viết lại theo đúng mẫu bạn ghim">
-                            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-200"></i> Viết Lại AI
+                        <button onclick="reRewritePostUI(${p.id}, 'vi')" id="btn-ai-rewrite-vi-${p.id}" class="px-2.5 py-1.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl flex items-center gap-1 shadow-md shadow-amber-900/30 hover:scale-[1.02] transition-all text-xs" title="Gemini viết lại bằng Tiếng Việt">
+                            <span>🇻🇳</span> AI Việt
+                        </button>
+                        <button onclick="reRewritePostUI(${p.id}, 'en')" id="btn-ai-rewrite-en-${p.id}" class="px-2.5 py-1.5 bg-gradient-to-r from-indigo-600 to-blue-700 hover:from-indigo-500 hover:to-blue-600 text-white font-bold rounded-xl flex items-center gap-1 shadow-md shadow-indigo-900/30 hover:scale-[1.02] transition-all text-xs" title="Gemini dịch & viết lại bằng Tiếng Anh (cho nhóm Expat / nước ngoài)">
+                            <span>🇬🇧</span> AI English
                         </button>
                         <button onclick="openEditModal(${p.id})" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold rounded-xl flex items-center gap-1.5 transition-all text-xs" title="Chỉnh sửa nội dung bài viết trước khi đăng">
                             <i data-lucide="edit-3" class="w-3.5 h-3.5 text-blue-400"></i> Sửa Bài
@@ -802,19 +805,24 @@ async function deletePostDirectUI(id) {
     }
 }
 
-// Yêu cầu AI viết lại bài viết trong bảng tin duyệt
-async function reRewritePostUI(id) {
-    const btn = document.getElementById(`btn-ai-rewrite-${id}`);
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin text-amber-400"></i> Đang viết lại...`;
+// Yêu cầu AI viết lại bài viết trong bảng tin duyệt (hỗ trợ Tiếng Việt & Tiếng Anh)
+async function reRewritePostUI(id, language = 'vi') {
+    const btnVi = document.getElementById(`btn-ai-rewrite-vi-${id}`);
+    const btnEn = document.getElementById(`btn-ai-rewrite-en-${id}`);
+    const legacyBtn = document.getElementById(`btn-ai-rewrite-${id}`);
+    const targetBtn = language === 'en' ? btnEn : (btnVi || legacyBtn);
+    const origHtml = targetBtn ? targetBtn.innerHTML : '';
+    if (targetBtn) {
+        targetBtn.disabled = true;
+        targetBtn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Viết...`;
         if (window.lucide) lucide.createIcons();
     }
-    showToast(`Đang gửi bài viết #${id} sang Chrome Gemini để viết lại...`, 'info');
+    const langLabel = language === 'en' ? 'Tiếng Anh (English)' : 'Tiếng Việt';
+    showToast(`Đang gửi bài #${id} sang Gemini để viết lại bằng ${langLabel}...`, 'info');
     try {
-        const res = await window.electronApi.reRewritePost(id);
+        const res = await window.electronApi.reRewritePost(id, language);
         if (res.success && res.rewritten_text) {
-            showToast(`Đã viết lại bài viết #${id} theo mẫu ghim thành công!`, 'success');
+            showToast(`✓ Đã viết lại bài #${id} bằng ${langLabel} thành công!`, 'success');
             await loadPosts();
         } else {
             showToast(res.error || 'Không thể viết lại bài viết', 'error');
@@ -822,9 +830,9 @@ async function reRewritePostUI(id) {
     } catch (e) {
         showToast('Lỗi: ' + e.message, 'error');
     } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = `<i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-200"></i> Viết Lại AI`;
+        if (targetBtn) {
+            targetBtn.disabled = false;
+            targetBtn.innerHTML = origHtml;
             if (window.lucide) lucide.createIcons();
         }
     }
@@ -1226,33 +1234,6 @@ async function testGeminiWebChatUI() {
     }
 }
 
-// Viết lại 1 bài bằng AI Gemini trực tiếp từ giao diện (Ưu tiên Google Chrome Gemini -> Tự động dự phòng API)
-async function reRewritePostUI(id) {
-    const btn = document.getElementById(`btn-ai-rewrite-${id}`);
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin text-amber-400"></i> Đang viết...`;
-    }
-
-    showToast(`Đang dùng AI Gemini viết lại bài #${id}...`, 'info');
-    try {
-        const res = await window.electronApi.reRewritePost(id);
-        if (res.success) {
-            showToast(`AI đã biên tập lại bài #${id} thành công!`, 'success');
-        } else {
-            showToast(res.error || 'Lỗi khi AI viết lại bài', 'error');
-        }
-    } catch (e) {
-        showToast(e.message, 'error');
-    }
-
-    await loadPosts();
-    if (btn) {
-        btn.disabled = false;
-        btn.innerHTML = `<i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Viết lại AI`;
-        lucide.createIcons();
-    }
-}
 
 // 3. Zalo Webview Controls
 function updateZaloActiveGroupDisplay() {
@@ -2969,6 +2950,8 @@ async function loadGeneralSettings() {
             document.getElementById('cfg-delay-max').value = res.settings.delay_max_seconds || '480';
             const spinSelect = document.getElementById('cfg-ai-spin');
             if (spinSelect) spinSelect.value = res.settings.ai_spin_enabled || '0';
+            const langSelect = document.getElementById('cfg-ai-lang');
+            if (langSelect) langSelect.value = res.settings.gemini_default_language || 'vi';
             updateSpinUI(res.settings.ai_spin_enabled === '1');
         }
     } catch (e) {
@@ -2982,13 +2965,15 @@ async function saveAllSettings() {
     const min = document.getElementById('cfg-delay-min').value;
     const max = document.getElementById('cfg-delay-max').value;
     const spin = document.getElementById('cfg-ai-spin')?.value || '0';
+    const lang = document.getElementById('cfg-ai-lang')?.value || 'vi';
 
     await window.electronApi.saveSettings({
         auto_post_enabled: auto,
         emergency_stop: stop,
         delay_min_seconds: min,
         delay_max_seconds: max,
-        ai_spin_enabled: spin
+        ai_spin_enabled: spin,
+        gemini_default_language: lang
     });
     updateSpinUI(spin === '1');
     showToast('Đã lưu cấu hình cài đặt hệ thống!', 'success');
@@ -3063,6 +3048,41 @@ function openEditModal(postId) {
 
 function closePostModal() {
     document.getElementById('post-modal').classList.add('hidden');
+}
+
+async function modalRewritePost(language = 'vi') {
+    const id = document.getElementById('modal-post-id')?.value;
+    if (!id) return;
+    const btnVi = document.getElementById('modal-btn-rewrite-vi');
+    const btnEn = document.getElementById('modal-btn-rewrite-en');
+    const targetBtn = language === 'en' ? btnEn : btnVi;
+    const origHtml = targetBtn ? targetBtn.innerHTML : '';
+    if (targetBtn) {
+        targetBtn.disabled = true;
+        targetBtn.innerHTML = `<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i> Viết...`;
+        if (window.lucide) lucide.createIcons();
+    }
+    const langLabel = language === 'en' ? 'Tiếng Anh (English)' : 'Tiếng Việt';
+    showToast(`Đang gửi bài #${id} sang Gemini để viết lại bằng ${langLabel}...`, 'info');
+    try {
+        const res = await window.electronApi.reRewritePost(id, language);
+        if (res.success && res.rewritten_text) {
+            const input = document.getElementById('modal-rewritten-input');
+            if (input) input.value = res.rewritten_text;
+            showToast(`✓ Đã viết lại bằng ${langLabel} thành công!`, 'success');
+            loadPosts();
+        } else {
+            showToast('Lỗi: ' + (res.error || 'Không thể viết lại'), 'error');
+        }
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
+    } finally {
+        if (targetBtn) {
+            targetBtn.disabled = false;
+            targetBtn.innerHTML = origHtml;
+            if (window.lucide) lucide.createIcons();
+        }
+    }
 }
 
 async function saveModalEdit() {

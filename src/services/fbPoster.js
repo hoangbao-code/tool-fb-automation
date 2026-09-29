@@ -301,21 +301,22 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
 
         // 4. Nhập nội dung bài viết vào editor (hỗ trợ Lexical / Draft.js của Facebook)
         editor.focus();
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 150));
 
-        // Đặt con trỏ vào cuối vùng soạn thảo
+        // Xóa sạch nội dung cũ nếu có để tránh dồn/lặp bài
         try {
             const sel = window.getSelection();
             const range = document.createRange();
             range.selectNodeContents(editor);
-            range.collapse(false);
             sel.removeAllRanges();
             sel.addRange(range);
+            document.execCommand('delete', false, null);
         } catch (e) {}
+        await new Promise(r => setTimeout(r, 100));
 
-        let inserted = false;
+        let hasContent = false;
 
-        // Cách 1: Giả lập Paste qua ClipboardEvent & DataTransfer (tương thích cao nhất với Facebook React)
+        // Ưu tiên 1: Giả lập Paste qua ClipboardEvent & DataTransfer (tương thích chuẩn nhất với Lexical / React)
         try {
             const dt = new DataTransfer();
             dt.setData('text/plain', textToPost);
@@ -325,38 +326,41 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
                 cancelable: true
             });
             editor.dispatchEvent(pasteEvt);
-            if (editor.innerText && editor.innerText.trim().length > 0) {
-                inserted = true;
-            }
         } catch (e) {}
 
-        // Cách 2: document.execCommand từng dòng để giữ định dạng xuống dòng
-        if (!inserted || !editor.innerText.trim()) {
+        // Chờ Lexical render nội dung đã paste
+        await new Promise(r => setTimeout(r, 350));
+
+        const curLen = (editor.innerText || editor.textContent || '').trim().length;
+        if (curLen >= 5) {
+            hasContent = true;
+        }
+
+        // Ưu tiên 2: Nếu Paste không ăn (hiếm khi xảy ra), dùng execCommand từng dòng
+        if (!hasContent) {
             try {
                 document.execCommand('selectAll', false, null);
                 document.execCommand('delete', false, null);
-                const lines = textToPost.split(/\\r?\\n/);
+                const lines = textToPost.split(/\r?\n/);
                 for (let li = 0; li < lines.length; li++) {
                     if (lines[li].length > 0) document.execCommand('insertText', false, lines[li]);
                     if (li < lines.length - 1) document.execCommand('insertParagraph', false, null);
                 }
-                if (editor.innerText && editor.innerText.trim().length > 0) inserted = true;
             } catch (e) {}
+
+            await new Promise(r => setTimeout(r, 200));
+            const afterLen = (editor.innerText || editor.textContent || '').trim().length;
+            if (afterLen >= 5) hasContent = true;
         }
 
-        // Cách 3: InputEvent beforeinput & input
-        try {
-            const beforeEvt = new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: textToPost });
-            editor.dispatchEvent(beforeEvt);
-        } catch (e) {}
-
-        if (!inserted || !editor.innerText.trim()) {
+        // Ưu tiên 3: Nếu cả 2 cách trên đều chưa ăn, mới gán textContent trực tiếp
+        if (!hasContent) {
             editor.textContent = textToPost;
         }
 
         editor.dispatchEvent(new Event('input', { bubbles: true }));
         editor.dispatchEvent(new Event('change', { bubbles: true }));
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 300));
 
         // 4.1 Đính kèm hình ảnh (nếu có)
         if (Array.isArray(imagesToUpload) && imagesToUpload.length > 0) {

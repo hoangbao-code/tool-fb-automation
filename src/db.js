@@ -148,6 +148,7 @@ db.serialize(() => {
         ['ai_spin_enabled', '0'],
         ['gemini_conversation_url', ''],
         ['gemini_send_raw_content', '1'],
+        ['gemini_default_language', 'vi'],
         ['discord_bot_enabled', '0'],
         ['discord_bot_token', ''],
         ['discord_channel_id', ''],

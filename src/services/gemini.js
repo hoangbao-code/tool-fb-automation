@@ -111,14 +111,39 @@ async function callGeminiApi(apiKey, requestedModel, prompt) {
 /**
  * Gửi nội dung tin nhắn phòng thô trực tiếp vào Google Chrome Gemini Web
  * Chờ AI trên Chrome hoàn tất biên tập, làm sạch và trả về bài viết đã viết lại.
- * Tuyệt đối không bọc prompt template hay nạp tin thô khi AI chưa phản hồi.
+ * Hỗ trợ tùy chọn ngôn ngữ Tiếng Anh (en) hoặc Tiếng Việt (vi).
  */
-async function rewriteWithGemini(content, sender = '', groupName = '', overridePrompt = null) {
+async function rewriteWithGemini(content, sender = '', groupName = '', overridePrompt = null, language = null) {
     if (!content || !content.trim()) {
         throw new Error('Nội dung tin nhắn trống, không thể gửi sang Gemini AI.');
     }
 
     const rawText = content.trim();
+
+    // Xác định ngôn ngữ mục tiêu (mặc định lấy từ settings nếu không chỉ định)
+    let targetLang = language;
+    if (!targetLang) {
+        try {
+            const langRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_default_language'`);
+            targetLang = langRow?.value?.trim() || 'vi';
+        } catch (e) {
+            targetLang = 'vi';
+        }
+    }
+
+    let promptToSend = rawText;
+    if (overridePrompt) {
+        promptToSend = overridePrompt.replace('{CONTENT}', rawText);
+        if (targetLang === 'en' && !promptToSend.toLowerCase().includes('english')) {
+            promptToSend = `[YÊU CẦU: Viết bài đăng hoàn toàn bằng TIẾNG ANH (English) chuyên nghiệp, thu hút khách nước ngoài / expat]\n\n` + promptToSend;
+        }
+    } else {
+        if (targetLang === 'en') {
+            promptToSend = `[YÊU CẦU: Hãy dịch và viết lại bài đăng sau đây thành bài đăng Facebook hoàn toàn bằng TIẾNG ANH (English) chuyên nghiệp, thu hút khách thuê người nước ngoài / expat. Giữ đúng toàn bộ thông tin quan trọng (giá thuê, diện tích, địa chỉ/quận, tiện ích, số điện thoại Zalo liên hệ), thêm emoji sinh động và hashtag tiếng Anh phù hợp như #saigonapartment #expat #apartmentforrent #hcmc. Không thêm lời chào hay giải thích, chỉ xuất ra nội dung bài viết.]\n\nNội dung gốc:\n${rawText}`;
+        } else {
+            promptToSend = `[YÊU CẦU: Hãy viết lại bài đăng sau đây thành một bài đăng Facebook chuyên nghiệp bằng TIẾNG VIỆT, hấp dẫn, giữ đúng toàn bộ thông tin quan trọng (giá, diện tích, địa chỉ, số điện thoại liên hệ), có thêm icon sinh động và hashtag liên quan. Không thêm lời chào hay giải thích, chỉ xuất ra nội dung bài viết.]\n\nNội dung gốc:\n${rawText}`;
+        }
+    }
 
     // Lấy cấu hình URL cuộc trò chuyện đã ghim từ settings
     const targetUrlRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_conversation_url'`);
@@ -129,7 +154,7 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
     // Nếu Chrome chưa chạy -> TỰ ĐỘNG KHỞI CHẠY GOOGLE CHROME với cuộc trò chuyện đã ghim!
     if (!chromeStatus.active) {
         console.log('[Gemini Web] Chrome chưa chạy, đang tự động khởi chạy Chrome...');
-        await dbAsync.log('info', `[Gemini Web] Đang tự động mở Google Chrome để biên tập tin từ [${groupName || 'Zalo'}]...`);
+        await dbAsync.log('info', `[Gemini Web] Đang tự động mở Google Chrome để biên tập tin từ [${groupName || 'Zalo'}] (${targetLang === 'en' ? 'Tiếng Anh' : 'Tiếng Việt'})...`);
         const launchRes = await launchChromeGemini(DEFAULT_PORT, targetUrl);
         if (launchRes.success) {
             chromeStatus = { active: true };
@@ -141,7 +166,7 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
             if (apiKeyRow?.value && apiKeyRow.value.trim()) {
                 console.log('[Gemini Web] Không thể mở Chrome, tự động chuyển sang Gemini API dự phòng...');
                 const modelRow = await dbAsync.get(`SELECT value FROM settings WHERE key = 'gemini_model'`);
-                const apiRes = await callGeminiApi(apiKeyRow.value.trim(), modelRow?.value || 'gemini-3.7-flash', rawText);
+                const apiRes = await callGeminiApi(apiKeyRow.value.trim(), modelRow?.value || 'gemini-3.7-flash', promptToSend);
                 return cleanGeminiOutput(apiRes.text);
             }
             throw new Error(`Không thể khởi chạy Google Chrome: ${launchRes.message}. Vui lòng kiểm tra xem Chrome đã được cài đặt chưa.`);
@@ -150,9 +175,8 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
 
     let resultTextRaw = '';
 
-    // Gửi thẳng nội dung thô vào Gemini Web (không bọc prompt rườm rà)
-    console.log(`[Gemini Web] Đang gửi nội dung thô (${rawText.length} ký tự) vào Gemini Web...`);
-    const chromeRes = await sendPromptToChromeGemini(rawText, DEFAULT_PORT, targetUrl);
+    console.log(`[Gemini Web] Đang gửi yêu cầu biên tập (${targetLang === 'en' ? 'Tiếng Anh' : 'Tiếng Việt'}) vào Gemini Web...`);
+    const chromeRes = await sendPromptToChromeGemini(promptToSend, DEFAULT_PORT, targetUrl);
 
     if (chromeRes.success && chromeRes.text) {
         resultTextRaw = chromeRes.text;
@@ -190,19 +214,53 @@ async function rewriteWithGemini(content, sender = '', groupName = '', overrideP
         }
     }
 
-    await dbAsync.log('info', `Gemini Web đã biên tập xong bài viết cho [${groupName || 'Zalo'}] (${resultText.length} ký tự).`);
+    await dbAsync.log('info', `Gemini Web đã biên tập xong bài viết cho [${groupName || 'Zalo'}] bằng ${targetLang === 'en' ? 'Tiếng Anh' : 'Tiếng Việt'} (${resultText.length} ký tự).`);
     return resultText.trim();
 }
 
 /**
+ * Kiểm tra xem bài viết hoặc nhóm đích có phải bằng Tiếng Anh / Dành cho Expat hay không
+ */
+function isEnglishPost(content = '', groupName = '') {
+    const combined = (content + ' ' + groupName).toLowerCase();
+    const expatPatterns = [
+        'expat', 'foreigner', 'apartment for rent', 'room for rent',
+        'living in ho chi minh', 'saigon apartment', 'district 1', 'district 2',
+        'district 7', 'thao dien', 'luxury apartment', 'western', 'studio for rent'
+    ];
+    for (const p of expatPatterns) {
+        if (combined.includes(p)) return true;
+    }
+    const vietnameseAccents = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+    if (!vietnameseAccents.test(content) && content.length > 50) {
+        const enWords = ['apartment', 'bedroom', 'bathroom', 'balcony', 'fully furnished', 'rent', 'deposit', 'contact', 'location', 'amenities'];
+        let enCount = 0;
+        for (const w of enWords) {
+            if (combined.includes(w)) enCount++;
+        }
+        if (enCount >= 2) return true;
+    }
+    return false;
+}
+
+/**
  * Tạo biến thể bài viết riêng biệt (Unique Spin Content) cho từng nhóm Facebook
- * để tránh thuật toán chống spam trùng lặp của Facebook
+ * để tránh thuật toán chống spam trùng lặp của Facebook.
+ * Tự động chọn câu mở đầu và CTA bằng Tiếng Anh hoặc Tiếng Việt phù hợp với bài viết!
  */
 function spinPostForGroup(baseContent, targetGroupName = '', index = 0) {
     if (!baseContent) return '';
-    
-    // Các câu tiêu đề mở đầu biến thể
-    const hooks = [
+
+    const isEn = isEnglishPost(baseContent, targetGroupName);
+
+    const hooks = isEn ? [
+        `📢 NEW UPDATE:`,
+        `✨ HOT LISTING TODAY:`,
+        `🌟 AVAILABLE NOW:`,
+        `💎 NEW APARTMENT FOR RENT:`,
+        `📌 HIGHLIGHTED PROPERTY:`,
+        `🚀 EXCELLENT DEAL:`
+    ] : [
         `📢 CẬP NHẬT MỚI:`,
         `🔥 TIN HOT HÔM NAY:`,
         `✨ DÀNH CHO ANH EM QUAN TÂM:`,
@@ -211,8 +269,12 @@ function spinPostForGroup(baseContent, targetGroupName = '', index = 0) {
         `🚀 CHIA SẺ CÙNG CẢ NHÀ:`
     ];
 
-    // Các câu kêu gọi hành động cuối bài
-    const ctas = [
+    const ctas = isEn ? [
+        `👉 Interested? Send a direct message or call for viewing!`,
+        `📞 Call / Zalo / WhatsApp for fast viewing & consultation:`,
+        `🤝 Schedule your viewing today — feel free to inbox anytime!`,
+        `⚡ Move-in ready! Contact us now to reserve this unit!`
+    ] : [
         `👉 Mọi người quan tâm inbox hoặc liên hệ ngay nhé!`,
         `📞 Xem chi tiết thông tin bên dưới hoặc liên hệ trực tiếp:`,
         `🤝 Hỗ trợ tư vấn và giải đáp nhiệt tình cho anh em:`,
@@ -239,4 +301,4 @@ async function testGemini(apiKey, promptTemplate, model = 'gemini-3.6-flash') {
     return `[Mô hình sử dụng: ${modelUsed}]\n\n${text}`;
 }
 
-module.exports = { rewriteWithGemini, testGemini, spinPostForGroup, callGeminiApi, cleanGeminiOutput };
+module.exports = { rewriteWithGemini, testGemini, spinPostForGroup, isEnglishPost, callGeminiApi, cleanGeminiOutput };

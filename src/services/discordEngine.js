@@ -478,17 +478,22 @@ function createApprovalButtons(postId, disabled = false) {
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`discord_choose_cluster_${postId}`)
-            .setLabel('✅ Xác Nhận')
+            .setLabel('✅ Xác Nhận Đăng')
             .setStyle(ButtonStyle.Success)
             .setDisabled(disabled),
         new ButtonBuilder()
-            .setCustomId(`discord_rewrite_${postId}`)
-            .setLabel('🔄 Viết lại AI')
+            .setCustomId(`discord_rewrite_vi_${postId}`)
+            .setLabel('🇻🇳 AI Tiếng Việt')
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(disabled),
+        new ButtonBuilder()
+            .setCustomId(`discord_rewrite_en_${postId}`)
+            .setLabel('🇬🇧 AI Tiếng Anh')
             .setStyle(ButtonStyle.Primary)
             .setDisabled(disabled),
         new ButtonBuilder()
             .setCustomId(`discord_groups_${postId}`)
-            .setLabel('👥 Xem Nhóm FB')
+            .setLabel('👥 Nhóm FB')
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(disabled),
         new ButtonBuilder()
@@ -1524,12 +1529,20 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                         .setLabel('🚀 Xác Nhận Đăng (ACP)')
                         .setStyle(ButtonStyle.Success),
                     new ButtonBuilder()
+                        .setCustomId(`discord_rewrite_vi_${postId}`)
+                        .setLabel('🇻🇳 AI Tiếng Việt')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId(`discord_rewrite_en_${postId}`)
+                        .setLabel('🇬🇧 AI Tiếng Anh')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
                         .setCustomId(`discord_choose_cluster_${postId}`)
                         .setLabel('🔙 Chọn Nhóm Khác')
                         .setStyle(ButtonStyle.Secondary),
                     new ButtonBuilder()
                         .setCustomId(`discord_reject_${postId}`)
-                        .setLabel('❌ Hủy bỏ')
+                        .setLabel('❌ Hủy')
                         .setStyle(ButtonStyle.Danger)
                 );
 
@@ -1694,13 +1707,26 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                 return;
             }
 
-            // 2. Bấm NÚT VIẾT LẠI AI
+            // 2. Bấm NÚT VIẾT LẠI AI (TIẾNG VIỆT HOẶC TIẾNG ANH)
             if (customId.startsWith('discord_rewrite_')) {
-                const postId = parseInt(customId.replace('discord_rewrite_', ''), 10);
+                let targetLang = 'vi';
+                let postId = null;
+
+                if (customId.startsWith('discord_rewrite_vi_')) {
+                    targetLang = 'vi';
+                    postId = parseInt(customId.replace('discord_rewrite_vi_', ''), 10);
+                } else if (customId.startsWith('discord_rewrite_en_')) {
+                    targetLang = 'en';
+                    postId = parseInt(customId.replace('discord_rewrite_en_', ''), 10);
+                } else {
+                    postId = parseInt(customId.replace('discord_rewrite_', ''), 10);
+                }
+
+                const langLabel = targetLang === 'en' ? 'Tiếng Anh (English)' : 'Tiếng Việt';
                 await safeDeferUpdate();
 
                 await interaction.editReply({
-                    content: `🔄 **Đang gửi bài #${postId} vào Gemini Web để viết phiên bản khác...** Vui lòng đợi trong giây lát...`,
+                    content: `🔄 **Đang gửi bài #${postId} vào Gemini Web để viết lại bằng ${langLabel}...** Vui lòng đợi trong giây lát...`,
                     components: [createApprovalButtons(postId, true)]
                 });
 
@@ -1708,20 +1734,20 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
                     const post = await dbAsync.get(`SELECT * FROM posts WHERE id = ?`, [postId]);
                     if (!post) throw new Error('Không tìm thấy bài viết');
 
-                    const newRewritten = await rewriteWithGemini(post.original_text, interaction.user.username, 'Discord Rewrite');
+                    const newRewritten = await rewriteWithGemini(post.original_text, interaction.user.username, 'Discord Rewrite', null, targetLang);
                     await dbAsync.run(`UPDATE posts SET rewritten_text = ? WHERE id = ?`, [newRewritten, postId]);
 
                     const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
                         .setDescription(newRewritten.length > 4000 ? newRewritten.substring(0, 3995) + '...' : newRewritten)
-                        .setFooter({ text: 'Đã viết lại phiên bản mới! Bấm nút bên dưới để Duyệt bài.' });
+                        .setFooter({ text: `Đã biên tập bằng ${langLabel}! Bấm [Xác Nhận Đăng] để chọn nhóm đăng bài.` });
 
                     await interaction.editReply({
-                        content: `✨ **Đã viết lại xong bài #${postId}!** Vui lòng kiểm tra phiên bản mới:`,
+                        content: `✨ **Đã viết lại bài #${postId} bằng ${langLabel} thành công!** Vui lòng kiểm tra lại:`,
                         embeds: [updatedEmbed],
                         components: [createApprovalButtons(postId, false)]
                     });
 
-                    await dbAsync.log('info', `[Discord] Đã viết lại thành công bài #${postId} theo yêu cầu.`);
+                    await dbAsync.log('info', `[Discord] Đã viết lại thành công bài #${postId} bằng ${langLabel}.`);
                 } catch (rwErr) {
                     await interaction.editReply({
                         content: `⚠️ Viết lại thất bại: ${rwErr.message}`,

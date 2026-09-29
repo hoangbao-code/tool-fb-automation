@@ -58,7 +58,7 @@ contextBridge.exposeInMainWorld('electronApi', {
     publishPost: (idOrData) => ipcRenderer.invoke('publish-post', idOrData),
     deletePost: (id) => ipcRenderer.invoke('delete-post', id),
     clearAllPosts: (statusFilter) => ipcRenderer.invoke('clear-all-posts', statusFilter),
-    reRewritePost: (id) => ipcRenderer.invoke('re-rewrite-post', id),
+    reRewritePost: (id, language = null) => ipcRenderer.invoke('re-rewrite-post', id, language),
 
     // 6. Thử nghiệm AI & Chrome Gemini
     testAi: (apiKey, promptTemplate, model) => ipcRenderer.invoke('test-ai', { apiKey, promptTemplate, model }),

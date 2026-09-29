@@ -158,6 +158,7 @@ while ((match = idRegex.exec(appJsContent)) !== null) {
 
 let missingIds = [];
 for (const id of requiredIds) {
+    if (id.includes('${')) continue;
     // Check if id exists in html
     const idPattern = new RegExp(`id=["']${id}["']`);
     if (!idPattern.test(htmlContent)) {
