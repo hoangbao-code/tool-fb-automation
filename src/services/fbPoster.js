@@ -341,7 +341,7 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
             try {
                 document.execCommand('selectAll', false, null);
                 document.execCommand('delete', false, null);
-                const lines = textToPost.split(/\r?\n/);
+                const lines = textToPost.split(String.fromCharCode(13)).join('').split(String.fromCharCode(10));
                 for (let li = 0; li < lines.length; li++) {
                     if (lines[li].length > 0) document.execCommand('insertText', false, lines[li]);
                     if (li < lines.length - 1) document.execCommand('insertParagraph', false, null);
@@ -542,7 +542,7 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
             return {
                 success: true,
                 status: 'pending_approval',
-                postUrl: curGroupUrl.replace(/\\/?$/, '') + '/pending_posts',
+                postUrl: (curGroupUrl.endsWith('/') ? curGroupUrl.slice(0, -1) : curGroupUrl) + '/pending_posts',
                 message: 'Bài viết đã được gửi và đang chờ Quản trị viên duyệt.'
             };
         }
