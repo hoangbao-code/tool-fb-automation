@@ -318,13 +318,13 @@ const dbAsync = {
             return await dbAsync.all(`
                 SELECT g.* FROM fb_groups g
                 JOIN fb_cluster_groups cg ON g.id = cg.group_id
-                WHERE cg.cluster_id = ? AND g.is_active = 1 AND (g.user_id = ? OR g.user_id = 1 OR g.user_id IS NULL)
+                WHERE cg.cluster_id = ? AND (g.is_active IS NULL OR g.is_active != 0) AND (g.user_id = ? OR g.user_id = 1 OR g.user_id IS NULL)
             `, [clusterId, userId]);
         }
         return await dbAsync.all(`
             SELECT g.* FROM fb_groups g
             JOIN fb_cluster_groups cg ON g.id = cg.group_id
-            WHERE cg.cluster_id = ? AND g.is_active = 1
+            WHERE cg.cluster_id = ? AND (g.is_active IS NULL OR g.is_active != 0)
         `, [clusterId]);
     },
     exportBackup: async () => {
