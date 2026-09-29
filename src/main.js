@@ -1,3 +1,57 @@
+// BẢO VỆ TIẾN TRÌNH MAIN: Ngăn chặn triệt để lỗi mạng thoáng qua (ECONNRESET, ETIMEDOUT, TLSWrap) làm bật hộp thoại crash Electron
+process.on('uncaughtException', (err) => {
+    const msg = err?.message || String(err);
+    const code = err?.code || '';
+    const stack = err?.stack || '';
+    
+    const isNetworkTransient = 
+        code === 'ECONNRESET' ||
+        code === 'ETIMEDOUT' ||
+        code === 'ENOTFOUND' ||
+        code === 'EAI_AGAIN' ||
+        code === 'ECONNREFUSED' ||
+        code === 'EPIPE' ||
+        msg.includes('ECONNRESET') ||
+        msg.includes('ETIMEDOUT') ||
+        msg.includes('socket hang up') ||
+        msg.includes('network timeout') ||
+        stack.includes('TLSWrap.onStreamRead') ||
+        stack.includes('onStreamRead');
+
+    if (isNetworkTransient) {
+        console.warn('[Network Guardian] Đã chặn an toàn lỗi ngắt kết nối mạng thoáng qua:', code || msg);
+        return;
+    }
+
+    console.error('[CRITICAL Uncaught Exception]:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+    const msg = reason?.message || String(reason);
+    const code = reason?.code || '';
+    const stack = reason?.stack || '';
+
+    const isNetworkTransient = 
+        code === 'ECONNRESET' ||
+        code === 'ETIMEDOUT' ||
+        code === 'ENOTFOUND' ||
+        code === 'EAI_AGAIN' ||
+        code === 'ECONNREFUSED' ||
+        code === 'EPIPE' ||
+        msg.includes('ECONNRESET') ||
+        msg.includes('ETIMEDOUT') ||
+        msg.includes('socket hang up') ||
+        stack.includes('TLSWrap.onStreamRead') ||
+        stack.includes('onStreamRead');
+
+    if (isNetworkTransient) {
+        console.warn('[Network Guardian] Đã chặn an toàn Unhandled Rejection mạng thoáng qua:', code || msg);
+        return;
+    }
+
+    console.error('[CRITICAL Unhandled Rejection]:', reason);
+});
+
 const { app, BrowserWindow, ipcMain, session, Tray, Menu, Notification, nativeImage, webContents } = require('electron');
 const path = require('path');
 const fs = require('fs');

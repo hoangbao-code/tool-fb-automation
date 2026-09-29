@@ -500,6 +500,20 @@ function startServer(port = 3000) {
         console.log(`\x1b[36m│\x1b[0m  🌐 Trình duyệt nhúng   : \x1b[34mFacebook Webview Isolated Session\x1b[0m       \x1b[36m│\x1b[0m`);
         console.log(`\x1b[36m└─────────────────────────────────────────────────────────────────┘\x1b[0m`);
     });
+
+    server.on('clientError', (err, socket) => {
+        if (err.code === 'ECONNRESET' || !socket.writable) return;
+        socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+    });
+
+    server.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.warn(`[Server Gateway] Cổng ${serverPort} đang bận hoặc đã có tiến trình khác sử dụng.`);
+        } else {
+            console.warn('[Server Gateway] Lỗi server:', err.message);
+        }
+    });
+
     return { app, server };
 }
 

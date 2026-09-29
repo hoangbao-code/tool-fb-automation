@@ -1994,9 +1994,34 @@ async function startDiscordBot({ token, channelId, debounceSeconds = 60 }) {
         });
 
         client.on('error', async (err) => {
-            console.error('[Discord Client Error]:', err);
-            await dbAsync.log('error', `[Discord Bot Error]: ${err.message}`);
+            console.warn('[Discord Client Error]:', err.message || err);
+            const isTransient = err.code === 'ECONNRESET' || err.message?.includes('ECONNRESET');
+            if (!isTransient) {
+                await dbAsync.log('warn', `[Discord Bot Error]: ${err.message}`);
+            }
         });
+
+        client.on('shardError', (err, shardId) => {
+            console.warn(`[Discord Shard ${shardId} Error]:`, err.message || err);
+        });
+
+        client.on('shardDisconnect', (event, shardId) => {
+            console.warn(`[Discord Shard ${shardId} Disconnected]: code ${event?.code || event}`);
+        });
+
+        client.on('shardReconnecting', (shardId) => {
+            console.log(`[Discord Shard ${shardId}] Đang tự động kết nối lại mạng...`);
+        });
+
+        client.on('shardResume', (shardId, replayedEvents) => {
+            console.log(`[Discord Shard ${shardId}] Kết nối đã khôi phục thành công (${replayedEvents} events).`);
+        });
+
+        if (client.rest) {
+            client.rest.on('error', (err) => {
+                console.warn('[Discord REST Error]:', err.message || err);
+            });
+        }
 
         // Đăng nhập bot
         client.login(token).catch(err => {
