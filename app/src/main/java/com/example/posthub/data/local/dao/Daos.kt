@@ -145,6 +145,9 @@ interface PostLogDao {
     @Insert
     suspend fun insertLog(log: PostLogEntity): Long
 
+    @Query("SELECT * FROM post_logs WHERE postId = :postId ORDER BY timestamp ASC")
+    suspend fun getLogsForPost(postId: Long): List<PostLogEntity>
+
     @Query("DELETE FROM post_logs WHERE timestamp < :beforeTimestamp")
     suspend fun deleteOldLogs(beforeTimestamp: Long): Int
 }

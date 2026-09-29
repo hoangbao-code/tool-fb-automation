@@ -48,6 +48,13 @@ data class AssistedSession(
     val progressDisplay: String get() = "${currentIndex + 1}/${groups.size}"
 }
 
+data class FbPostResult(
+    val status: String, // "SUCCESS", "PENDING_APPROVAL", "FAILED", "ASSISTED_READY"
+    val postUrl: String? = null,
+    val message: String? = null,
+    val error: String? = null
+)
+
 class FbWebSession(
     private val context: Context,
     private val secureStore: SecureStore,
@@ -542,87 +549,322 @@ class FbWebSession(
      * Thực thi đăng bài lên Group:
      * - isAssisted = true: Mở ô soạn thảo, điền sẵn nội dung, để người dùng tự bấm nút Đăng cuối cùng.
      * - isAssisted = false: Tự động điền và bấm Đăng sau khi qua rào chắn Jitter.
+     * Trả về FbPostResult phân biệt rõ:
+     * - SUCCESS: Đã đăng thành công (kèm postUrl nếu có)
+     * - PENDING_APPROVAL: Nhóm cần Quản trị viên duyệt bài
+     * - FAILED: Thất bại kèm lý do cụ thể (bị chặn, lỗi selector, timeout...)
      */
     suspend fun postToGroup(
         groupUrl: String,
         content: String,
         isAssisted: Boolean = true
-    ): Result<String> = withContext(Dispatchers.Main) {
+    ): Result<FbPostResult> = withContext(Dispatchers.Main) {
         if (secureStore.isEmergencyStop()) {
             return@withContext Result.failure(IllegalStateException("Đang trong trạng thái DỪNG KHẨN CẤP! Vui lòng kiểm tra lại tài khoản."))
         }
 
         if (secureStore.isDryRun()) {
             AppLog.i("FbWebSession", "[DRY-RUN] Giả lập đăng bài thành công vào: $groupUrl (Nội dung: ${content.take(50)}...)")
-            return@withContext Result.success("DRY-RUN thành công")
+            return@withContext Result.success(FbPostResult(status = "SUCCESS", postUrl = groupUrl, message = "DRY-RUN thành công"))
         }
 
         val wv = getOrCreateWebView(context)
         restoreCookies()
 
         // 1. Mở nhóm
+        AppLog.i("FbWebSession", "Bắt đầu mở nhóm: $groupUrl")
         openGroup(groupUrl)
-        delay(JitterPolicy.calculateActionDelayMillis(4, 7))
+        delay(JitterPolicy.calculateActionDelayMillis(4, 6))
 
-        // 2. Mở trình soạn thảo bài viết bằng Javascript
-        val clickComposerJs = """
+        // 2. Tự động kiểm tra Checkpoint / Phiên hết hạn trước khi đăng
+        val initialCheckJs = """
             (function() {
-                var btn = document.querySelector("${selectorConfig.composerOpenButton}");
-                if (btn) { btn.click(); return 'OPENED'; }
-                return 'NOT_FOUND';
+                var url = window.location.href.toLowerCase();
+                var text = (document.body.innerText || '').toLowerCase();
+                if (url.includes('/login') || url.includes('checkpoint') || text.includes('checkpoint') || text.includes('xác minh danh tính')) {
+                    return JSON.stringify({ status: 'FAILED', error: 'Tài khoản dính checkpoint hoặc phiên đăng nhập đã hết hạn.' });
+                }
+                if (text.includes('chỉ quản trị viên mới có thể đăng') || text.includes('only admins can post')) {
+                    return JSON.stringify({ status: 'FAILED', error: 'Nhóm này cài đặt chỉ Quản trị viên mới được đăng bài.' });
+                }
+                if (text.includes('tạm thời bị chặn') || text.includes('temporarily blocked') || text.includes('bị hạn chế')) {
+                    return JSON.stringify({ status: 'FAILED', error: 'Tài khoản đang bị Facebook tạm khóa tính năng đăng bài trong nhóm.' });
+                }
+                return JSON.stringify({ status: 'OK' });
             })();
         """.trimIndent()
 
-        val openStatus = evaluateJs(wv, clickComposerJs)
-        AppLog.i("FbWebSession", "Mở khung soạn thảo bài viết: $openStatus")
-        delay(JitterPolicy.calculateActionDelayMillis(3, 5))
+        val checkResStr = evaluateJs(wv, initialCheckJs)
+        try {
+            val checkJson = org.json.JSONObject(checkResStr)
+            if (checkJson.optString("status") == "FAILED") {
+                val err = checkJson.optString("error", "Lỗi trạng thái tài khoản")
+                AppLog.e("FbWebSession", "Không thể đăng bài vào $groupUrl: $err")
+                return@withContext Result.success(FbPostResult(status = "FAILED", error = err))
+            }
+        } catch (_: Exception) {}
 
-        // 3. Điền nội dung bài viết
-        val escapedContent = content.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+        // 3. Mở khung soạn thảo (Composer Trigger)
+        val openTriggerJs = """
+            (function() {
+                try {
+                    // Đóng thông báo hoặc popup che chắn nếu có
+                    var closeBtns = document.querySelectorAll("[aria-label='Close'], [aria-label='Đóng'], [aria-label='Not Now'], [aria-label='Lúc khác']");
+                    for (var c = 0; c < closeBtns.length; c++) {
+                        try { closeBtns[c].click(); } catch(e) {}
+                    }
+
+                    // Tìm nút mở khung soạn bài (Composer Trigger)
+                    var triggerKeywords = [
+                        'bạn viết gì đi',
+                        'tạo bài viết công khai',
+                        'tạo bài viết',
+                        'bạn đang nghĩ gì',
+                        'viết gì đó',
+                        'write something',
+                        'create a public post',
+                        'create a post',
+                        'what\'s on your mind'
+                    ];
+
+                    var triggerBtn = null;
+                    var allEls = Array.from(document.querySelectorAll('span, div[role="button"], div[tabindex="0"], div[data-action-id="composer"]'));
+                    for (var i = 0; i < allEls.length; i++) {
+                        var el = allEls[i];
+                        var text = (el.innerText || el.textContent || '').trim().toLowerCase();
+                        var aria = (el.getAttribute('aria-label') || '').toLowerCase();
+                        for (var k = 0; k < triggerKeywords.length; k++) {
+                            var kw = triggerKeywords[k];
+                            if (text === kw || (text.includes(kw) && text.length < 50) || aria.includes(kw)) {
+                                var btn = el.closest('[role="button"]') || el.closest('[tabindex="0"]') || el;
+                                if (btn && btn.offsetParent !== null) {
+                                    triggerBtn = btn;
+                                    break;
+                                }
+                            }
+                        }
+                        if (triggerBtn) break;
+                    }
+
+                    if (!triggerBtn) {
+                        triggerBtn = document.querySelector('div[role="region"] div[role="button"], div[data-pagelet="GroupInlineComposer"] div[role="button"]');
+                    }
+
+                    if (triggerBtn) {
+                        triggerBtn.click();
+                    }
+
+                    return JSON.stringify({ status: triggerBtn ? 'TRIGGER_CLICKED' : 'TRIGGER_NOT_FOUND' });
+                } catch(e) {
+                    return JSON.stringify({ status: 'ERROR', error: e.toString() });
+                }
+            })();
+        """.trimIndent()
+
+        val triggerRes = evaluateJs(wv, openTriggerJs)
+        AppLog.i("FbWebSession", "Kết quả tìm và click mở Composer: $triggerRes")
+        delay(JitterPolicy.calculateActionDelayMillis(2, 4))
+
+        // 4. Nhập nội dung bài viết vào Editor
+        val escapedContent = org.json.JSONObject.quote(content)
         val fillTextJs = """
             (function() {
-                var el = document.querySelector("${selectorConfig.composerTextArea}");
-                if (el) {
-                    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
-                        el.value = `$escapedContent`;
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                        el.dispatchEvent(new Event('change', { bubbles: true }));
-                    } else {
-                        el.innerText = `$escapedContent`;
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                try {
+                    var dialog = document.querySelector('div[role="dialog"]');
+                    var ctx = dialog || document;
+                    var editor = ctx.querySelector('div[role="textbox"][contenteditable="true"], div[contenteditable="true"], textarea[name="xc_message"], textarea');
+
+                    if (!editor) {
+                        var pageText = (document.body.innerText || '').toLowerCase();
+                        if (pageText.includes('tham gia nhóm') || pageText.includes('join group')) {
+                            return JSON.stringify({ status: 'FAILED', error: 'Bạn chưa tham gia nhóm này.' });
+                        }
+                        return JSON.stringify({ status: 'FAILED', error: 'Không tìm thấy khung soạn thảo bài viết.' });
                     }
-                    return 'FILLED';
+
+                    editor.focus();
+                    var textToPost = $escapedContent;
+
+                    var inserted = false;
+                    try {
+                        document.execCommand('selectAll', false, null);
+                        document.execCommand('delete', false, null);
+                        inserted = document.execCommand('insertText', false, textToPost);
+                    } catch(e) {}
+
+                    if (!inserted || !editor.innerText.trim()) {
+                        try {
+                            var lines = textToPost.split(/\r?\n/);
+                            for (var l = 0; l < lines.length; l++) {
+                                if (lines[l].length > 0) document.execCommand('insertText', false, lines[l]);
+                                if (l < lines.length - 1) document.execCommand('insertParagraph', false, null);
+                            }
+                            if (editor.innerText && editor.innerText.trim().length > 0) inserted = true;
+                        } catch(e) {}
+                    }
+
+                    if (!inserted || !editor.innerText.trim()) {
+                        if (editor.tagName === 'TEXTAREA' || editor.tagName === 'INPUT') {
+                            editor.value = textToPost;
+                        } else {
+                            editor.innerText = textToPost;
+                        }
+                    }
+
+                    editor.dispatchEvent(new Event('input', { bubbles: true }));
+                    editor.dispatchEvent(new Event('change', { bubbles: true }));
+
+                    return JSON.stringify({ status: 'FILLED' });
+                } catch(e) {
+                    return JSON.stringify({ status: 'FAILED', error: e.toString() });
                 }
-                return 'TEXTAREA_NOT_FOUND';
             })();
         """.trimIndent()
 
-        val fillStatus = evaluateJs(wv, fillTextJs)
-        AppLog.i("FbWebSession", "Điền nội dung bài viết: $fillStatus")
+        val fillRes = evaluateJs(wv, fillTextJs)
+        AppLog.i("FbWebSession", "Kết quả điền nội dung bài viết: $fillRes")
+
+        try {
+            val fillJson = org.json.JSONObject(fillRes)
+            if (fillJson.optString("status") == "FAILED") {
+                val err = fillJson.optString("error", "Không thể điền nội dung")
+                return@withContext Result.success(FbPostResult(status = "FAILED", error = err))
+            }
+        } catch (_: Exception) {}
 
         if (isAssisted) {
-            AppLog.i("FbWebSession", "Chế độ TRỢ LỰC (ASSISTED): Đã điền sẵn bài viết và chuẩn bị ảnh. Mời bạn kiểm tra lại trên màn hình và tự bấm 'Đăng'!")
-            return@withContext Result.success("Đã chuẩn bị xong bài viết (Chế độ Trợ lực)")
-        } else {
-            // Chế độ AUTO: Đợi giãn cách Jitter rồi tự bấm nút đăng
-            val delayBeforeSubmit = JitterPolicy.calculateActionDelayMillis(5, 10)
-            AppLog.i("FbWebSession", "Chế độ TỰ ĐỘNG (AUTO): Chờ ${delayBeforeSubmit / 1000}s giãn cách an toàn trước khi bấm Đăng...")
-            delay(delayBeforeSubmit)
+            AppLog.i("FbWebSession", "Chế độ TRỢ LỰC (ASSISTED): Đã điền sẵn bài viết. Mời bạn kiểm tra lại trên màn hình và tự bấm 'Đăng'!")
+            return@withContext Result.success(FbPostResult(status = "ASSISTED_READY", message = "Đã điền sẵn bài viết"))
+        }
 
-            val clickSubmitJs = """
-                (function() {
-                    var submitBtn = document.querySelector("${selectorConfig.composerSubmitButton}");
+        // Chế độ AUTO: Đợi giãn cách Jitter rồi tự bấm nút Đăng
+        val delayBeforeSubmit = JitterPolicy.calculateActionDelayMillis(3, 5)
+        AppLog.i("FbWebSession", "Chế độ TỰ ĐỘNG (AUTO): Chờ ${delayBeforeSubmit / 1000}s trước khi bấm Đăng...")
+        delay(delayBeforeSubmit)
+
+        val clickSubmitJs = """
+            (function() {
+                try {
+                    var postKeywords = ['đăng', 'post', 'chia sẻ', 'publish'];
+                    var submitBtn = null;
+                    var d = document.querySelector('div[role="dialog"]') || document;
+                    var buttons = Array.from(d.querySelectorAll('div[role="button"], button'));
+                    for (var b = 0; b < buttons.length; b++) {
+                        var btn = buttons[b];
+                        var btnText = (btn.innerText || btn.textContent || '').trim().toLowerCase();
+                        var btnAria = (btn.getAttribute('aria-label') || '').toLowerCase();
+                        for (var p = 0; p < postKeywords.length; p++) {
+                            var pk = postKeywords[p];
+                            if (btnText === pk || (btnText.includes(pk) && btnText.length < 20) || btnAria.includes(pk)) {
+                                if (btn.getAttribute('aria-disabled') !== 'true' && !btn.disabled && btn.offsetParent !== null) {
+                                    submitBtn = btn;
+                                    break;
+                                }
+                            }
+                        }
+                        if (submitBtn) break;
+                    }
+
+                    if (!submitBtn) {
+                        submitBtn = d.querySelector('div[aria-label*="Đăng"][role="button"], div[aria-label*="Post"][role="button"], button[type="submit"]');
+                    }
+
                     if (submitBtn) {
                         submitBtn.click();
-                        return 'SUBMITTED';
+                        return JSON.stringify({ status: 'CLICKED_SUBMIT' });
                     }
-                    return 'SUBMIT_BTN_NOT_FOUND';
-                })();
-            """.trimIndent()
+                    return JSON.stringify({ status: 'SUBMIT_BTN_NOT_FOUND' });
+                } catch(e) {
+                    return JSON.stringify({ status: 'ERROR', error: e.toString() });
+                }
+            })();
+        """.trimIndent()
 
-            val submitStatus = evaluateJs(wv, clickSubmitJs)
-            AppLog.i("FbWebSession", "Bấm nút đăng tự động: $submitStatus")
-            return@withContext Result.success("Đã hoàn tất lệnh đăng tự động")
+        val submitRes = evaluateJs(wv, clickSubmitJs)
+        AppLog.i("FbWebSession", "Kết quả bấm nút đăng tự động: $submitRes")
+
+        if (submitRes.contains("SUBMIT_BTN_NOT_FOUND")) {
+            return@withContext Result.success(FbPostResult(status = "FAILED", error = "Không tìm thấy nút Đăng hoặc nút Đăng đang bị khóa"))
+        }
+
+        // Chờ phản hồi từ Facebook (6 giây) để kiểm tra kết quả thật
+        AppLog.i("FbWebSession", "Đang chờ Facebook xử lý bài đăng và theo dõi trạng thái...")
+        delay(6000)
+
+        val verifyJs = """
+            (function() {
+                var bodyText = (document.body.innerText || '').toLowerCase();
+                var curUrl = window.location.href;
+
+                // 1. Kiểm tra trạng thái Chờ duyệt
+                if (bodyText.includes('chờ phê duyệt') || bodyText.includes('quản trị viên sẽ xét duyệt') || 
+                    bodyText.includes('pending') || bodyText.includes('đang chờ duyệt') || 
+                    curUrl.includes('pending_posts')) {
+                    return JSON.stringify({
+                        status: 'PENDING_APPROVAL',
+                        message: 'Bài viết đang chờ Quản trị viên duyệt',
+                        url: curUrl.includes('pending_posts') ? curUrl : curUrl + 'pending_posts'
+                    });
+                }
+
+                // 2. Kiểm tra chặn tính năng / Spam block
+                if (bodyText.includes('bị chặn') || bodyText.includes('không thể đăng') || 
+                    bodyText.includes('vi phạm tiêu chuẩn') || bodyText.includes('temporarily blocked')) {
+                    return JSON.stringify({
+                        status: 'FAILED',
+                        error: 'Bị Facebook tạm chặn đăng bài vào nhóm này (Spam filter hoặc vi phạm quy tắc)'
+                    });
+                }
+
+                // 3. Kiểm tra xem dialog đăng bài đã đóng chưa
+                var dialog = document.querySelector('div[role="dialog"]');
+                if (!dialog) {
+                    // Dialog đã đóng => Bài viết đã đăng lên nhóm!
+                    var postLink = null;
+                    var links = document.querySelectorAll('a[href*="/posts/"], a[href*="/permalink/"]');
+                    if (links.length > 0) {
+                        postLink = links[0].href;
+                    }
+                    return JSON.stringify({
+                        status: 'SUCCESS',
+                        postUrl: postLink || curUrl,
+                        message: 'Đăng bài thành công'
+                    });
+                }
+
+                // Nếu dialog vẫn còn mở, kiểm tra xem có thông báo lỗi gì không
+                var errorBox = dialog.querySelector('[role="alert"], [data-testid="error-message"]');
+                var errMsg = errorBox ? (errorBox.innerText || '').trim() : 'Nút Đăng không phản hồi hoặc Facebook từ chối bài viết';
+                return JSON.stringify({ status: 'FAILED', error: errMsg });
+            })();
+        """.trimIndent()
+
+        val verifyRes = evaluateJs(wv, verifyJs)
+        AppLog.i("FbWebSession", "Kết quả xác thực sau khi đăng: $verifyRes")
+
+        try {
+            val vJson = org.json.JSONObject(verifyRes)
+            val st = vJson.optString("status", "FAILED")
+            when (st) {
+                "SUCCESS" -> {
+                    val pUrl = vJson.optString("postUrl", groupUrl)
+                    AppLog.i("FbWebSession", "✓ ĐĂNG BÀI THÀNH CÔNG vào $groupUrl (Link: $pUrl)")
+                    Result.success(FbPostResult(status = "SUCCESS", postUrl = pUrl, message = "Đăng thành công"))
+                }
+                "PENDING_APPROVAL" -> {
+                    val pendingUrl = vJson.optString("url", groupUrl)
+                    AppLog.w("FbWebSession", "⏳ BÀI VIẾT ĐANG CHỜ DUYỆT tại nhóm: $groupUrl")
+                    Result.success(FbPostResult(status = "PENDING_APPROVAL", postUrl = pendingUrl, message = "Đang chờ Quản trị viên duyệt"))
+                }
+                else -> {
+                    val err = vJson.optString("error", "Đăng bài thất bại")
+                    AppLog.e("FbWebSession", "✗ ĐĂNG BÀI THẤT BẠI tại $groupUrl: $err")
+                    Result.success(FbPostResult(status = "FAILED", error = err))
+                }
+            }
+        } catch (e: Exception) {
+            AppLog.e("FbWebSession", "Lỗi phân tích kết quả xác thực: ${e.message}")
+            Result.success(FbPostResult(status = "FAILED", error = "Lỗi xác thực phản hồi từ Facebook: ${e.message}"))
         }
     }
 
@@ -647,36 +889,45 @@ class FbWebSession(
 
     suspend fun fillActiveComposer(content: String): Result<String> = withContext(Dispatchers.Main) {
         val wv = webView ?: return@withContext Result.failure(IllegalStateException("WebView chưa khởi tạo"))
-        val clickComposerJs = """
-            (function() {
-                var btn = document.querySelector("${selectorConfig.composerOpenButton}");
-                if (btn) { btn.click(); return 'OPENED'; }
-                return 'NOT_FOUND';
-            })();
-        """.trimIndent()
-        evaluateJs(wv, clickComposerJs)
-        delay(1500)
+        val escapedContent = org.json.JSONObject.quote(content)
 
-        val escapedContent = content.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
-        val fillTextJs = """
+        val fillScript = """
             (function() {
-                var el = document.querySelector("${selectorConfig.composerTextArea}");
-                if (el) {
-                    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
-                        el.value = `$escapedContent`;
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                        el.dispatchEvent(new Event('change', { bubbles: true }));
-                    } else {
-                        el.innerText = `$escapedContent`;
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                try {
+                    var triggerKeywords = ['bạn viết gì đi', 'tạo bài viết công khai', 'tạo bài viết', 'bạn đang nghĩ gì', 'viết gì đó', 'write something'];
+                    var allEls = Array.from(document.querySelectorAll('span, div[role="button"], div[tabindex="0"]'));
+                    for (var i = 0; i < allEls.length; i++) {
+                        var el = allEls[i];
+                        var text = (el.innerText || el.textContent || '').trim().toLowerCase();
+                        for (var k = 0; k < triggerKeywords.length; k++) {
+                            if (text.includes(triggerKeywords[k])) {
+                                var b = el.closest('[role="button"]') || el;
+                                if (b && b.offsetParent !== null) { b.click(); break; }
+                            }
+                        }
                     }
-                    return 'FILLED';
+
+                    setTimeout(function() {
+                        var d = document.querySelector('div[role="dialog"]') || document;
+                        var ed = d.querySelector('div[role="textbox"][contenteditable="true"], div[contenteditable="true"], textarea');
+                        if (ed) {
+                            ed.focus();
+                            document.execCommand('selectAll', false, null);
+                            document.execCommand('delete', false, null);
+                            document.execCommand('insertText', false, $escapedContent);
+                            ed.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                    }, 1000);
+
+                    return 'TRIGGERED_FILL';
+                } catch(e) {
+                    return e.toString();
                 }
-                return 'TEXTAREA_NOT_FOUND';
             })();
         """.trimIndent()
-        val fillStatus = evaluateJs(wv, fillTextJs)
-        Result.success("Đã điền nội dung ($fillStatus)")
+
+        evaluateJs(wv, fillScript)
+        Result.success("Đã điền nội dung")
     }
 
     fun updateSelectorConfig(newConfig: SelectorConfig) {

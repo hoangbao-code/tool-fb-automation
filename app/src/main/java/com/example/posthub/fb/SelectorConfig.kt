@@ -5,14 +5,14 @@ import org.json.JSONObject
 import java.security.MessageDigest
 
 data class SelectorConfig(
-    val version: Int = 2,
-    val composerOpenButton: String = "div[role='button']:has-text('Bạn đang nghĩ gì'), div[role='button']:has-text('Viết gì đó'), div[data-action-id='composer']",
-    val composerTextArea: String = "div[role='textbox'], textarea[name='view_post'], div[contenteditable='true']",
-    val composerSubmitButton: String = "div[role='button']:has-text('Đăng'), div[role='button']:has-text('Post'), button[type='submit']",
-    val groupJoinButton: String = "div[role='button']:has-text('Tham gia nhóm'), div[role='button']:has-text('Join Group'), button:has-text('Tham gia'), div[aria-label*='Tham gia']",
+    val version: Int = 3,
+    val composerOpenButton: String = "div[role='button'], span, div[tabindex='0'], div[data-action-id='composer']",
+    val composerTextArea: String = "div[role='textbox'][contenteditable='true'], div[contenteditable='true'], textarea[name='xc_message'], textarea",
+    val composerSubmitButton: String = "div[role='button'], button[type='submit'], button",
+    val groupJoinButton: String = "div[role='button'], button",
     val joinAnswerInput: String = "textarea, input[type='text']",
     val joinCheckbox: String = "input[type='checkbox'], div[role='checkbox']",
-    val joinSubmitButton: String = "div[role='button']:has-text('Gửi'), div[role='button']:has-text('Submit'), button[type='submit']",
+    val joinSubmitButton: String = "div[role='button'], button[type='submit']",
     val checkpointSignatures: List<String> = listOf(
         "checkpoint", "captcha", "bị hạn chế", "tạm thời bị khóa", "xác minh danh tính", "security check", "temporarily blocked"
     )

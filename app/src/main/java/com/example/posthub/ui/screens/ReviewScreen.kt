@@ -123,6 +123,8 @@ fun ReviewScreen(
     var isAiGenerating by remember { mutableStateOf(false) }
     var previousPostText by remember { mutableStateOf<String?>(null) }
     var isViewingGeminiWeb by rememberSaveable { mutableStateOf(false) }
+    var postLogsForThisPost by remember { mutableStateOf<List<com.example.posthub.data.local.entity.PostLogEntity>>(emptyList()) }
+    var showReportDialog by remember { mutableStateOf(false) }
 
     // Nếu đang mở trang Gemini Web để tương tác cuộc trò chuyện
     if (isViewingGeminiWeb) {
@@ -140,6 +142,8 @@ fun ReviewScreen(
     // Load bài đăng từ Database
     LaunchedEffect(postId) {
         val loaded = withContext(Dispatchers.IO) { db.postDao().getPostById(postId) }
+        val logs = withContext(Dispatchers.IO) { db.postLogDao().getLogsForPost(postId) }
+        postLogsForThisPost = logs
         if (loaded != null) {
             post = loaded
             rawText = loaded.rawText
@@ -227,6 +231,111 @@ fun ReviewScreen(
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // Kết quả đăng bài (nếu đã từng đăng vào các nhóm)
+            if (postLogsForThisPost.isNotEmpty()) {
+                val successLogs = postLogsForThisPost.filter { it.status == "SUCCESS" }
+                val pendingLogs = postLogsForThisPost.filter { it.status == "PENDING_APPROVAL" }
+                val failedLogs = postLogsForThisPost.filter { it.status == "FAILED" }
+
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = if (failedLogs.isEmpty()) Color(0xFFE8F5E9) else Color(0xFFFFF3E0)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "📊 Kết Quả Đăng Bài (${postLogsForThisPost.size} nhóm)",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1B5E20)
+                                )
+                                Text(
+                                    text = "Đã đăng: ${successLogs.size} • Chờ duyệt: ${pendingLogs.size} • Lỗi: ${failedLogs.size}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+
+                            Button(
+                                onClick = { showReportDialog = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                            ) {
+                                Text("Xem Báo Cáo", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Dialog hiển thị chi tiết link bài viết và trạng thái từng nhóm
+            if (showReportDialog) {
+                val reportSummaryText = buildString {
+                    appendLine("==========================================")
+                    appendLine("BÁO CÁO ĐĂNG BÀI FACEBOOK - BÀI VIẾT #${postId}")
+                    appendLine("Tổng số nhóm: ${postLogsForThisPost.size}")
+                    appendLine("==========================================")
+                    postLogsForThisPost.forEachIndexed { idx, log ->
+                        val statusDesc = when (log.status) {
+                            "SUCCESS" -> "✓ [ĐÃ ĐĂNG] Link: ${log.errorMessage ?: "Đã đăng thành công"}"
+                            "PENDING_APPROVAL" -> "⏳ [CHỜ DUYỆT] Đang chờ Quản trị viên phê duyệt"
+                            else -> "✗ [THẤT BẠI] Lý do: ${log.errorMessage ?: "Lỗi"}"
+                        }
+                        appendLine("${idx + 1}. ${log.groupName}: $statusDesc")
+                    }
+                }
+
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showReportDialog = false },
+                    title = { Text("Báo Cáo Chi Tiết Đăng Bài") },
+                    text = {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                            postLogsForThisPost.forEach { log ->
+                                Row(modifier = Modifier.padding(vertical = 4.dp)) {
+                                    val icon = when (log.status) {
+                                        "SUCCESS" -> "🟢"
+                                        "PENDING_APPROVAL" -> "🟡"
+                                        else -> "🔴"
+                                    }
+                                    Column {
+                                        Text("$icon ${log.groupName}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        val detail = when (log.status) {
+                                            "SUCCESS" -> "Đã đăng: ${log.errorMessage ?: ""}"
+                                            "PENDING_APPROVAL" -> "Đang chờ Quản trị viên duyệt bài"
+                                            else -> "Thất bại: ${log.errorMessage ?: "Lỗi"}"
+                                        }
+                                        Text(detail, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("PostReport", reportSummaryText)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Đã sao chép toàn bộ báo cáo & link bài viết!", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Text("Sao chép báo cáo")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showReportDialog = false }) {
+                            Text("Đóng")
+                        }
+                    }
+                )
+            }
+
             // Phần 1: Các biến trích xuất (Variables Editor)
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(12.dp)) {
