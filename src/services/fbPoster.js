@@ -90,11 +90,52 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
             'tạo bài viết công khai',
             'tạo bài viết',
             'bạn đang nghĩ gì',
+            'bắt đầu cuộc thảo luận',
+            'tạo bài thảo luận',
+            'viết gì đó',
+            'thảo luận',
             'write something',
             'create a public post',
             'create a post',
+            'start discussion',
             'what\\'s on your mind'
         ];
+
+        function switchToDiscussionTabIfPresent() {
+            try {
+                const tabs = Array.from(document.querySelectorAll('a[role="tab"], div[role="tab"], a[href*="/discussion"], a[href*="sorting_setting"]'));
+                for (const tab of tabs) {
+                    const text = (tab.innerText || tab.textContent || '').trim().toLowerCase();
+                    const aria = (tab.getAttribute('aria-label') || '').toLowerCase();
+                    if (text.includes('thảo luận') || text.includes('discussion') || aria.includes('thảo luận') || aria.includes('discussion')) {
+                        const isSelected = tab.getAttribute('aria-selected') === 'true';
+                        if (!isSelected) {
+                            tab.click();
+                            return true;
+                        }
+                    }
+                }
+            } catch (e) {}
+            return false;
+        }
+
+        function checkAndAcceptRules(ctx) {
+            try {
+                const searchCtx = ctx || document;
+                const buttons = Array.from(searchCtx.querySelectorAll('div[role="button"], button'));
+                for (const b of buttons) {
+                    const text = (b.innerText || b.textContent || '').trim().toLowerCase();
+                    const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+                    if (text === 'tôi đồng ý' || text === 'đồng ý' || text === 'xác nhận' || text === 'đã hiểu' || 
+                        text === 'i agree' || text === 'agree' || text === 'confirm' || text === 'got it' ||
+                        aria.includes('đồng ý') || aria.includes('agree')) {
+                        b.click();
+                        return true;
+                    }
+                }
+            } catch (e) {}
+            return false;
+        }
 
         function findComposerTrigger() {
             const elements = Array.from(document.querySelectorAll('span, div[role="button"], div[tabindex="0"]'));
@@ -108,13 +149,16 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
                     }
                 }
             }
-            return document.querySelector('div[role="region"] div[role="button"], div[data-pagelet="GroupInlineComposer"] div[role="button"]');
+            return document.querySelector('div[role="region"] div[role="button"], div[data-pagelet="GroupInlineComposer"] div[role="button"], div[data-pagelet="GroupInlineComposer"] [tabindex="0"]');
         }
 
         let triggerBtn = null;
         for (let i = 0; i < 20; i++) {
             triggerBtn = findComposerTrigger();
             if (triggerBtn) break;
+            if (i === 4 || i === 10) {
+                switchToDiscussionTabIfPresent();
+            }
             await new Promise(r => setTimeout(r, 500));
         }
 
@@ -130,12 +174,21 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
         // 3. Chờ Dialog tạo bài viết xuất hiện
         let dialog = null;
         let editor = null;
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < 25; i++) {
             await new Promise(r => setTimeout(r, 400));
             dialog = document.querySelector('div[role="dialog"]');
             const searchContext = dialog || document;
             editor = searchContext.querySelector('div[role="textbox"][contenteditable="true"], div[contenteditable="true"]');
             if (editor && editor.offsetParent !== null) break;
+
+            if (dialog) checkAndAcceptRules(dialog);
+
+            if (i > 0 && i % 3 === 0) {
+                const retryBtn = findComposerTrigger();
+                if (retryBtn) {
+                    try { retryBtn.click(); } catch (e) {}
+                }
+            }
         }
 
         if (!editor) {
@@ -267,9 +320,9 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
                     }));
                 } catch (e) {}
 
-                // Chờ Facebook tải ảnh lên CDN và hiển thị preview (tối đa 25 giây)
+                // Chờ Facebook tải ảnh lên CDN và hiển thị preview (tối đa 45 giây)
                 console.log('[FB DOM] Đang chờ Facebook xử lý và tải ảnh lên...');
-                for (let w = 0; w < 50; w++) {
+                for (let w = 0; w < 90; w++) {
                     await new Promise(r => setTimeout(r, 500));
                     const imgThumbnails = dialogCtx.querySelectorAll('img[src^="blob:"], img[src*="fbcdn"], [aria-label*="Ảnh"], [role="img"]');
                     const sb = findSubmitButton();
@@ -283,30 +336,46 @@ const FB_DOM_POST_SCRIPT = (content, imagesData = []) => `
         }
 
         // 5. Tìm nút "Đăng" / "Post"
-        function findSubmitButton() {
+        function findSubmitButtonElement() {
             const searchContext = document.querySelector('div[role="dialog"]') || document;
             const buttons = Array.from(searchContext.querySelectorAll('div[role="button"], button'));
             for (const b of buttons) {
                 const aria = (b.getAttribute('aria-label') || '').trim().toLowerCase();
                 const text = (b.innerText || b.textContent || '').trim().toLowerCase();
-                const isDisabled = b.getAttribute('aria-disabled') === 'true' || b.disabled;
-
-                if ((aria === 'đăng' || aria === 'post' || text === 'đăng' || text === 'post') && !isDisabled) {
+                if (aria === 'đăng' || aria === 'post' || text === 'đăng' || text === 'post') {
                     return b;
                 }
             }
             return null;
         }
 
+        function findSubmitButton() {
+            const btn = findSubmitButtonElement();
+            if (btn) {
+                const isDisabled = btn.getAttribute('aria-disabled') === 'true' || btn.disabled;
+                if (!isDisabled) return btn;
+            }
+            return null;
+        }
+
+        const maxWaitSubmitSec = (imagesToUpload && imagesToUpload.length > 0) ? 60 : 15;
         let submitBtn = null;
-        for (let i = 0; i < 15; i++) {
+        for (let i = 0; i < maxWaitSubmitSec * 2; i++) {
             submitBtn = findSubmitButton();
             if (submitBtn) break;
-            await new Promise(r => setTimeout(r, 300));
+
+            // Nếu nút đăng bị disabled quá 3 giây, thử kích hoạt nhẹ editor để React cập nhật form state
+            if (i > 6 && i % 6 === 0) {
+                try {
+                    editor.focus();
+                    editor.dispatchEvent(new Event('input', { bubbles: true }));
+                } catch (e) {}
+            }
+            await new Promise(r => setTimeout(r, 500));
         }
 
         if (!submitBtn) {
-            return { success: false, error: 'Không tìm thấy nút "Đăng" khả dụng (Nội dung có thể chưa hợp lệ).' };
+            return { success: false, error: 'Không tìm thấy nút "Đăng" khả dụng trên Facebook (Nút đăng bị vô hiệu hóa hoặc ảnh chưa tải xong).' };
         }
 
         // Bấm nút Đăng
@@ -620,10 +689,23 @@ async function executeGroupPost({ webContents, cookies, groupUrl, groupName, con
         }
     }
 
-    // 2. Dự phòng đăng qua HTTP Cookies
-    if (cookies && cookies.trim().length > 10) {
+    // 2. Dự phòng đăng qua HTTP Cookies (tự động lấy từ session của Webview nếu cookies chưa có)
+    let activeCookies = cookies;
+    if ((!activeCookies || activeCookies.trim().length < 10) && webContents && !webContents.isDestroyed() && webContents.session) {
+        try {
+            const electronCookies = await webContents.session.cookies.get({ domain: '.facebook.com' });
+            if (electronCookies && electronCookies.length > 0) {
+                activeCookies = electronCookies.map(c => `${c.name}=${c.value}`).join('; ');
+                console.log(`[FB Poster] Đã trích xuất ${electronCookies.length} cookie từ Facebook Webview để dùng dự phòng.`);
+            }
+        } catch (e) {
+            console.warn('[FB Poster] Không trích xuất được cookie từ webContents:', e.message);
+        }
+    }
+
+    if (activeCookies && activeCookies.trim().length > 10) {
         console.log(`[FB Poster] Sử dụng Direct Cookies để đăng bài vào [${groupName}]...`);
-        const cookieRes = await postViaCookies(cookies, { groupUrl, content });
+        const cookieRes = await postViaCookies(activeCookies, { groupUrl, content });
         return cookieRes;
     }
 
